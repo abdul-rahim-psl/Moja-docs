@@ -132,9 +132,8 @@ crash-looping (`docker ps -a --filter name=tazama-` sweep, confirmed twice). TMS
 (`:5000`) and admin-service (`:5100`) both `GET /health` → `200 {"status":"UP"}`.
 Mojaloop stack untouched and still healthy alongside it.
 
-**Not yet done**: driving an actual transfer through the TTK collection with both stacks
-up simultaneously, and pointing `ppa-prototype` at both. That's step 5 (build the
-transform + sink) and step 7 (end-to-end validation) — next up once you say go.
+**All 8 planned steps are now done** — see "Plan" below for the full breakdown of
+what was built (steps 4-6) and validated/documented (steps 7-8).
 
 ## Field-mapping gap analysis (FSPIOP transfer → ISO 20022)
 
@@ -204,70 +203,106 @@ deliberate, visible limitation — not hidden inside the mapping code.
 3. ~~**Bring up Mojaloop locally**~~ **Done** — `ml-core-test-harness` up via the same
    recipe as CCHFRMS-33, all services healthy, Kafka confirmed reachable on
    `localhost:9092` with both target topics present.
-4. **Add a transform module** to `ppa-prototype` (e.g. `src/transform/iso20022.js`):
-   - `toPacs008(envelope)` — consumes the already-decoded `topic-transfer-prepare`
-     envelope, returns a `FIToFICstmrCdtTrf` body per the gap table above.
-   - `toPacs002(envelope)` — same for `topic-transfer-fulfil`, including the
-     `transferState → TxSts` enum map.
-   - Keep stubbed/defaulted fields easy to grep for (e.g. a `// STUB:` marker or a
-     single `PLACEHOLDER_*` constants block) so the "gaps" are visible in code, not
-     just in this doc.
-5. **Add a Tazama sink.** Extend the existing consumer pipeline
-   (`src/kafka/consumer.js` → currently parser → store) with a new step: after
-   parsing/decoding, if the topic is `topic-transfer-prepare` or `topic-transfer-fulfil`,
-   build the ISO payload and `POST` it to the TMS endpoint (plain `fetch`/`http`, no new
-   dependency needed). Log the TMS response (`200` vs `400` body) alongside the existing
-   `[event]` log line and keep storing the raw envelope in the message store as today —
-   don't remove existing CCHFRMS-33 behavior.
-6. **Env/config additions** to `src/config.js`: `TAZAMA_TMS_URL` (default
-   `http://localhost:3000`), and a feature flag (`TAZAMA_INGEST_ENABLED`, default
-   `true` for this prototype) so the Kafka-only mode from CCHFRMS-33 still works if
-   needed.
-7. **Validate end-to-end**: drive a transfer through the TTK collection (or a manual
-   `POST /transfers` + fulfil) against the harness, confirm:
-   - prepare → pacs.008 POST → TMS `200`
-   - fulfil → pacs.002 POST (same `EndToEndId`) → TMS `200`, and that TMS's own cache
-     lookup succeeds (no fallback-to-Postgres-rebuild log on the TMS side, or if it
-     falls back, confirm that still succeeds)
-   - a deliberately-malformed case to see TMS's `400` shape, so failure handling is
-     documented too, not just the happy path.
-8. **Document.** Update `ppa-prototype/README.md` with the new Tazama-ingestion section
-   (mirroring how the Kafka-consumption section is documented today), and write the
-   gap/assumption list (the field-mapping table above, finalized with real response
-   bodies) either there or in a new `docs/Kafka/pacs-mapping-gaps.md`.
+4. ~~**Add a transform module** to `ppa-prototype`.~~ **Done** —
+   `src/tazama/iso20022.js`, exporting `toPacs008(envelope)` and `toPacs002(envelope)`
+   per the gap table above, including the `transferState → TxSts` enum map. Every
+   stubbed/defaulted field is centralized in one `PLACEHOLDER` constant (grep for it)
+   rather than scattered through the mapping logic, so the gaps are visible in code,
+   not just in this doc. Built against TMS's actual AJV schemas
+   (`tazama-lf/tms-service/src/schemas/pacs.008.json`/`pacs.002.json`, `dev` branch),
+   which caught two required-field details this doc's gap table didn't: `InitgPty` is
+   required as a field distinct from `Dbtr`, and pacs.002's `ChrgsInf` is validated as
+   an exact 3-item array.
+5. ~~**Add a Tazama sink.**~~ **Done** — `src/tazama/tmsClient.js` (HTTP client, uses
+   Node 22's built-in `fetch`, no new dependency) and `src/tazama/ingest.js` (wires the
+   transform + client into `src/kafka/consumer.js`, right after the existing
+   `store.record` call). Never throws — TMS failures are logged
+   (`[tazama] ... -> failed at ...`) and recorded on the stored message's `tazama`
+   field without interrupting Kafka consumption or CCHFRMS-33's existing behavior.
+   Two bugs surfaced only once this was tested against a live TMS (not visible from
+   AJV schema-reading alone): the `account` table was missing a `creDtTm` column
+   (same class of issue as the `network_map.active` bug above — fixed the same way,
+   in `00-CREATE.sql` + live `ALTER TABLE`), and the initial mapping reused
+   `transferId` as `MsgId` on both pacs.008 and pacs.002, which collided with TMS's
+   `UNIQUE(MsgId, TenantId)` constraint (`event_history.transaction` is unique per
+   message, not per transfer) — fixed with a `messageId(transferId, msgType)` helper
+   producing distinct, still-traceable ids (`<transferId>-pacs008`/`-pacs002`).
+6. ~~**Env/config additions**~~ **Done** — `TAZAMA_TMS_URL` (default
+   `http://localhost:5000`, matching the actual host-mapped TMS port, not `:3000` as
+   originally guessed here) and `TAZAMA_INGEST_ENABLED` (default `true`) in
+   `src/config.js`.
+7. ~~**Validate end-to-end**~~ **Done** — drove a fresh transfer through the TTK's P2P
+   golden-path collection with `ppa-prototype` running against both live stacks:
+   - prepare → pacs.008 POST → TMS `200` (`[tazama] topic-transfer-prepare ... -> TMS
+     200 OK`), confirmed in Postgres.
+   - fulfil → pacs.002 POST (same `EndToEndId`) → TMS `200`, confirmed in Postgres
+     with `txsts = 'ACSC'`. Confirmed the cache-hit path specifically by tailing TMS's
+     own logs live during the call — no `cache`/`rebuild`/`error` lines, i.e. no
+     fallback-to-Postgres-rebuild occurred.
+   - Two deliberately-malformed cases sent directly to TMS to capture its `400`
+     shape: a missing required field, and a forbidden `TenantId` in the body — both
+     returned Fastify/AJV's standard `FST_ERR_VALIDATION` error shape. See
+     `ppa-prototype/README.md`'s new "Failure modes" section for the real response
+     bodies.
+8. ~~**Document.**~~ **Done** — `ppa-prototype/README.md`'s "Tazama ingestion
+   (CCHFRMS-38)" section covers the *how* (topics, files, config, field-mapping
+   summary), plus a new "Failure modes" subsection with the real `400` response
+   bodies from step 7. The gap/assumption list lives in this doc (see "Gaps to raise
+   on the CCHFRMS-38 ticket itself" below), now updated to mark which items were
+   confirmed live vs. remain open assumptions — kept in this doc rather than a
+   separate `docs/Kafka/pacs-mapping-gaps.md` file, since it was already the single
+   place tracking the field-by-field analysis throughout this work.
 
 ## Gaps to raise on the CCHFRMS-38 ticket itself
 
 These aren't blockers, but should be called out to whoever owns the story so the
-"lossy mapping" isn't a surprise at review time:
+"lossy mapping" isn't a surprise at review time. Updated after steps 7-8 with what
+was actually confirmed live vs. what's still an open assumption:
 
 1. **No source data for ISO party/account identity fields** (`Dbtr`/`Cdtr`
    `Id.PrvtId`, `DbtrAcct`/`CdtrAcct`) in the FSPIOP transfer messages — only
    `payerFsp`/`payeeFsp` (participant-level, not party-level) are available from
-   `topic-transfer-prepare`. If Tazama's rules need real party/account identity to be
-   meaningful, this prototype's stubbed values won't be enough — that's a scope
-   question for a later story (e.g. correlating in quote-topic data from CCHFRMS-33's
-   `topic-quotes-post`/`topic-quotes-put`, which does carry `payer`/`payee` party
-   details, to enrich the transfer payload before mapping).
-2. **`TxSts` enum mapping is not specified anywhere** — the story says "convert to the
-   JSON format expected by Tazama" but doesn't define the Mojaloop `transferState` →
-   ISO `TxSts` mapping. Proposing a default map as part of this work
-   (`COMMITTED→ACSC`, `ABORTED`/`REJECTED→RJCT`, `RESERVED→ACSP`, else `PDNG`) but
-   flagging it as an assumption, not a confirmed spec.
+   `topic-transfer-prepare`. **Still open.** If Tazama's rules need real party/account
+   identity to be meaningful, this prototype's stubbed values won't be enough — that's
+   a scope question for a later story (e.g. correlating in quote-topic data from
+   CCHFRMS-33's `topic-quotes-post`/`topic-quotes-put`, which does carry `payer`/`payee`
+   party details, to enrich the transfer payload before mapping).
+2. **`TxSts` enum mapping is not specified anywhere** by the story. **Implemented and
+   verified**: `COMMITTED→ACSC`, `ABORTED`/`REJECTED→RJCT`, `RESERVED→ACSP`, else
+   `PDNG` (`toIsoTxSts` in `iso20022.js`). Confirmed live — a `COMMITTED` transfer
+   produced `txsts = 'ACSC'` in Tazama's own Postgres. Still an assumption in the
+   sense that no one has confirmed this is the *desired* mapping, only that it's a
+   reasonable one that works end-to-end.
 3. **Tenant handling is undecided.** TMS resolves `TenantId` server-side
    (`DEFAULT` when unauthenticated). Fine for a local prototype; will need a real
    decision once this moves toward the shared/server environment (multiple DFSPs ⇒
-   multiple tenants?).
+   multiple tenants?). **Still open** — untouched by this pass.
 4. **Story doesn't mention `topic-transfer-get` or `topic-notification-event`** (both
    already consumed by the CCHFRMS-33 prototype) — worth an explicit call-out that
    they're out of scope for this story so it's not assumed they're being ingested too.
-5. **EndToEndId/InstrId choice is unspecified** — FSPIOP only has one `transferId`;
-   the story doesn't say whether `InstrId` and `EndToEndId` should be the same value
-   or derived differently. Defaulting to "same value" unless told otherwise.
-6. **Server deployment is explicitly out of scope for this pass** (per your
-   instruction) — this plan only covers local `ml-core-test-harness` +
-   `Full-Stack-Docker-Tazama`. Porting the TMS URL/broker address to the real server
-   is future work, not part of this story's acceptance criteria as written.
+   **Still open** — confirmed unchanged: both are still consumed/stored but not
+   forwarded to TMS.
+5. **EndToEndId/InstrId choice is unspecified** by the story — FSPIOP only has one
+   `transferId`. **Implemented and verified**: both set to `transferId` directly.
+   Discovered during implementation that this choice has a real consequence not
+   anticipated when this gap was first written: `GrpHdr.MsgId` (a *different* field)
+   cannot also be set to the raw `transferId`, because TMS enforces
+   `UNIQUE(MsgId, TenantId)` across *all* message types for a tenant — reusing
+   `transferId` there collides between a transfer's pacs.008 and pacs.002. Fixed with
+   a derived, distinct `MsgId` per message (`<transferId>-pacs008`/`-pacs002`); see
+   "Plan" step 5 above.
+6. **Server deployment is explicitly out of scope for this pass** (per instruction) —
+   this plan only covers local `ml-core-test-harness` + `Full-Stack-Docker-Tazama`.
+   Porting the TMS URL/broker address to the real server is future work, not part of
+   this story's acceptance criteria as written. **Still open** — unchanged.
+7. **TMS's `400` failure shape is now documented with real response bodies** (see
+   `ppa-prototype/README.md`, "Failure modes"): AJV validation errors return
+   `{"statusCode":400,"code":"FST_ERR_VALIDATION","error":"Bad Request","message":"..."}`.
+   Confirmed for two cases (a missing required field, and a forbidden `TenantId` in
+   the body). In practice, most failures hit during this work were `500`s from
+   downstream Postgres/business-logic errors (see the two bugs found in step 5 above),
+   not `400`s — worth noting that AJV validation passing doesn't guarantee the request
+   will actually succeed.
 
 ## Non-goals for this story (matches ticket scope)
 
