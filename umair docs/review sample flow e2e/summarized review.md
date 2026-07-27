@@ -1,7 +1,5 @@
 # Summarized Review — `docs/Sample flow E2E/`
 
-Executive summary of the full review in
-`docs/umair docs/review sample flow e2e/for me_sample flow e2e.md`.
 
 ## What this capture is
 

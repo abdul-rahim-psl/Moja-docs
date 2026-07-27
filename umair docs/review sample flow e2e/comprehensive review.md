@@ -2,7 +2,7 @@
 
 What the 18 captured messages actually are, how they line up (or don't) with
 what `ppa-prototype` ingests today, and which ones are actually useful to us
-and why. Read `docs/Sample flow E2E/README.md` first if you haven't — this
+and why. Read `Sample flow E2E/README.md` first if you haven't — this
 doc assumes that context.
 
 ## TL;DR
