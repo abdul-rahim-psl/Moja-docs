@@ -1,181 +1,200 @@
-# Plan: Running `ml-core-test-harness` in ISO 20022 Mode
+# Plan: Running the Cross-Border (DRPP-style) Flow in ISO Mode, Locally
 
-Planning only — nothing here has been implemented. This picks up the prior
-investigation in `docs/iso-mode/iso20022 golden path flow.md` (written
-2026-07-17) and re-verifies it against current upstream state as of
-2026-07-27, because one of its two hard blockers has changed.
+Planning only — nothing here has been implemented. Goal: reproduce a flow
+cycle similar to the real production DRPP sample in `docs/Sample flow E2E/`
+— cross-border FX transfer, ISO 20022 wire mode — against our own
+`ml-core-test-harness`, end to end.
 
-**Read `docs/iso-mode/iso20022 golden path flow.md` first** — this doc does
-not repeat that investigation's full detail, only what's changed and what
-that means for the plan.
+**Correction notice**: an earlier version of this document concluded the
+cross-border flow was blocked by `mojaloop-simulator` lacking ISO 20022
+support. That conclusion was wrong — it was written before checking how our
+own harness actually wires up its FX topology. Corrected below. If you read
+an earlier version, discard the "simulator blocks the FX flow" claim
+specifically; everything else about the simulator's general ISO-readiness
+still stands, it's just not relevant to this particular flow.
 
-## Why this matters right now
+## Read first
 
-The E2E review (`comprehensive review.md` in this folder) showed a live DRPP
-production deployment running Mojaloop's ISO 20022 wire profile
-(`API_TYPE=iso20022`), and the `extensionList` party-data finding from that
-review has already been built into the PPA (`src/parsers/extensionListParty.js`).
-That code has only ever been verified against one real captured HTTP message
-— it has never been exercised against our own Kafka topics, because our test
-harness has never run in ISO mode. Getting the harness into ISO mode is the
-most direct way to close that verification gap.
+- `docs/iso-mode/iso20022 golden path flow.md` (2026-07-17) — the original
+  ISO-mode investigation. Establishes that the four core services
+  (`central-ledger`, `ml-api-adapter`, `quoting-service`,
+  `account-lookup-service`) are ISO-ready behind `API_TYPE`, and that at the
+  time, both `mojaloop-simulator` and `mojaloop/sdk-scheme-adapter` had zero
+  ISO 20022 support.
+- `comprehensive review.md` in this folder — the DRPP capture this plan is
+  trying to reproduce.
 
-## Recap: what the prior investigation found (2026-07-17)
+## The key correction: the FX flow doesn't use the simulator at all
 
-Mojaloop supports FSPIOP and ISO 20022 as parallel wire formats behind an
-`API_TYPE` flag. All four core services (`central-ledger`,
-`ml-api-adapter`, `quoting-service`, `account-lookup-service`) are ISO-ready
-and unit/integration-tested. Flipping them is mechanical (Track A). But the
-golden path also routes through two **external Docker images** —
-`mojaloop/mojaloop-simulator` and `mojaloop/sdk-scheme-adapter` — and at the
-time of that investigation, a direct GitHub code search for `iso20022` in
-both repos returned **0 results in both**. That was the hard blocker: "full
-and unmodified" (keeping those two containers as-is) was ruled out entirely.
+Checked directly against `ml-core-test-harness/docker-compose.yml` and
+`envs/`. Our harness already has a **complete FX participant topology**, and
+none of it touches `mojaloop-simulator`:
 
-## What's changed since (verified today, 2026-07-27)
+| Service | Image | Role | Compose profile |
+| --- | --- | --- | --- |
+| `fx-provider1-sdk` | `sdk-scheme-adapter` | The FXP (`DFSP_ID=testfxp1`) | `fx-sdk` |
+| `fx-payerdfsp-sdk` | `sdk-scheme-adapter` | Payer-side DFSP in the FX flow | `fx-sdk` |
+| `fx-payeedfsp-sdk` | `sdk-scheme-adapter` | Payee-side DFSP in the FX flow | `fx-sdk` |
 
-Re-ran the same verification method (`gh api search/code`) against both
-repos.
+**The FXP is just another `sdk-scheme-adapter` instance**, not
+`mojaloop-simulator` playing a third role. All three SDKs' `PEER_ENDPOINT`/
+`BACKEND_ENDPOINT` route through `mojaloop-testing-toolkit`
+(`envs/fx-provider.env`, `envs/fx-payerdfsp-sdk.env`,
+`envs/fx-payeedfsp-sdk.env` all confirmed — none reference `simulator`).
+`mojaloop-simulator` is only used in the *plain* (non-FX) golden path, for a
+different purpose (backend for the simple P2P DFSPs), and is irrelevant to
+the cross-border flow.
 
-| Repo | 2026-07-17 result | 2026-07-27 result |
+This also matches the real DRPP capture: every FSPIOP-layer message in
+`docs/Sample flow E2E/` shows `test-mwk-dfsp`/`test-zmw-dfsp`/`test-fxp` as
+the three participants — i.e. DRPP's own topology is "three DFSP-shaped
+participants", the same shape our `fx-sdk` profile already has, not
+"two DFSPs plus a simulator."
+
+## What this means: the blocker for the cross-border flow specifically is just sdk-scheme-adapter's ISO support
+
+Since the FX topology is 100% `sdk-scheme-adapter` instances and
+`mojaloop-testing-toolkit`, and `mojaloop-testing-toolkit` isn't an external
+image with a fixed protocol (it's our own TTK config, driven by spec files),
+the only external-image blocker that actually applies here is
+**`sdk-scheme-adapter`'s ISO 20022 support**.
+
+Re-verified today (2026-07-27) against the original investigation's method
+(`gh api search/code`):
+
+| Repo | 2026-07-17 | 2026-07-27 |
 | --- | --- | --- |
-| `mojaloop/mojaloop-simulator` | 0 hits for `iso20022` | **Still 0.** A broader `iso` search returns 8 hits, all incidental (`isoDate`-type string matches in `quote.js`, `bulkQuote.js`, etc.) — confirmed by inspection, not ISO 20022 support. |
-| `mojaloop/sdk-scheme-adapter` | 0 hits for `iso20022` | **23 hits — real, substantial ISO 20022 support has landed.** |
+| `mojaloop/sdk-scheme-adapter` | 0 hits for `iso20022` | **23 hits.** Real support: a dedicated `api_iso20022.yaml` inbound spec, ISO-aware handlers/transfer models (`OutboundTransfersModel.js`, `TransfersModel.js`), unit tests (`handlers-iso20022.test.js`, `InboundServer-iso20022.test.js`, `OutboundTransfersISO20022.test.js`), and a complete self-contained functional test rig at `test/func_iso20022/` with its own docker-compose and a documented TTK-based test runner. |
 
-### What actually landed in `sdk-scheme-adapter`
+The file first appeared 2025-04-22, 17 days after our pinned
+`SDK_SCHEME_ADAPTER_VERSION=v24.7.0` (2025-04-05). Stable releases have
+shipped well past that since — most recent non-snapshot tag `v24.19.7`, with
+`v24.20.0`/`v25.0.0` snapshots also public. **So this is a version-pin gap,
+not a missing-feature gap.**
 
-Not a stray reference — a real feature, with its own inbound spec, handlers,
-and a dedicated functional test suite:
+(For completeness: `mojaloop-simulator` genuinely still has 0 ISO 20022
+support, confirmed again today. It just doesn't matter for this particular
+flow, since it's not part of the FX topology.)
 
-- `modules/api-svc/src/InboundServer/api_iso20022.yaml` — a dedicated ISO
-  20022 inbound OpenAPI spec
-- `modules/api-svc/src/InboundServer/handlers.js`,
-  `modules/api-svc/src/lib/model/{OutboundTransfersModel,TransfersModel}.js`
-  — ISO-aware request handling and transfer models
-- `modules/api-svc/src/config.js`, `src/constants.js` — config/constants
-  support for the mode
-- Unit tests: `handlers-iso20022.test.js`, `InboundServer-iso20022.test.js`,
-  `OutboundTransfersISO20022.test.js`
-- **`test/func_iso20022/`** — a complete, self-contained functional test rig:
-  its own `docker-compose.yml`, per-participant `api-svc.env` configs
-  (`sdk-ttkfxp`, `sdk-ttksim1`, `sdk-ttksim2` — note: includes an FXP
-  participant), a TTK-based collection runner, and a documented CLI/UI
-  workflow (`README.md`) producing an HTML report
+## The plan
 
-The file first appeared 2025-04-22 — 17 days after our pinned
-`SDK_SCHEME_ADAPTER_VERSION=v24.7.0` (released 2025-04-05). A large number of
-releases have shipped since: the most recent non-snapshot stable tag is
-`v24.19.7`, well past our pin, with `v24.20.0` and `v25.0.0` snapshots also
-public.
+### Step 1 — Upgrade `SDK_SCHEME_ADAPTER_VERSION`
 
-### What this means for the prior "hard blocker" conclusion
+From `v24.7.0` to a stable ISO-capable tag (`v24.19.7` or later). Needs its
+own verification pass before committing to a specific tag: changelog/breaking
+changes between `v24.7.0` and the target, and whether our `envs/*-sdk.env`
+files' config surface (SDK config schema can drift between minor versions)
+still applies cleanly. Not yet checked — flagged as an explicit open
+question below, not assumed safe.
 
-**Partially resolved, not fully.** The 2026-07-17 doc's verdict — "not
-achievable today, full stop" — was contingent on *both* external images
-lacking ISO support. That's no longer the state of the world:
+### Step 2 — Set `API_TYPE=iso20022` on the FX participants
 
-- `sdk-scheme-adapter`: blocker **lifted**, contingent on upgrading past our
-  pinned `v24.7.0`.
-- `mojaloop-simulator`: blocker **still stands**, unchanged, confirmed again
-  today.
+Confirmed today: `envs/fx-provider.env`, `envs/fx-payerdfsp-sdk.env`,
+`envs/fx-payeedfsp-sdk.env` currently have **no `API_TYPE` line at all** (the
+prior investigation flagged this as "add flag fresh, no existing precedent" —
+still true). Add `API_TYPE=iso20022` to all three.
 
-The golden path's simulator container plays both the payee DFSP's backend
-*and* (per the func_iso20022 test rig's own participant naming —
-`sdk-ttksim1`/`sdk-ttksim2`) is paired with sdk-scheme-adapter instances in
-that upstream test setup. Whether our own harness's simulator role can be
-routed around, or whether it's load-bearing for the golden path scenarios we
-care about, is the open question below.
+### Step 3 — Set `API_TYPE=iso20022` on the four core services
 
-## Updated options, given the partial resolution
+Mechanical, per the prior investigation, still valid:
 
-### Option 1 — Re-scope Track B around only the simulator gap
+- `ml-api-adapter`, `quoting-service`, `account-lookup-service` — add
+  `"API_TYPE": "iso20022"` in their respective
+  `docker/config-modifier/configs/*.js` scripts. Confirmed today: none of the
+  three currently set `API_TYPE` at all.
+- `central-ledger` — no change needed (protocol-agnostic, confirmed in the
+  prior investigation).
 
-Instead of "full and unmodified golden path," the achievable target becomes:
-**sdk-scheme-adapter and the four core services in ISO mode, simulator
-still FSPIOP** (if the simulator's role can tolerate a protocol boundary) —
-or **simulator swapped out / bypassed for the specific scenarios that need
-it**, using sdk-scheme-adapter's own `func_iso20022` test rig as a template
-for how upstream itself handles this (its own compose file presumably
-doesn't depend on `mojaloop-simulator` at all — worth confirming directly by
-reading that compose file, not assumed here).
+**New question this plan adds that the prior investigation didn't need to
+answer**: does `quoting-service`'s ISO transform cover **`fxQuotes`**
+specifically (not just `quotes`), and does `ml-api-adapter`'s cover
+**`fxTransfers`** (not just `transfers`)? The prior investigation's evidence
+for quoting-service (`src/lib/dto.js:68-70`, described as "generic transform
+dispatch... covering both `quotes` and `fxQuotes`") suggests yes for the
+quote side. The transfer side's fxTransfers coverage wasn't explicitly
+confirmed in that investigation and needs a direct code check before relying
+on it.
 
-### Option 2 — Adopt `sdk-scheme-adapter`'s own functional test rig as a reference implementation
+### Step 4 — Provision the FX participants and drive the flow
 
-Rather than retrofitting our `ml-core-test-harness`, `test/func_iso20022/` in
-`sdk-scheme-adapter` is a working, upstream-maintained ISO-mode end-to-end
-setup. Standing it up directly (separate from our harness) would validate
-ISO-mode transfer flows through a real sdk-scheme-adapter without us having
-to solve any of the integration work ourselves — useful as a fast way to see
-real ISO-mode Kafka-adjacent traffic, though it's a different topology than
-our own harness and wouldn't directly answer "what does *our* stack produce."
+Our harness already has everything needed to provision and run the FX golden
+path in FSPIOP mode — confirmed today:
 
-### Option 3 — Track A only, against the four core services (unchanged from prior doc)
+- Provisioning: `docker/ml-testing-toolkit/test-cases/collections/provisioning/participants_fx_sdk/` (`participant_testfxp1.json`, `participant_fxpayerdfsp.json`, `participant_fxpayeedfsp.json`), plus `provisioning/fxp.json`.
+- Test collection: `docker/ml-testing-toolkit/test-cases/collections/tests/fx/golden_path/` — `api_tests/fx_quotes.json`, `api_tests/fx_transfers.json`, `feature_tests/happy_path/fx_tests.json`.
+- Compose profile: `fx-sdk` (brings up the three FX SDK containers) alongside whatever profile brings up the four core services.
 
-Still available regardless of the above: flip `API_TYPE=iso20022` on
-`ml-api-adapter`/`quoting-service`/`account-lookup-service`, drive traffic
-via TTK directly (bypassing simulator and sdk-scheme-adapter entirely). This
-was already the prior doc's "closest thing achievable today" — still true,
-still doesn't need any upstream change, and is the lowest-risk way to answer
-the specific question that matters most for the PPA: **what do our 5 Kafka
-topics actually contain when the core services run in ISO mode?** This does
-not require resolving the simulator blocker at all, since it deliberately
-routes around both external images.
+None of this needs to be built from scratch — it needs to be **run with the
+ISO flags flipped** instead of the default FSPIOP. The existing FX test
+collection is FSPIOP-shaped (same gap the prior investigation found for the
+plain golden path), so either: (a) run it as-is against ISO-mode services
+first, to see whether the core services' request/response validation simply
+rejects FSPIOP-shaped bodies when `API_TYPE=iso20022` (informative failure,
+tells us the mode switch is real), or (b) author ISO-shaped equivalents of
+`fx_quotes.json`/`fx_transfers.json` mirroring the DRPP capture's actual
+bodies (we have real reference payloads for this — files 06/07/14/15 in
+`docs/Sample flow E2E/`).
 
-## What Option 3 would take (mechanical steps, from the prior doc, still valid)
+### Step 5 — Capture and compare against the DRPP sample
 
-1. `API_TYPE=iso20022` on `ml-api-adapter`, `quoting-service`,
-   `account-lookup-service` config-modifier scripts (`central-ledger` needs
-   no change — protocol-agnostic).
-2. Flip the SDK env files' existing `API_TYPE` flag
-   (`payerfsp-sdk.env`, `payeefsp-sdk.env`, `testfsp{1,2,3,4}-sdk.env`,
-   `perf-backend.env` — confirmed today, all 7 still say `fspiop`) — only
-   relevant if driving traffic through the SDK layer rather than TTK-direct.
-3. Flip the TTK assertion flag at
-   `docker/ml-testing-toolkit/test-cases/environments/default-env.json:48`.
-4. Author the missing `trigger_templates/`/`response_map.json` under
-   `docker/ml-testing-toolkit/spec_files/api_definitions/fspiop_2.0_iso20022/`
-   — confirmed today, still just `api_spec.yaml`, `callback_map.json`,
-   `mockRef.json`; the referenced files genuinely don't exist yet.
-5. Build ISO-shaped TTK test cases for the golden path (current collections
-   are 100% FSPIOP-shaped).
+Once a transaction runs, capture the resulting Kafka messages via
+`ppa-prototype` (already subscribed to all 5 relevant topics — no PPA change
+needed to *consume* this) and compare field-by-field against
+`docs/Sample flow E2E/`, specifically checking whether `extensionList`
+(the finding that started this whole thread) actually appears on our own
+`topic-transfer-prepare`/`-fulfil` payloads the same way it did in the DRPP
+HTTP-layer capture. This is the actual point of doing all of the above — not
+just "does ISO mode run," but "does our `extensionListParty.js` enrichment
+have real data to work with in this environment."
 
-None of this touches Kafka topic names, payload envelope structure, or
-consumer group mechanics — so `ppa-prototype`'s `src/config.js` topic list
-and `src/kafka/consumer.js` wiring would need no changes to *consume*
-ISO-mode traffic. What's unverified is only the **shape of what lands inside
-`content.payload`/`content.payloadDecoded`** on each topic once the upstream
-services are actually transforming ISO 20022 internally.
+**Scope note**: `ppa-prototype` today does not subscribe to `topic-quotes-*`
+variants for fxQuotes, nor any fxTransfers topic, if those turn out to be
+separate Kafka topics from `topic-quotes-post/put`/`topic-transfer-prepare/fulfil`
+— this needs confirming once the flow actually runs (the prior investigation
+never checked whether fxQuotes/fxTransfers produce distinct topic names).
+If they do, that's a `src/config.js` addition, not a redesign.
 
-## Recommended path (planning opinion, not a decision)
+## What "similar to the real production sample" would and wouldn't match
 
-Start with **Option 3** — it's unchanged, lowest-risk, doesn't depend on the
-simulator blocker at all, and directly answers the question the PPA's
-`extensionList` work actually needs answered. Treat **Option 1/2** as
-follow-ups once Option 3 gives real signal on whether `extensionList` (or
-other ISO-mode fields) actually reach the Kafka layer the way the DRPP HTTP
-capture suggested — if the four core services already transform in a way
-that populates `extensionList` on the internal Kafka message before TTK/SDK
-sees it, that's confirmable through Option 3 alone, without ever touching the
-simulator or sdk-scheme-adapter blocker.
+| DRPP capture element | Reproducible locally? |
+| --- | --- |
+| Party lookup → FX quote → payee quote → FX transfer reserve → transfer prepare/fulfil | **Yes** — same resource sequence, same participant shape (3 DFSP-like nodes), already provisionable today in FSPIOP mode; ISO mode is the addition this plan targets. |
+| Three-stage payer authorization (`acceptParty`/`acceptConversion`/`acceptQuote`) via the SDK outbound API | **Yes** — that's `sdk-scheme-adapter`'s own outbound API, already present, same mechanism our harness's other SDK-fronted flows already use. |
+| `extensionList`-based ISO field mapping on transfer messages | **Unverified until run** — this is the specific thing Step 5 checks. Plausible, since `ml-api-adapter`'s ISO transform is real and tested, but not yet confirmed to reach the internal Kafka payload in the same shape. |
+| The specific currencies (MWK/ZMW), specific DFSP ids, specific JWT/Keycloak auth layer | **No, and not needed.** Those are DRPP-deployment-specific (real Keycloak realm, real currency pair, real proxy routing headers like `fspiop-proxy: proxy-mwk`). Our local repro would use whatever test currencies/participant ids our harness's FX collections already use — the *shape* of the flow is what's being reproduced, not the specific deployment's identifiers. |
+| DRPP's specific switch topology (`extapi.mw.drpp.global`, proxy routing) | **No.** That's DRPP's production ingress/proxy layer, unrelated to what runs inside `ml-core-test-harness`. |
 
-## Open questions to resolve before implementing (not answered here)
+## Open questions to resolve before implementing
 
-- Does `sdk-scheme-adapter`'s own `test/func_iso20022/docker-compose.yml`
-  depend on `mojaloop-simulator`, or does it substitute something else for
-  that role? (Directly readable from that file — not yet checked.)
-- What's the actual upgrade delta from our pinned `v24.7.0` to a stable
-  ISO-capable tag (`v24.19.7`+) — breaking changes, config surface changes,
-  compatibility with the rest of our pinned stack?
-- Does the golden-path scenario set we care about (P2P happy path) even
-  require the simulator, or is it only FX/edge-case scenarios that do?
+1. **Upgrade safety**: `v24.7.0` → `v24.19.7`+ changelog/breaking-change
+   review, and whether `envs/*-sdk.env` config keys still apply unchanged.
+2. **fxQuotes/fxTransfers ISO coverage**: confirm directly in
+   `quoting-service`/`ml-api-adapter` source (not just inferred from the
+   quotes/transfers coverage already confirmed) that the FX-specific
+   resources are actually transformed, not just the base ones.
+3. **Kafka topic names for FX**: does `quoting-service`/`ml-api-adapter`
+   publish fxQuotes/fxTransfers events on the same 5 topics `ppa-prototype`
+   already subscribes to, or on separate topic names not yet in
+   `src/config.js`?
+4. **TTK ISO gaps** (carried over from the prior investigation, still
+   unverified): missing `trigger_templates/`/`response_map.json` under
+   `fspiop_2.0_iso20022/`, and whether an equivalent `fx-api_2.0_iso20022`
+   spec dir needs to be created (the prior investigation confirmed no such
+   directory exists for FX at all).
 
-## Summary verdict
+## Summary
 
-The 2026-07-17 conclusion ("not achievable today, hard blocker, external to
-this monorepo") is **out of date on one of its two blockers**.
-`sdk-scheme-adapter` has real, tested, released ISO 20022 support as of
-recent stable tags; `mojaloop-simulator` still has none. The practical
-near-term move that needs no upstream resolution at all — Track A /
-Option 3, TTK-direct against the four core services — remains the fastest
-way to get real signal on the question that actually matters for the PPA's
-`extensionList` work: what our own Kafka topics look like in ISO mode.
+Reproducing a DRPP-style cross-border ISO-mode flow locally is **more
+achievable than the first pass of this plan suggested** — the earlier
+"simulator blocks it" conclusion was based on assuming the simulator plays
+the FXP role, which it doesn't in our harness. The actual topology
+(`fx-provider1-sdk` + `fx-payerdfsp-sdk` + `fx-payeedfsp-sdk`, all
+`sdk-scheme-adapter`) already exists, is already provisioned and tested in
+FSPIOP mode, and the one external-image blocker that applies to it
+(`sdk-scheme-adapter`'s ISO support) has been resolved upstream since the
+original investigation — contingent on a version bump we haven't verified
+the safety of yet. The plan is: upgrade the pinned SDK version, flip
+`API_TYPE` on the FX SDKs and the four core services, run the existing FX
+golden-path collection (FSPIOP first as a smoke test, then ISO-shaped), and
+use `ppa-prototype`'s existing Kafka subscription to check whether
+`extensionList` shows up the way the DRPP capture suggested.
