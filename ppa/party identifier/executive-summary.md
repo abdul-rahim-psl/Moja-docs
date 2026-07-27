@@ -1,9 +1,10 @@
 # Executive Summary — Real Party & Account Identity in the PPA
 
 **Audience:** product / delivery leads and integration decision-makers.
-**Date:** 2026-07-20.
-**Status:** implemented, tested (46 automated test cases, all passing), and
-verified against real captured Mojaloop traffic.
+**Date:** 2026-07-20, extended 2026-07-27.
+**Status:** implemented, tested (63 automated test cases, all passing), and
+verified against real captured Mojaloop traffic — including a live production
+capture (see "Update" below).
 
 ---
 
@@ -68,6 +69,18 @@ This is the "Option A" approach recommended in our earlier research
 - **Observable.** The service's `/health` endpoint now reports how many quotes
   are cached and the join hit/miss rate, and each forwarded message is logged as
   either `(enriched)` or `(placeholder party data)`.
+
+## Update (2026-07-27): a second, independent source added
+
+A separate review of real traffic from a live production deployment
+(`docs/umair docs/review sample flow e2e/`) turned up a transfer message that
+carried the payee's real phone number directly on itself, in a standard
+FSPIOP field (`extensionList`) we hadn't been reading. We added a second,
+independent enrichment source that checks this field directly — so a transfer
+can now get real identity even in cases the quote-join can't help with (the
+quote was missed, or arrived late). It's a narrower source than the quote (no
+name or date of birth in the one example seen), but it's free, additive, and
+already confirmed against that same real captured message.
 
 ## What is still not covered
 

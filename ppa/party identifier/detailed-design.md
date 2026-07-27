@@ -1,15 +1,17 @@
 # Party Identifier Enrichment — Detailed Design & Implementation
 
-Comprehensive technical write-up of the quote→transfer in-memory join ("Option
-A") that gives the PPA prototype real payer/payee identity and account
-identifiers (IBAN / ACCOUNT_ID / MSISDN / …) in the ISO 20022 messages it sends
-to Tazama's TMS.
+Comprehensive technical write-up of two complementary sources of real
+payer/payee identity and account identifiers (IBAN / ACCOUNT_ID / MSISDN / …)
+that the PPA prototype weaves into the ISO 20022 messages it sends to
+Tazama's TMS: (1) the quote→transfer in-memory join ("Option A"), and (2) a
+transfer's own `extensionList`, added later (§5a) after a review of real
+production traffic.
 
 - **Executive summary:** `./executive-summary.md`
 - **Prior research that motivated this:** `./real account numbers.md`
 - **Implementation:** `ppa-prototype/src/` (files mapped below)
-- **Tests:** `ppa-prototype/test/` (46 cases, all passing)
-- **Date:** 2026-07-20
+- **Tests:** `ppa-prototype/test/` (63 cases, all passing)
+- **Date:** 2026-07-20 (extended 2026-07-27 with the `extensionList` source)
 
 ---
 
@@ -185,6 +187,84 @@ real value when known, the exact previous placeholder otherwise.
 
 ---
 
+## 5a. Second source: the transfer's own `extensionList`
+
+**Added after this document was first written**, prompted by a review of
+`docs/Sample flow E2E/` — 18 real messages captured from a live production
+DRPP/COMESA deployment (see `docs/umair docs/review sample flow e2e/`).
+
+That review surfaced something that contradicted this design's founding
+premise. §1 states, based on our own captured FSPIOP-JSON samples, that a
+Mojaloop transfer message carries no party/account identity at all — only
+`payerFsp`/`payeeFsp` — which is exactly why the quote→transfer join exists.
+But a **live-captured `topic-transfer-prepare`-equivalent message**
+(`docs/Sample flow E2E/16_fspiop_transfers_post_prepare_request.json`, ISO
+20022 wire mode) showed the payee's real MSISDN riding directly on the
+transfer's own `extensionList`:
+
+```json
+"extensionList": {
+  "extension": [
+    { "key": "CdtTrfTxInf.Cdtr.Id.PrvtId.Othr.SchmeNm.Prtry", "value": "MSISDN" },
+    { "key": "CdtTrfTxInf.Cdtr.Id.PrvtId.Othr.Id",            "value": "16665551001" },
+    { "key": "CdtTrfTxInf.CdtrAgt.FinInstnId.Othr.Id",        "value": "test-zmw-dfsp" }
+  ]
+}
+```
+
+`extensionList` turns out to be a real, schema-valid field on **both**
+`TransfersPostRequest` and `TransfersIDPutResponse` in the FSPIOP v2.0 spec
+(`{ extension: [{ key, value }] }`) — confirmed directly against
+`@mojaloop/api-snippets`'s OpenAPI schema, not assumed. Our own test harness
+never populates it (hence §1's original claim held for every message we'd
+actually captured), but nothing about the schema restricts it to ISO mode —
+a plain-FSPIOP deployment could populate it too.
+
+### What was built
+
+`src/parsers/extensionListParty.js` — a pure function,
+`extractPartyDataFromExtensionList(transferEnvelope)`, that:
+
+- Reads `content.payloadDecoded.extensionList.extension` (works on both
+  prepare and fulfil — both schemas allow it).
+- Matches keys against `^CdtTrfTxInf\.(Dbtr|Cdtr)\.(.+)$` and pulls out
+  `Id.PrvtId.Othr.Id` → `partyIdentifier`, `Id.PrvtId.Othr.SchmeNm.Prtry` →
+  `partyIdType`, `Name` → `name`.
+- Returns `{ payer, payee }`, each `undefined` if no matching keys were found
+  for that side — same "absent, not throwing" convention as `quoteParty.js`.
+- Tolerates a missing/malformed `extensionList` without throwing.
+
+`src/tazama/enrichment.js`'s `lookupForTransfer()` now merges this with the
+quote-cache result via a new `mergePartyData()`/`mergeParty()`: **quote-cache
+fields win when defined; `extensionList` fills any gap**, per party, including
+the case where no quote was ever cached at all. The merge is careful to skip
+`undefined` quote-cache fields rather than let them clobber a real
+`extensionList` value (`flattenParty()` in `quoteParty.js` always sets every
+key, even to `undefined`, so a naive object spread would have been wrong here
+— caught by a test, see §10).
+
+### Why this matters in practice
+
+- **A transfer can now be partially enriched even when the quote-join has
+  nothing** — no quote seen (PPA started mid-stream), quote arrived after the
+  transfer (defeats the ordering assumption in §11), or the quote was simply
+  never captured. Previously these cases fell all the way back to
+  placeholders; now they fall back to `extensionList` first, if the transfer
+  happens to carry it.
+- **It does not replace the quote join.** The one live example seen carried
+  only `partyIdType`/`partyIdentifier` (and only for `Cdtr`, not `Dbtr`) — no
+  name, no date of birth. The quote join is still the richer, primary source
+  wherever it's available; this is a fallback, not an upgrade.
+- **Verified against the real captured file, not just synthetic fixtures**:
+  running `extractPartyDataFromExtensionList()` against
+  `docs/Sample flow E2E/16_fspiop_transfers_post_prepare_request.json`
+  directly reproduces `{ payee: { partyIdType: "MSISDN", partyIdentifier:
+  "16665551001" } }` — the exact value in the live capture — and feeding that
+  through `toPacs008()` with no quote cached puts `16665551001` in
+  `CdtrAcct.Id.Othr[0].Id`, confirmed by direct test run.
+
+---
+
 ## 6. The cache: bounds and lifecycle (`quoteStore.js`)
 
 A quote is cached the moment it is consumed and read back when its transfer
@@ -264,7 +344,7 @@ every transfer falls through to placeholder output.
 
 ---
 
-## 10. Test inventory (TDD, 46 cases, all passing)
+## 10. Test inventory (TDD, 63 cases, all passing)
 
 Written test-first with Node's built-in `node:test` (zero new dependencies,
 matching the prototype's minimal-dependency ethos). Run with `npm test`.
@@ -277,13 +357,15 @@ matching the prototype's minimal-dependency ethos). Run with `npm test`.
 | `test/enrichment.test.js` | 9 | recordQuote↔lookup round-trip, both legs from one cache, miss on unseen transfer, tolerant of error quotes, disabled no-op, stats, injected TTL/clock expiry |
 | `test/ingest-enrichment.integration.test.js` | 5 | full path with a fake TMS client: real IBAN reaches TMS, both legs enriched, no-quote fallback, out-of-order (transfer-before-quote) documents the ordering dependency, MSISDN carried through |
 | `test/server-health.test.js` | 2 | `/health` includes enrichment stats via hook; omits cleanly without hook |
+| `test/extensionListParty.test.js` | 9 | payee-only extraction, payer+payee both present, IBAN scheme, no extensionList at all, malformed extensionList, unrelated keys ignored, works on fulfil too, missing envelope tolerated |
+| `test/enrichment-extensionlist.test.js` | 7 | extensionList-only enrichment (no quote cached), quote-cache precedence over extensionList, extensionList fills a quote-cache gap, neither source present, extensionList on fulfil, disabled means fully off, quote-cache stats unaffected by extensionList-only matches |
 
 Shared fixtures: `test/fixtures/messages.js` (builder functions modelled on the
 real captured payloads, encoding the correlation invariant).
 
 ### Verification against real captured data
 
-Beyond the fixtures, the enrichment was run against the **actual** captured
+The quote-join enrichment was run against the **actual** captured
 `topic-quotes-post` and `topic-transfer-prepare` samples in
 `ppa-prototype/captured/`. Result on real data:
 
@@ -297,6 +379,22 @@ DbtrAgt:        { "MmbId": "payeefsp" }           (FSP, still from the transfer)
 
 (The captured sample uses MSISDN, so the "account identifier" is a phone number
 — see §11.)
+
+The **extensionList** path (§5a) was separately verified against
+`docs/Sample flow E2E/16_fspiop_transfers_post_prepare_request.json` — a real
+message from a live production deployment, not a fixture. With **no quote
+cached at all**:
+
+```
+extractPartyDataFromExtensionList() ->  { payee: { partyIdType: "MSISDN", partyIdentifier: "16665551001" } }
+toPacs008(envelope, partyData).CdtrAcct.Id  ->  { "Othr": [{ "Id": "16665551001", "SchmeNm": { "Prtry": "MSISDN" } }] }
+toPacs008(envelope, partyData).DbtrAcct.Id  ->  { "Othr": [{ "Id": "test-mwk-dfsp", "SchmeNm": { "Prtry": "FSPID" } }] }  (placeholder — this transfer's extensionList had no Dbtr keys)
+```
+
+`16665551001` is the exact MSISDN from the live capture, reaching
+`CdtrAcct.Id` with zero quote involvement — confirming the fallback source
+works end to end on the data that motivated it, not just a synthetic
+reconstruction of it.
 
 ---
 
@@ -312,6 +410,8 @@ DbtrAgt:        { "MmbId": "payeefsp" }           (FSP, still from the transfer)
 | **Very high volume** | Cache capped at `maxEntries`; oldest evicted. Hit rate visible via `/health`. |
 | **pacs.002 account number** | Structurally impossible — the schema has no account field. Only pacs.008 carries it. |
 | **Duplicate transfers** (double-post concern) | Out of scope here (a pre-existing consumer-resilience gap, see CCHFRMS-38 §3); enrichment does not change it — a re-consumed transfer would enrich identically. |
+| **`extensionList` present but only on one side** (e.g. `Cdtr` keys but no `Dbtr` keys, as in the one live example seen) | That side is enriched, the other falls back to placeholder — per-party, not all-or-nothing. |
+| **`extensionList` and quote-cache disagree** (different identifier for the same party) | Quote-cache wins — treated as the more authoritative, richer source. Not expected in practice (both should describe the same real party), but the precedence is deterministic and tested. |
 
 ---
 
@@ -320,6 +420,14 @@ DbtrAgt:        { "MmbId": "payeefsp" }           (FSP, still from the transfer)
 - Implements the "Option A" recommendation from `./real account numbers.md` §3
   and closes Gap 1 of `docs/user stories/cchfrms-38/fspiop-to-iso20022-gaps.md`
   for the common (quote-precedes-transfer) case.
+- **Extended (§5a) after a review of `docs/Sample flow E2E/`** (real DRPP/COMESA
+  production traffic — see `docs/umair docs/review sample flow e2e/`) surfaced
+  a transfer-prepare message carrying party identity directly on its own
+  `extensionList`. Added `src/parsers/extensionListParty.js` as a second,
+  independent enrichment source, merged into `enrichment.js` with quote-cache
+  data taking precedence. This closes the gap for transfers whose quote was
+  never seen or arrived out of order, wherever the deployment happens to
+  populate `extensionList`.
 - **Not attempted (candidate follow-ups):**
   - Persisting/replaying the cache so a PPA restart mid-stream keeps in-flight
     quotes (today the cache is in-memory only, consistent with the prototype's
@@ -330,6 +438,12 @@ DbtrAgt:        { "MmbId": "payeefsp" }           (FSP, still from the transfer)
     `payeeFspFee`/`payeeFspCommission` to enrich the amount/charge fields (a
     separate, amount-side enrichment — this work covers identity only).
   - Settlement/regulatory placeholders (Gap 2) — no Mojaloop source exists.
+  - Confirming what our 5 Kafka topics actually look like when
+    `quoting-service`/`ml-api-adapter` run in ISO 20022 mode (`API_TYPE`) —
+    per `docs/iso-mode/iso20022 golden path flow.md`, that mode has never been
+    exercised in our own test harness, so it's unverified whether
+    `extensionList` (or any ISO-mode-specific field) actually reaches our
+    Kafka topics the same way it appeared in the HTTP-layer E2E capture.
 
 ---
 
@@ -339,6 +453,7 @@ DbtrAgt:        { "MmbId": "payeefsp" }           (FSP, still from the transfer)
 - `src/parsers/quoteParty.js`
 - `src/store/quoteStore.js`
 - `src/tazama/enrichment.js`
+- `src/parsers/extensionListParty.js` — second enrichment source, reads party identity directly off a transfer's own `extensionList`
 
 **Modified source**
 - `src/tazama/iso20022.js` — `party()`/`account()`/`partyName()` builders; `toPacs008`/`toPacs002` take optional `partyData`
@@ -348,10 +463,11 @@ DbtrAgt:        { "MmbId": "payeefsp" }           (FSP, still from the transfer)
 - `src/index.js` — passes the hook
 - `src/config.js` — `enrichment` config block
 - `package.json` — `test` script
-- `README.md` — env vars + "Party enrichment" section
+- `README.md` — env vars + "Party enrichment" section + "Second source: extensionList" section
 
 **New tests**
 - `test/quoteParty.test.js`, `test/quoteStore.test.js`,
   `test/iso20022-enrichment.test.js`, `test/enrichment.test.js`,
   `test/ingest-enrichment.integration.test.js`, `test/server-health.test.js`,
-  `test/fixtures/messages.js`
+  `test/fixtures/messages.js`, `test/extensionListParty.test.js`,
+  `test/enrichment-extensionlist.test.js`
