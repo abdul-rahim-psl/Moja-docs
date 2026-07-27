@@ -1,0 +1,149 @@
+{
+  "_meta": {
+    "seq_note": "chronological order of the end-to-end flow",
+    "layer": "SDK Scheme Adapter outbound API (non-FSPIOP)",
+    "direction": "test-mwk-dfsp SDK outbound API -> Test harness",
+    "method": "200 OK",
+    "resource": "/transfers",
+    "purpose": "SDK returns state machine paused at WAITING_FOR_PARTY_ACCEPTANCE, echoing the party lookup result for payer confirmation.",
+    "timestamp": "Mon, 13 Oct 2025 13:14:06 GMT",
+    "trace_id": "67629f2771f9ca3e58ae98d2b525ff82",
+    "correlation": {
+      "transferId": "01K7EV9TNQ1VKX84N0GSQH6MDD",
+      "currentState": "WAITING_FOR_PARTY_ACCEPTANCE"
+    }
+  },
+  "headers": {
+    "content-type": "application/json; charset=utf-8",
+    "content-length": "5677",
+    "date": "Mon, 13 Oct 2025 13:14:06 GMT",
+    "x-envoy-upstream-service-time": "851",
+    "server": "istio-envoy",
+    "x-envoy-decorator-operation": "test-mwk-dfsp-sdk-scheme-adapter-api-svc.test-mwk-dfsp.svc.cluster.local:4001/*"
+  },
+  "body": {
+    "homeTransactionId": "123ABC",
+    "from": {
+      "type": "CONSUMER",
+      "idType": "MSISDN",
+      "idValue": "16665551002",
+      "displayName": "Display-Test",
+      "firstName": "Firstname-Test",
+      "middleName": "Middlename-Test",
+      "lastName": "Lastname-Test",
+      "dateOfBirth": "1984-01-01",
+      "fspId": "test-mwk-dfsp"
+    },
+    "to": {
+      "type": "CONSUMER",
+      "idType": "MSISDN",
+      "idValue": "16665551001",
+      "merchantClassificationCode": "123",
+      "fspId": "test-zmw-dfsp",
+      "extensionList": [
+        {
+          "key": "Assgnmt.MsgId",
+          "value": "01K7EV9V3FQ2RYXXE9ARH7DNFA"
+        },
+        {
+          "key": "Assgnmt.CreDtTm",
+          "value": "2025-10-13T13:14:05.807Z"
+        },
+        {
+          "key": "Rpt.Vrfctn",
+          "value": true
+        }
+      ]
+    },
+    "amountType": "SEND",
+    "currency": "MWK",
+    "amount": "60",
+    "transactionType": "TRANSFER",
+    "note": "test",
+    "skipPartyLookup": false,
+    "transferId": "01K7EV9TNQ1VKX84N0GSQH6MDD",
+    "traceId": "67629f2771f9ca3e58ae98d2b525ff82",
+    "currentState": "WAITING_FOR_PARTY_ACCEPTANCE",
+    "initiatedTimestamp": "2025-10-13T13:14:05.367Z",
+    "direction": "OUTBOUND",
+    "getPartiesRequest": {
+      "withCredentials": false,
+      "transitional": {
+        "clarifyTimeoutError": true
+      },
+      "method": "GET",
+      "baseURL": "https://extapi.mw.drpp.global",
+      "url": "/parties/MSISDN/16665551001",
+      "headers": {
+        "content-type": "application/vnd.interoperability.iso20022.parties+json;version=2.0",
+        "date": "Mon, 13 Oct 2025 13:14:05 GMT",
+        "fspiop-source": "test-mwk-dfsp",
+        "Authorization": "Bearer eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICJkQkxBNEhKNnBmd0pYWlZHTG5IY0w1UEQ0UFYwQWhhd2tmWDVueS1Oa1VFIn0.eyJleHAiOjE3NjAzNjEzMjIsImlhdCI6MTc2MDM2MTAyMiwianRpIjoiYTU2MWNkMDQtMDQ3Yy00MzUxLWEwYzAtMzIzODg3NjU4NTkxIiwiaXNzIjoiaHR0cHM6Ly9rZXljbG9hay5tdy5kcnBwLmdsb2JhbC9yZWFsbXMvZGZzcHMiLCJzdWIiOiI5NzVlOWQxYy00MTYzLTRlYmItYjgwOS0yMDBkMmViYTY4NDYiLCJ0eXAiOiJCZWFyZXIiLCJhenAiOiJ0ZXN0LW13ay1kZnNwIiwiYWNyIjoiMSIsInJlYWxtX2FjY2VzcyI6eyJyb2xlcyI6WyJkZWZhdWx0LXJvbGVzLWRmc3BzIiwib2ZmbGluZV9hY2Nlc3MiLCJ1bWFfYXV0aG9yaXphdGlvbiJdfSwic2NvcGUiOiJlbWFpbCBwcm9maWxlIiwiY2xpZW50SG9zdCI6IjEwLjIwLjguNjAiLCJlbWFpbF92ZXJpZmllZCI6ZmFsc2UsInByZWZlcnJlZF91c2VybmFtZSI6InNlcnZpY2UtYWNjb3VudC10ZXN0LW13ay1kZnNwIiwiY2xpZW50QWRkcmVzcyI6IjEwLjIwLjguNjAiLCJjbGllbnRfaWQiOiJ0ZXN0LW13ay1kZnNwIn0.7-pU-f2gKzlu9W-UEF_jqVonlS4iScNjzOaYBFW2j9nlYbIAJHTTRmI9hFc7O5OF-tWbBT_S0GOTr0sTC__Spl-JOMazI7v53Jlm9kr_HDzbYu_Dpz8m9YcaW2lWCJPmkwYnl5dVDwNL6x6Ie7L-LCsH9OeM9dDj-QibQ-I7uQlrHqi_kmVd86biJ3LQUv8s1sINtMLm2EPudjcNYVlkgWhB2wBJP26_0shrtyZVfoA7Zz2PKVfIKKrIx3szQFswagSyd74nx7mhL3E2c7Z3aymAaHbWtWR6EYPosln6ojujQmyyCGLMwQ6bwTEsdpIwZhl5PdKgH6s4OblpCFkBVQ",
+        "accept": "application/vnd.interoperability.iso20022.parties+json;version=2",
+        "traceparent": "00-67629f2771f9ca3e58ae98d2b525ff82-a614ea0ed64c1853-01"
+      },
+      "httpsAgent": "[REDACTED]"
+    },
+    "getPartiesResponse": {
+      "body": {
+        "party": {
+          "partyIdInfo": {
+            "partyIdType": "MSISDN",
+            "partyIdentifier": "16665551001",
+            "fspId": "test-zmw-dfsp",
+            "extensionList": {
+              "extension": [
+                {
+                  "key": "Assgnmt.MsgId",
+                  "value": "01K7EV9V3FQ2RYXXE9ARH7DNFA"
+                },
+                {
+                  "key": "Assgnmt.CreDtTm",
+                  "value": "2025-10-13T13:14:05.807Z"
+                },
+                {
+                  "key": "Rpt.Vrfctn",
+                  "value": true
+                }
+              ]
+            }
+          },
+          "name": "Chikondi Banda",
+          "supportedCurrencies": [
+            "ZMW"
+          ]
+        }
+      },
+      "headers": {
+        "host": "conn-test-mwk-dfsp.pm.drpp-onprem.global",
+        "content-type": "application/vnd.interoperability.iso20022.parties+json;version=2.0",
+        "date": "Mon, 13 Oct 2025 13:14:05 GMT",
+        "fspiop-source": "test-zmw-dfsp",
+        "fspiop-destination": "test-mwk-dfsp",
+        "traceparent": "00-67629f2771f9ca3e58ae98d2b525ff82-ebcafa192e12093f-01",
+        "tracestate": "tx_callback_start_ts=1760361245807",
+        "fspiop-http-method": "PUT",
+        "fspiop-uri": "/parties/MSISDN/16665551001",
+        "fspiop-signature": "{\"signature\":\"JlOyt0OLHK_k9Wv6K6rP4zGSk36B4BHMbsYpf3S37umPr5lFDXzfIUFT-CCwxKp--utV1Bc031OYPXWfZFThSmYVLMAmS9mHKFiKKb49J4EdvTG6TlRB_go2ptrFQLltVgozp-xdBd8f1QlZUTUA2zQaVCcFp4K0h86moREwb21IvcCERKZuy9drBXFUS6zCBGh5Yn9_XiuZMwIx8O2wCMovSdFAbw69XdqChGK37j7FzORnJyN17gXPe0HIcqbZpQFuTzRIyAhBtCaVRi17ifBH6eGGzOMKpRvDnK808HW_JNke60g-JteebG4VLKphUe7-gROvrmMu_7mzREt6yg\",\"protectedHeader\":\"eyJhbGciOiJSUzI1NiIsIkZTUElPUC1VUkkiOiIvcGFydGllcy9NU0lTRE4vMTY2NjU1NTEwMDEiLCJGU1BJT1AtSFRUUC1NZXRob2QiOiJQVVQiLCJGU1BJT1AtU291cmNlIjoidGVzdC16bXctZGZzcCIsIkZTUElPUC1EZXN0aW5hdGlvbiI6InRlc3QtbXdrLWRmc3AiLCJEYXRlIjoiTW9uLCAxMyBPY3QgMjAyNSAxMzoxNDowNSBHTVQifQ\"}",
+        "fspiop-proxy": "proxy-mwk",
+        "authorization": "Bearer eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICJkQkxBNEhKNnBmd0pYWlZHTG5IY0w1UEQ0UFYwQWhhd2tmWDVueS1Oa1VFIn0.eyJleHAiOjE3NjAzNjE1MjksImlhdCI6MTc2MDM2MTIyOSwianRpIjoiOTMyZGM2NDgtOTkyZi00NDU5LWE5ZWMtOWJjMmFjMDJkOWJjIiwiaXNzIjoiaHR0cHM6Ly9rZXljbG9hay5tdy5kcnBwLmdsb2JhbC9yZWFsbXMvZGZzcHMiLCJzdWIiOiJlOTI0NzMxNy1jOGEwLTQ5YTQtODE3Ni00NWRkODIwYjQ0YWYiLCJ0eXAiOiJCZWFyZXIiLCJhenAiOiJwcm94eS1td2siLCJhY3IiOiIxIiwicmVhbG1fYWNjZXNzIjp7InJvbGVzIjpbImRlZmF1bHQtcm9sZXMtZGZzcHMiLCJvZmZsaW5lX2FjY2VzcyIsInVtYV9hdXRob3JpemF0aW9uIl19LCJzY29wZSI6ImVtYWlsIHByb2ZpbGUiLCJjbGllbnRIb3N0IjoiMTAuMjAuMi4yMDgiLCJlbWFpbF92ZXJpZmllZCI6ZmFsc2UsInByZWZlcnJlZF91c2VybmFtZSI6InNlcnZpY2UtYWNjb3VudC1wcm94eS1td2siLCJjbGllbnRBZGRyZXNzIjoiMTAuMjAuMi4yMDgiLCJjbGllbnRfaWQiOiJwcm94eS1td2sifQ.9Qz0Zewy9yJ1kGLAI7oM8Kdf9iZ9NA3M3_yvjPm1wUAHerBGz23CKu1O0qmPiM0BhM11XdnOt6yf13PvB9ocYQDkh06LPxvlLTpXf5N44WYCKnRHob4QQI6WkR8fHiYnTlb_Ew-ZjQWkI6a_Z-LKxNOTIYTDpOAEEAGKk6qWQhq511mF8hMQ3wuqPUSA7cYUUoVn1TL6rHJMKJyKouhAdW7M8izb4k-oZirgPL66whttHtPFsH2GJEA38sVPyaSlY-2OMyE-W-ttJsWlRdx3hkBcxduVOQtYbj8jZg_kRdF7o7q4nqx8FPJMColUUlSmL0KSihXTBN_PnH3LrQRA7w",
+        "user-agent": "axios/1.12.2",
+        "accept-encoding": "gzip, compress, deflate, br",
+        "x-forwarded-for": "13.247.23.136,16.28.6.201",
+        "x-forwarded-proto": "https",
+        "x-envoy-external-address": "16.28.6.201",
+        "x-request-id": "644c0ba5-e1df-41d3-ab69-2e20026d5fd5",
+        "x-envoy-attempt-count": "1",
+        "content-length": 469,
+        "x-b3-traceid": "e125d3f87fe6e954809726feadc15861",
+        "x-b3-spanid": "06cae1f3bdf574d9",
+        "x-b3-parentspanid": "45ee19c550908853",
+        "x-b3-sampled": "0"
+      }
+    },
+    "needFx": true,
+    "supportedCurrencies": [
+      "ZMW"
+    ]
+  }
+}

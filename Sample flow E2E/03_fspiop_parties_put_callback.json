@@ -1,0 +1,71 @@
+{
+  "_meta": {
+    "seq_note": "chronological order of the end-to-end flow",
+    "layer": "FSPIOP / ISO 20022 interoperability API (via DRPP switch)",
+    "direction": "test-zmw-dfsp (payee DFSP) -> test-mwk-dfsp",
+    "method": "PUT",
+    "resource": "/parties/MSISDN/16665551001",
+    "purpose": "Payee DFSP returns the resolved party (ISO 20022 acmt.023/024 Prty), confirming the payee is reachable in ZMW.",
+    "timestamp": "Mon, 13 Oct 2025 13:14:05 GMT",
+    "trace_id": "67629f2771f9ca3e58ae98d2b525ff82",
+    "traceparent": "00-67629f2771f9ca3e58ae98d2b525ff82-ebcafa192e12093f-01",
+    "correlation": {
+      "transferId": "01K7EV9TNQ1VKX84N0GSQH6MDD"
+    }
+  },
+  "headers": {
+    "host": "conn-test-mwk-dfsp.pm.drpp-onprem.global",
+    "content-type": "application/vnd.interoperability.iso20022.parties+json;version=2.0",
+    "date": "Mon, 13 Oct 2025 13:14:05 GMT",
+    "fspiop-source": "test-zmw-dfsp",
+    "fspiop-destination": "test-mwk-dfsp",
+    "traceparent": "00-67629f2771f9ca3e58ae98d2b525ff82-ebcafa192e12093f-01",
+    "tracestate": "tx_callback_start_ts=1760361245807",
+    "fspiop-http-method": "PUT",
+    "fspiop-uri": "/parties/MSISDN/16665551001",
+    "fspiop-signature": "{\"signature\":\"JlOyt0OLHK_k9Wv6K6rP4zGSk36B4BHMbsYpf3S37umPr5lFDXzfIUFT-CCwxKp--utV1Bc031OYPXWfZFThSmYVLMAmS9mHKFiKKb49J4EdvTG6TlRB_go2ptrFQLltVgozp-xdBd8f1QlZUTUA2zQaVCcFp4K0h86moREwb21IvcCERKZuy9drBXFUS6zCBGh5Yn9_XiuZMwIx8O2wCMovSdFAbw69XdqChGK37j7FzORnJyN17gXPe0HIcqbZpQFuTzRIyAhBtCaVRi17ifBH6eGGzOMKpRvDnK808HW_JNke60g-JteebG4VLKphUe7-gROvrmMu_7mzREt6yg\",\"protectedHeader\":\"eyJhbGciOiJSUzI1NiIsIkZTUElPUC1VUkkiOiIvcGFydGllcy9NU0lTRE4vMTY2NjU1NTEwMDEiLCJGU1BJT1AtSFRUUC1NZXRob2QiOiJQVVQiLCJGU1BJT1AtU291cmNlIjoidGVzdC16bXctZGZzcCIsIkZTUElPUC1EZXN0aW5hdGlvbiI6InRlc3QtbXdrLWRmc3AiLCJEYXRlIjoiTW9uLCAxMyBPY3QgMjAyNSAxMzoxNDowNSBHTVQifQ\"}",
+    "fspiop-proxy": "proxy-mwk",
+    "authorization": "Bearer eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICJkQkxBNEhKNnBmd0pYWlZHTG5IY0w1UEQ0UFYwQWhhd2tmWDVueS1Oa1VFIn0.eyJleHAiOjE3NjAzNjE1MjksImlhdCI6MTc2MDM2MTIyOSwianRpIjoiOTMyZGM2NDgtOTkyZi00NDU5LWE5ZWMtOWJjMmFjMDJkOWJjIiwiaXNzIjoiaHR0cHM6Ly9rZXljbG9hay5tdy5kcnBwLmdsb2JhbC9yZWFsbXMvZGZzcHMiLCJzdWIiOiJlOTI0NzMxNy1jOGEwLTQ5YTQtODE3Ni00NWRkODIwYjQ0YWYiLCJ0eXAiOiJCZWFyZXIiLCJhenAiOiJwcm94eS1td2siLCJhY3IiOiIxIiwicmVhbG1fYWNjZXNzIjp7InJvbGVzIjpbImRlZmF1bHQtcm9sZXMtZGZzcHMiLCJvZmZsaW5lX2FjY2VzcyIsInVtYV9hdXRob3JpemF0aW9uIl19LCJzY29wZSI6ImVtYWlsIHByb2ZpbGUiLCJjbGllbnRIb3N0IjoiMTAuMjAuMi4yMDgiLCJlbWFpbF92ZXJpZmllZCI6ZmFsc2UsInByZWZlcnJlZF91c2VybmFtZSI6InNlcnZpY2UtYWNjb3VudC1wcm94eS1td2siLCJjbGllbnRBZGRyZXNzIjoiMTAuMjAuMi4yMDgiLCJjbGllbnRfaWQiOiJwcm94eS1td2sifQ.9Qz0Zewy9yJ1kGLAI7oM8Kdf9iZ9NA3M3_yvjPm1wUAHerBGz23CKu1O0qmPiM0BhM11XdnOt6yf13PvB9ocYQDkh06LPxvlLTpXf5N44WYCKnRHob4QQI6WkR8fHiYnTlb_Ew-ZjQWkI6a_Z-LKxNOTIYTDpOAEEAGKk6qWQhq511mF8hMQ3wuqPUSA7cYUUoVn1TL6rHJMKJyKouhAdW7M8izb4k-oZirgPL66whttHtPFsH2GJEA38sVPyaSlY-2OMyE-W-ttJsWlRdx3hkBcxduVOQtYbj8jZg_kRdF7o7q4nqx8FPJMColUUlSmL0KSihXTBN_PnH3LrQRA7w",
+    "user-agent": "axios/1.12.2",
+    "accept-encoding": "gzip, compress, deflate, br",
+    "x-forwarded-for": "13.247.23.136,16.28.6.201",
+    "x-forwarded-proto": "https",
+    "x-envoy-external-address": "16.28.6.201",
+    "x-request-id": "644c0ba5-e1df-41d3-ab69-2e20026d5fd5",
+    "x-envoy-attempt-count": "1",
+    "content-length": 469,
+    "x-b3-traceid": "e125d3f87fe6e954809726feadc15861",
+    "x-b3-spanid": "06cae1f3bdf574d9",
+    "x-b3-parentspanid": "45ee19c550908853",
+    "x-b3-sampled": "0"
+  },
+  "body": {
+    "party": {
+      "partyIdInfo": {
+        "partyIdType": "MSISDN",
+        "partyIdentifier": "16665551001",
+        "fspId": "test-zmw-dfsp",
+        "extensionList": {
+          "extension": [
+            {
+              "key": "Assgnmt.MsgId",
+              "value": "01K7EV9V3FQ2RYXXE9ARH7DNFA"
+            },
+            {
+              "key": "Assgnmt.CreDtTm",
+              "value": "2025-10-13T13:14:05.807Z"
+            },
+            {
+              "key": "Rpt.Vrfctn",
+              "value": true
+            }
+          ]
+        }
+      },
+      "name": "Chikondi Banda",
+      "supportedCurrencies": [
+        "ZMW"
+      ]
+    }
+  }
+}

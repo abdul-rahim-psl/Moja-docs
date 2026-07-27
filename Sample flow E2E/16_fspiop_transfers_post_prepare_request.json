@@ -1,0 +1,56 @@
+{
+  "_meta": {
+    "seq_note": "chronological order of the end-to-end flow",
+    "layer": "FSPIOP / ISO 20022 interoperability API (via DRPP switch)",
+    "direction": "test-mwk-dfsp (payer DFSP) -> test-zmw-dfsp (payee DFSP)",
+    "method": "POST",
+    "resource": "/transfers",
+    "purpose": "Transfer PREPARE for the payee leg (ZMW 1) — funds reserved in the switch position accounts.",
+    "timestamp": "Mon, 13 Oct 2025 13:14:10 GMT",
+    "trace_id": "67629f2771f9ca3e58ae98d2b525ff82",
+    "traceparent": "00-67629f2771f9ca3e58ae98d2b525ff82-a4f13bce8ca85c75-01",
+    "correlation": {
+      "transferId": "01K7EV9TNQ1VKX84N0GSQH6MDD"
+    }
+  },
+  "headers": {
+    "content-type": "application/vnd.interoperability.iso20022.transfers+json;version=2.0",
+    "date": "Mon, 13 Oct 2025 13:14:10 GMT",
+    "fspiop-source": "test-mwk-dfsp",
+    "fspiop-destination": "test-zmw-dfsp",
+    "Authorization": "Bearer eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICJkQkxBNEhKNnBmd0pYWlZHTG5IY0w1UEQ0UFYwQWhhd2tmWDVueS1Oa1VFIn0.eyJleHAiOjE3NjAzNjEzMjIsImlhdCI6MTc2MDM2MTAyMiwianRpIjoiYTU2MWNkMDQtMDQ3Yy00MzUxLWEwYzAtMzIzODg3NjU4NTkxIiwiaXNzIjoiaHR0cHM6Ly9rZXljbG9hay5tdy5kcnBwLmdsb2JhbC9yZWFsbXMvZGZzcHMiLCJzdWIiOiI5NzVlOWQxYy00MTYzLTRlYmItYjgwOS0yMDBkMmViYTY4NDYiLCJ0eXAiOiJCZWFyZXIiLCJhenAiOiJ0ZXN0LW13ay1kZnNwIiwiYWNyIjoiMSIsInJlYWxtX2FjY2VzcyI6eyJyb2xlcyI6WyJkZWZhdWx0LXJvbGVzLWRmc3BzIiwib2ZmbGluZV9hY2Nlc3MiLCJ1bWFfYXV0aG9yaXphdGlvbiJdfSwic2NvcGUiOiJlbWFpbCBwcm9maWxlIiwiY2xpZW50SG9zdCI6IjEwLjIwLjguNjAiLCJlbWFpbF92ZXJpZmllZCI6ZmFsc2UsInByZWZlcnJlZF91c2VybmFtZSI6InNlcnZpY2UtYWNjb3VudC10ZXN0LW13ay1kZnNwIiwiY2xpZW50QWRkcmVzcyI6IjEwLjIwLjguNjAiLCJjbGllbnRfaWQiOiJ0ZXN0LW13ay1kZnNwIn0.7-pU-f2gKzlu9W-UEF_jqVonlS4iScNjzOaYBFW2j9nlYbIAJHTTRmI9hFc7O5OF-tWbBT_S0GOTr0sTC__Spl-JOMazI7v53Jlm9kr_HDzbYu_Dpz8m9YcaW2lWCJPmkwYnl5dVDwNL6x6Ie7L-LCsH9OeM9dDj-QibQ-I7uQlrHqi_kmVd86biJ3LQUv8s1sINtMLm2EPudjcNYVlkgWhB2wBJP26_0shrtyZVfoA7Zz2PKVfIKKrIx3szQFswagSyd74nx7mhL3E2c7Z3aymAaHbWtWR6EYPosln6ojujQmyyCGLMwQ6bwTEsdpIwZhl5PdKgH6s4OblpCFkBVQ",
+    "accept": "application/vnd.interoperability.iso20022.transfers+json;version=2",
+    "traceparent": "00-67629f2771f9ca3e58ae98d2b525ff82-a4f13bce8ca85c75-01",
+    "fspiop-http-method": "POST",
+    "fspiop-uri": "/transfers",
+    "fspiop-signature": "{\"signature\":\"g4nurJqxV4BXKyrd4PWP8vXBjdEP9YtNg-Rktl_tbNx6BckCU6OKmn9IOf93-SttL6c7py1zb99OP0EwW9x8kH02B84Jwzlo4jCewAgJN-ZzEwvmTGTeIc8_URQr4fpz_p1bTLzLUpmuLkWVWcwEoa1toLXyHzzDgCazF9zt8Va7wqJPxaGGvlbT35tvWxOO4Yo2kv4TNna4hFAnE90va_aZ4T8I8eAPhX6Pw8to-qzlZ3QVLS-HDJ6pley9NaEbFWEnVwO0crvo2sSS3TzULxtEaEunF-OfQfT5dRnjR8fOdAkEtr_lMJcNsX4qjbRaw1zGagnBCK-7gs7gq1-kVQ\",\"protectedHeader\":\"eyJhbGciOiJSUzI1NiIsIkZTUElPUC1VUkkiOiIvdHJhbnNmZXJzIiwiRlNQSU9QLUhUVFAtTWV0aG9kIjoiUE9TVCIsIkZTUElPUC1Tb3VyY2UiOiJ0ZXN0LW13ay1kZnNwIiwiRlNQSU9QLURlc3RpbmF0aW9uIjoidGVzdC16bXctZGZzcCIsIkRhdGUiOiJNb24sIDEzIE9jdCAyMDI1IDEzOjE0OjEwIEdNVCJ9\"}"
+  },
+  "body": {
+    "transferId": "01K7EV9TNQ1VKX84N0GSQH6MDD",
+    "payeeFsp": "test-zmw-dfsp",
+    "payerFsp": "test-mwk-dfsp",
+    "amount": {
+      "currency": "ZMW",
+      "amount": "1"
+    },
+    "ilpPacket": "DIIC0QAAAAAAAABkMjAyNTEwMTMxMzE1MDgzODQ2alrYQWLyAk7EmjhMu-aJhet2sP2siUYM9o8ZQ7Y_UgpnLm1vamFsb29wggKKZXlKeGRXOTBaVWxrSWpvaU1ERkxOMFZXT1ZneVN6UkdPRW81TUZwWFRWSklSRTVEV2s0aUxDSjBjbUZ1YzJGamRHbHZia2xrSWpvaU1ERkxOMFZXT1ZST1VURldTMWc0TkU0d1IxTlJTRFpOUkVRaUxDSjBjbUZ1YzJGamRHbHZibFI1Y0dVaU9uc2ljMk5sYm1GeWFXOGlPaUpVVWtGT1UwWkZVaUlzSW1sdWFYUnBZWFJ2Y2lJNklsQkJXVVZTSWl3aWFXNXBkR2xoZEc5eVZIbHdaU0k2SWtKVlUwbE9SVk5USW4wc0luQmhlV1ZsSWpwN0luQmhjblI1U1dSSmJtWnZJanA3SW5CaGNuUjVTV1JVZVhCbElqb2lUVk5KVTBST0lpd2ljR0Z5ZEhsSlpHVnVkR2xtYVdWeUlqb2lNVFkyTmpVMU5URXdNREVpTENKbWMzQkpaQ0k2SW5SbGMzUXRlbTEzTFdSbWMzQWlmWDBzSW5CaGVXVnlJanA3SW5CaGNuUjVTV1JKYm1adklqcDdJbkJoY25SNVNXUlVlWEJsSWpvaVRWTkpVMFJPSWl3aWNHRnlkSGxKWkdWdWRHbG1hV1Z5SWpvaU1UWTJOalUxTlRFd01ESWlMQ0ptYzNCSlpDSTZJblJsYzNRdGJYZHJMV1JtYzNBaWZTd2libUZ0WlNJNklrUnBjM0JzWVhrdFZHVnpkQ0o5TENKbGVIQnBjbUYwYVc5dUlqb2lNakF5TlMweE1DMHhNMVF4TXpveE5Ub3dPQzR6T0RSYUlpd2lZVzF2ZFc1MElqcDdJbUZ0YjNWdWRDSTZJakVpTENKamRYSnlaVzVqZVNJNklscE5WeUo5ZlE",
+    "condition": "Nmpa2EFi8gJOxJo4TLvmiYXrdrD9rIlGDPaPGUO2P1I",
+    "expiration": "2025-10-13T13:15:10.546Z",
+    "extensionList": {
+      "extension": [
+        {
+          "key": "CdtTrfTxInf.Cdtr.Id.PrvtId.Othr.SchmeNm.Prtry",
+          "value": "MSISDN"
+        },
+        {
+          "key": "CdtTrfTxInf.Cdtr.Id.PrvtId.Othr.Id",
+          "value": "16665551001"
+        },
+        {
+          "key": "CdtTrfTxInf.CdtrAgt.FinInstnId.Othr.Id",
+          "value": "test-zmw-dfsp"
+        }
+      ]
+    }
+  }
+}

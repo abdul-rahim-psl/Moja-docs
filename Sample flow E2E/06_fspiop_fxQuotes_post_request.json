@@ -1,0 +1,48 @@
+{
+  "_meta": {
+    "seq_note": "chronological order of the end-to-end flow",
+    "layer": "FSPIOP / ISO 20022 interoperability API (via DRPP switch)",
+    "direction": "test-mwk-dfsp (payer DFSP) -> test-fxp (FX provider)",
+    "method": "POST",
+    "resource": "/fxQuotes",
+    "purpose": "Request an FX conversion quote: MWK 60 source -> ZMW target, linked to the transfer by determiningTransferId.",
+    "timestamp": "Mon, 13 Oct 2025 13:14:06 GMT",
+    "trace_id": "67629f2771f9ca3e58ae98d2b525ff82",
+    "traceparent": "00-67629f2771f9ca3e58ae98d2b525ff82-725045d290ab48f4-01",
+    "correlation": {
+      "transferId": "01K7EV9TNQ1VKX84N0GSQH6MDD",
+      "conversionRequestId": "01K7EV9VS1V41WTE9SC7JCGFZN",
+      "conversionId": "01K7EV9VS1V41WTE9SC7JCGFZP"
+    }
+  },
+  "headers": {
+    "content-type": "application/vnd.interoperability.iso20022.fxQuotes+json;version=2.0",
+    "date": "Mon, 13 Oct 2025 13:14:06 GMT",
+    "fspiop-source": "test-mwk-dfsp",
+    "fspiop-destination": "test-fxp",
+    "Authorization": "Bearer eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICJkQkxBNEhKNnBmd0pYWlZHTG5IY0w1UEQ0UFYwQWhhd2tmWDVueS1Oa1VFIn0.eyJleHAiOjE3NjAzNjEzMjIsImlhdCI6MTc2MDM2MTAyMiwianRpIjoiYTU2MWNkMDQtMDQ3Yy00MzUxLWEwYzAtMzIzODg3NjU4NTkxIiwiaXNzIjoiaHR0cHM6Ly9rZXljbG9hay5tdy5kcnBwLmdsb2JhbC9yZWFsbXMvZGZzcHMiLCJzdWIiOiI5NzVlOWQxYy00MTYzLTRlYmItYjgwOS0yMDBkMmViYTY4NDYiLCJ0eXAiOiJCZWFyZXIiLCJhenAiOiJ0ZXN0LW13ay1kZnNwIiwiYWNyIjoiMSIsInJlYWxtX2FjY2VzcyI6eyJyb2xlcyI6WyJkZWZhdWx0LXJvbGVzLWRmc3BzIiwib2ZmbGluZV9hY2Nlc3MiLCJ1bWFfYXV0aG9yaXphdGlvbiJdfSwic2NvcGUiOiJlbWFpbCBwcm9maWxlIiwiY2xpZW50SG9zdCI6IjEwLjIwLjguNjAiLCJlbWFpbF92ZXJpZmllZCI6ZmFsc2UsInByZWZlcnJlZF91c2VybmFtZSI6InNlcnZpY2UtYWNjb3VudC10ZXN0LW13ay1kZnNwIiwiY2xpZW50QWRkcmVzcyI6IjEwLjIwLjguNjAiLCJjbGllbnRfaWQiOiJ0ZXN0LW13ay1kZnNwIn0.7-pU-f2gKzlu9W-UEF_jqVonlS4iScNjzOaYBFW2j9nlYbIAJHTTRmI9hFc7O5OF-tWbBT_S0GOTr0sTC__Spl-JOMazI7v53Jlm9kr_HDzbYu_Dpz8m9YcaW2lWCJPmkwYnl5dVDwNL6x6Ie7L-LCsH9OeM9dDj-QibQ-I7uQlrHqi_kmVd86biJ3LQUv8s1sINtMLm2EPudjcNYVlkgWhB2wBJP26_0shrtyZVfoA7Zz2PKVfIKKrIx3szQFswagSyd74nx7mhL3E2c7Z3aymAaHbWtWR6EYPosln6ojujQmyyCGLMwQ6bwTEsdpIwZhl5PdKgH6s4OblpCFkBVQ",
+    "accept": "application/vnd.interoperability.iso20022.fxQuotes+json;version=2",
+    "traceparent": "00-67629f2771f9ca3e58ae98d2b525ff82-725045d290ab48f4-01",
+    "fspiop-http-method": "POST",
+    "fspiop-uri": "/fxQuotes",
+    "fspiop-signature": "{\"signature\":\"iMPh6HDRKkMt-yrTzNQigA0lqAM0USj-Cn8GcaihRHT0zM4s4SeNS4zv-F_kOgHSEzO98f9EJdImwlwb1IhIZZQcdZpXCFRyiVjrD56JNECydMdNgP0o0mT1O5x4sNuBpm4UsZOwK2XAxgVCl2ZKXNU2b6k10V2IVoQZ-ZH2NSTl42toPe5h9vqPmvCCDrBjNo7YmAfAfTZC-u7XkbSIH6E4sMCxlXdYbVEdAQZ9Ds75riYeMPSpCYBjsmdxq8xd3AO6p6vEQX3bRZ32cARpw8Qr5U--rxSnokdbpv14r82GixgYnlTQIElftZ5jn4RyqqoB7ZWS_0n1Ad6K76tHHw\",\"protectedHeader\":\"eyJhbGciOiJSUzI1NiIsIkZTUElPUC1VUkkiOiIvZnhRdW90ZXMiLCJGU1BJT1AtSFRUUC1NZXRob2QiOiJQT1NUIiwiRlNQSU9QLVNvdXJjZSI6InRlc3QtbXdrLWRmc3AiLCJGU1BJT1AtRGVzdGluYXRpb24iOiJ0ZXN0LWZ4cCIsIkRhdGUiOiJNb24sIDEzIE9jdCAyMDI1IDEzOjE0OjA2IEdNVCJ9\"}"
+  },
+  "body": {
+    "conversionRequestId": "01K7EV9VS1V41WTE9SC7JCGFZN",
+    "conversionTerms": {
+      "conversionId": "01K7EV9VS1V41WTE9SC7JCGFZP",
+      "initiatingFsp": "test-mwk-dfsp",
+      "determiningTransferId": "01K7EV9TNQ1VKX84N0GSQH6MDD",
+      "counterPartyFsp": "test-fxp",
+      "amountType": "SEND",
+      "sourceAmount": {
+        "currency": "MWK",
+        "amount": "60"
+      },
+      "targetAmount": {
+        "currency": "ZMW"
+      },
+      "expiration": "2025-10-13T13:15:06.497Z"
+    }
+  }
+}

@@ -1,0 +1,194 @@
+{
+  "_meta": {
+    "seq_note": "chronological order of the end-to-end flow",
+    "layer": "FSPIOP / ISO 20022 interoperability API (via DRPP switch)",
+    "direction": "test-zmw-dfsp (payee DFSP) -> test-mwk-dfsp",
+    "method": "PUT",
+    "resource": "/quotes/01K7EV9X2K4F8J90ZWMRHDNCZN",
+    "purpose": "Payee DFSP returns the quote: transferAmount, payee fees/commission, ILP packet and condition. Includes the untranslated ISO 20022 payload.",
+    "timestamp": "Mon, 13 Oct 2025 13:14:08 GMT",
+    "trace_id": "67629f2771f9ca3e58ae98d2b525ff82",
+    "traceparent": "00-67629f2771f9ca3e58ae98d2b525ff82-d51541bc51e1e8b7-01",
+    "correlation": {
+      "transferId": "01K7EV9TNQ1VKX84N0GSQH6MDD",
+      "quoteId": "01K7EV9X2K4F8J90ZWMRHDNCZN"
+    }
+  },
+  "headers": {
+    "host": "conn-test-mwk-dfsp.pm.drpp-onprem.global",
+    "content-type": "application/vnd.interoperability.iso20022.quotes+json;version=2.0",
+    "date": "Mon, 13 Oct 2025 13:14:08 GMT",
+    "fspiop-source": "test-zmw-dfsp",
+    "fspiop-destination": "test-mwk-dfsp",
+    "fspiop-http-method": "PUT",
+    "fspiop-signature": "{\"signature\":\"HdzwquoaaLInVnEBOf9ryQiZChpf1Mm5DxNPzLHmWiTDtRcRFDrt5lQZfo9jC2CJQIl89t56Fhl4ZI5yhT6ETbySTtsZCQpOEvbNsjvu3T8uPeb4Y3KS1R3ZvTnVz5Gy5AREh4e5n9eBYp-kzpy4GY8oEn6AKcrvwC_5se36Huvoic9AdCGiJkdcxPae2Go7ZLqa1ne_HN8DS4IXw2QpIw3MIEDC35t2TXNmwelKKTKTPXZmT__uFVihL1VQB3FrXTsYsZMOZUvfpQHqkjcPU1di84Jj9A82B4HWE2I7qP73s3umhc3ruirUlXfBL3T79eKs7aUthW7iCoMfKMe_yA\",\"protectedHeader\":\"eyJhbGciOiJSUzI1NiIsIkZTUElPUC1VUkkiOiIvcXVvdGVzLzAxSzdFVjlYMks0RjhKOTBaV01SSEROQ1pOIiwiRlNQSU9QLUhUVFAtTWV0aG9kIjoiUFVUIiwiRlNQSU9QLVNvdXJjZSI6InRlc3Qtem13LWRmc3AiLCJGU1BJT1AtRGVzdGluYXRpb24iOiJ0ZXN0LW13ay1kZnNwIiwiRGF0ZSI6Ik1vbiwgMTMgT2N0IDIwMjUgMTM6MTQ6MDggR01UIn0\"}",
+    "fspiop-uri": "/quotes/01K7EV9X2K4F8J90ZWMRHDNCZN",
+    "traceparent": "00-67629f2771f9ca3e58ae98d2b525ff82-d51541bc51e1e8b7-01",
+    "tracestate": "tx_callback_start_ts=1760361248386",
+    "user-agent": "axios/1.11.0",
+    "content-length": 1817,
+    "accept-encoding": "gzip, compress, deflate, br",
+    "x-forwarded-proto": "https",
+    "x-request-id": "b42e6f08-871d-45d0-bf4b-8f9dbb98ae5c",
+    "x-forwarded-for": "16.28.6.201",
+    "x-envoy-external-address": "16.28.6.201",
+    "x-envoy-attempt-count": "1",
+    "x-b3-traceid": "51735b103fea5462cac838c52b626579",
+    "x-b3-spanid": "8a5ebb124185804b",
+    "x-b3-parentspanid": "c619f3f158ba7251",
+    "x-b3-sampled": "0"
+  },
+  "body": {
+    "expiration": "2025-10-13T13:15:08.384Z",
+    "transferAmount": {
+      "currency": "ZMW",
+      "amount": "1"
+    },
+    "payeeReceiveAmount": {
+      "currency": "ZMW",
+      "amount": "1"
+    },
+    "payeeFspFee": {
+      "currency": "ZMW",
+      "amount": "0"
+    },
+    "ilpPacket": "DIIC0QAAAAAAAABkMjAyNTEwMTMxMzE1MDgzODQ2alrYQWLyAk7EmjhMu-aJhet2sP2siUYM9o8ZQ7Y_UgpnLm1vamFsb29wggKKZXlKeGRXOTBaVWxrSWpvaU1ERkxOMFZXT1ZneVN6UkdPRW81TUZwWFRWSklSRTVEV2s0aUxDSjBjbUZ1YzJGamRHbHZia2xrSWpvaU1ERkxOMFZXT1ZST1VURldTMWc0TkU0d1IxTlJTRFpOUkVRaUxDSjBjbUZ1YzJGamRHbHZibFI1Y0dVaU9uc2ljMk5sYm1GeWFXOGlPaUpVVWtGT1UwWkZVaUlzSW1sdWFYUnBZWFJ2Y2lJNklsQkJXVVZTSWl3aWFXNXBkR2xoZEc5eVZIbHdaU0k2SWtKVlUwbE9SVk5USW4wc0luQmhlV1ZsSWpwN0luQmhjblI1U1dSSmJtWnZJanA3SW5CaGNuUjVTV1JVZVhCbElqb2lUVk5KVTBST0lpd2ljR0Z5ZEhsSlpHVnVkR2xtYVdWeUlqb2lNVFkyTmpVMU5URXdNREVpTENKbWMzQkpaQ0k2SW5SbGMzUXRlbTEzTFdSbWMzQWlmWDBzSW5CaGVXVnlJanA3SW5CaGNuUjVTV1JKYm1adklqcDdJbkJoY25SNVNXUlVlWEJsSWpvaVRWTkpVMFJPSWl3aWNHRnlkSGxKWkdWdWRHbG1hV1Z5SWpvaU1UWTJOalUxTlRFd01ESWlMQ0ptYzNCSlpDSTZJblJsYzNRdGJYZHJMV1JtYzNBaWZTd2libUZ0WlNJNklrUnBjM0JzWVhrdFZHVnpkQ0o5TENKbGVIQnBjbUYwYVc5dUlqb2lNakF5TlMweE1DMHhNMVF4TXpveE5Ub3dPQzR6T0RSYUlpd2lZVzF2ZFc1MElqcDdJbUZ0YjNWdWRDSTZJakVpTENKamRYSnlaVzVqZVNJNklscE5WeUo5ZlE",
+    "condition": "Nmpa2EFi8gJOxJo4TLvmiYXrdrD9rIlGDPaPGUO2P1I",
+    "extensionList": {
+      "extension": [
+        {
+          "key": "GrpHdr.MsgId",
+          "value": "01K7EV9XM2F00J5V4PZQTKFE38"
+        },
+        {
+          "key": "GrpHdr.CreDtTm",
+          "value": "2025-10-13T13:14:08.386Z"
+        },
+        {
+          "key": "GrpHdr.NbOfTxs",
+          "value": "1"
+        },
+        {
+          "key": "GrpHdr.SttlmInf.SttlmMtd",
+          "value": "CLRG"
+        },
+        {
+          "key": "CdtTrfTxInf.Dbtr.Id.PrvtId.Othr.SchmeNm.Prtry",
+          "value": "MSISDN"
+        },
+        {
+          "key": "CdtTrfTxInf.Dbtr.Id.PrvtId.Othr.Id",
+          "value": "16665551002"
+        },
+        {
+          "key": "CdtTrfTxInf.Dbtr.Name",
+          "value": "Display-Test"
+        },
+        {
+          "key": "CdtTrfTxInf.DbtrAgt.FinInstnId.Othr.Id",
+          "value": "test-mwk-dfsp"
+        },
+        {
+          "key": "CdtTrfTxInf.Cdtr.Id.PrvtId.Othr.SchmeNm.Prtry",
+          "value": "MSISDN"
+        },
+        {
+          "key": "CdtTrfTxInf.Cdtr.Id.PrvtId.Othr.Id",
+          "value": "16665551001"
+        },
+        {
+          "key": "CdtTrfTxInf.CdtrAgt.FinInstnId.Othr.Id",
+          "value": "test-zmw-dfsp"
+        },
+        {
+          "key": "CdtTrfTxInf.ChrgBr",
+          "value": "CRED"
+        },
+        {
+          "key": "CdtTrfTxInf.ChrgsInf.Agt.FinInstnId.Othr.Id",
+          "value": "test-zmw-dfsp"
+        }
+      ]
+    }
+  },
+  "originalIso20022QuoteResponse": {
+    "GrpHdr": {
+      "MsgId": "01K7EV9XM2F00J5V4PZQTKFE38",
+      "CreDtTm": "2025-10-13T13:14:08.386Z",
+      "NbOfTxs": "1",
+      "SttlmInf": {
+        "SttlmMtd": "CLRG"
+      },
+      "PmtInstrXpryDtTm": "2025-10-13T13:15:08.384Z"
+    },
+    "CdtTrfTxInf": {
+      "PmtId": {
+        "TxId": "01K7EV9X2K4F8J90ZWMRHDNCZN"
+      },
+      "Dbtr": {
+        "Id": {
+          "PrvtId": {
+            "Othr": {
+              "SchmeNm": {
+                "Prtry": "MSISDN"
+              },
+              "Id": "16665551002"
+            }
+          }
+        },
+        "Name": "Display-Test"
+      },
+      "DbtrAgt": {
+        "FinInstnId": {
+          "Othr": {
+            "Id": "test-mwk-dfsp"
+          }
+        }
+      },
+      "Cdtr": {
+        "Id": {
+          "PrvtId": {
+            "Othr": {
+              "SchmeNm": {
+                "Prtry": "MSISDN"
+              },
+              "Id": "16665551001"
+            }
+          }
+        }
+      },
+      "CdtrAgt": {
+        "FinInstnId": {
+          "Othr": {
+            "Id": "test-zmw-dfsp"
+          }
+        }
+      },
+      "ChrgBr": "CRED",
+      "IntrBkSttlmAmt": {
+        "Ccy": "ZMW",
+        "ActiveCurrencyAndAmount": "1"
+      },
+      "InstdAmt": {
+        "Ccy": "ZMW",
+        "ActiveOrHistoricCurrencyAndAmount": "1"
+      },
+      "ChrgsInf": {
+        "Amt": {
+          "Ccy": "ZMW",
+          "ActiveOrHistoricCurrencyAndAmount": "0"
+        },
+        "Agt": {
+          "FinInstnId": {
+            "Othr": {
+              "Id": "test-zmw-dfsp"
+            }
+          }
+        }
+      },
+      "VrfctnOfTerms": {
+        "IlpV4PrepPacket": "DIIC0QAAAAAAAABkMjAyNTEwMTMxMzE1MDgzODQ2alrYQWLyAk7EmjhMu-aJhet2sP2siUYM9o8ZQ7Y_UgpnLm1vamFsb29wggKKZXlKeGRXOTBaVWxrSWpvaU1ERkxOMFZXT1ZneVN6UkdPRW81TUZwWFRWSklSRTVEV2s0aUxDSjBjbUZ1YzJGamRHbHZia2xrSWpvaU1ERkxOMFZXT1ZST1VURldTMWc0TkU0d1IxTlJTRFpOUkVRaUxDSjBjbUZ1YzJGamRHbHZibFI1Y0dVaU9uc2ljMk5sYm1GeWFXOGlPaUpVVWtGT1UwWkZVaUlzSW1sdWFYUnBZWFJ2Y2lJNklsQkJXVVZTSWl3aWFXNXBkR2xoZEc5eVZIbHdaU0k2SWtKVlUwbE9SVk5USW4wc0luQmhlV1ZsSWpwN0luQmhjblI1U1dSSmJtWnZJanA3SW5CaGNuUjVTV1JVZVhCbElqb2lUVk5KVTBST0lpd2ljR0Z5ZEhsSlpHVnVkR2xtYVdWeUlqb2lNVFkyTmpVMU5URXdNREVpTENKbWMzQkpaQ0k2SW5SbGMzUXRlbTEzTFdSbWMzQWlmWDBzSW5CaGVXVnlJanA3SW5CaGNuUjVTV1JKYm1adklqcDdJbkJoY25SNVNXUlVlWEJsSWpvaVRWTkpVMFJPSWl3aWNHRnlkSGxKWkdWdWRHbG1hV1Z5SWpvaU1UWTJOalUxTlRFd01ESWlMQ0ptYzNCSlpDSTZJblJsYzNRdGJYZHJMV1JtYzNBaWZTd2libUZ0WlNJNklrUnBjM0JzWVhrdFZHVnpkQ0o5TENKbGVIQnBjbUYwYVc5dUlqb2lNakF5TlMweE1DMHhNMVF4TXpveE5Ub3dPQzR6T0RSYUlpd2lZVzF2ZFc1MElqcDdJbUZ0YjNWdWRDSTZJakVpTENKamRYSnlaVzVqZVNJNklscE5WeUo5ZlE"
+      }
+    }
+  }
+}

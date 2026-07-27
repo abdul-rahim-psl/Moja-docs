@@ -1,0 +1,685 @@
+{
+  "_meta": {
+    "seq_note": "chronological order of the end-to-end flow",
+    "layer": "SDK Scheme Adapter outbound API (non-FSPIOP)",
+    "direction": "test-mwk-dfsp SDK outbound API -> Test harness",
+    "method": "200 OK",
+    "resource": "/transfers/01K7EV9TNQ1VKX84N0GSQH6MDD",
+    "purpose": "Final SDK state COMPLETED — full accumulated transfer state, containing every FSPIOP request/callback above.",
+    "timestamp": "Mon, 13 Oct 2025 13:14:12 GMT",
+    "trace_id": "67629f2771f9ca3e58ae98d2b525ff82",
+    "correlation": {
+      "transferId": "01K7EV9TNQ1VKX84N0GSQH6MDD",
+      "currentState": "COMPLETED"
+    }
+  },
+  "headers": {
+    "content-type": "application/json; charset=utf-8",
+    "content-length": "32252",
+    "date": "Mon, 13 Oct 2025 13:14:12 GMT",
+    "x-envoy-upstream-service-time": "3177",
+    "server": "istio-envoy",
+    "x-envoy-decorator-operation": "test-mwk-dfsp-sdk-scheme-adapter-api-svc.test-mwk-dfsp.svc.cluster.local:4001/*"
+  },
+  "body": {
+    "homeTransactionId": "123ABC",
+    "from": {
+      "type": "CONSUMER",
+      "idType": "MSISDN",
+      "idValue": "16665551002",
+      "displayName": "Display-Test",
+      "firstName": "Firstname-Test",
+      "middleName": "Middlename-Test",
+      "lastName": "Lastname-Test",
+      "dateOfBirth": "1984-01-01",
+      "fspId": "test-mwk-dfsp"
+    },
+    "to": {
+      "type": "CONSUMER",
+      "idType": "MSISDN",
+      "idValue": "16665551001",
+      "merchantClassificationCode": "123",
+      "fspId": "test-zmw-dfsp",
+      "extensionList": [
+        {
+          "key": "Assgnmt.MsgId",
+          "value": "01K7EV9V3FQ2RYXXE9ARH7DNFA"
+        },
+        {
+          "key": "Assgnmt.CreDtTm",
+          "value": "2025-10-13T13:14:05.807Z"
+        },
+        {
+          "key": "Rpt.Vrfctn",
+          "value": true
+        }
+      ]
+    },
+    "amountType": "SEND",
+    "currency": "MWK",
+    "amount": "60",
+    "transactionType": "TRANSFER",
+    "note": "test",
+    "skipPartyLookup": false,
+    "transferId": "01K7EV9TNQ1VKX84N0GSQH6MDD",
+    "traceId": "67629f2771f9ca3e58ae98d2b525ff82",
+    "currentState": "COMPLETED",
+    "initiatedTimestamp": "2025-10-13T13:14:05.367Z",
+    "direction": "OUTBOUND",
+    "getPartiesRequest": {
+      "withCredentials": false,
+      "transitional": {
+        "clarifyTimeoutError": true
+      },
+      "method": "GET",
+      "baseURL": "https://extapi.mw.drpp.global",
+      "url": "/parties/MSISDN/16665551001",
+      "headers": {
+        "content-type": "application/vnd.interoperability.iso20022.parties+json;version=2.0",
+        "date": "Mon, 13 Oct 2025 13:14:05 GMT",
+        "fspiop-source": "test-mwk-dfsp",
+        "Authorization": "Bearer eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICJkQkxBNEhKNnBmd0pYWlZHTG5IY0w1UEQ0UFYwQWhhd2tmWDVueS1Oa1VFIn0.eyJleHAiOjE3NjAzNjEzMjIsImlhdCI6MTc2MDM2MTAyMiwianRpIjoiYTU2MWNkMDQtMDQ3Yy00MzUxLWEwYzAtMzIzODg3NjU4NTkxIiwiaXNzIjoiaHR0cHM6Ly9rZXljbG9hay5tdy5kcnBwLmdsb2JhbC9yZWFsbXMvZGZzcHMiLCJzdWIiOiI5NzVlOWQxYy00MTYzLTRlYmItYjgwOS0yMDBkMmViYTY4NDYiLCJ0eXAiOiJCZWFyZXIiLCJhenAiOiJ0ZXN0LW13ay1kZnNwIiwiYWNyIjoiMSIsInJlYWxtX2FjY2VzcyI6eyJyb2xlcyI6WyJkZWZhdWx0LXJvbGVzLWRmc3BzIiwib2ZmbGluZV9hY2Nlc3MiLCJ1bWFfYXV0aG9yaXphdGlvbiJdfSwic2NvcGUiOiJlbWFpbCBwcm9maWxlIiwiY2xpZW50SG9zdCI6IjEwLjIwLjguNjAiLCJlbWFpbF92ZXJpZmllZCI6ZmFsc2UsInByZWZlcnJlZF91c2VybmFtZSI6InNlcnZpY2UtYWNjb3VudC10ZXN0LW13ay1kZnNwIiwiY2xpZW50QWRkcmVzcyI6IjEwLjIwLjguNjAiLCJjbGllbnRfaWQiOiJ0ZXN0LW13ay1kZnNwIn0.7-pU-f2gKzlu9W-UEF_jqVonlS4iScNjzOaYBFW2j9nlYbIAJHTTRmI9hFc7O5OF-tWbBT_S0GOTr0sTC__Spl-JOMazI7v53Jlm9kr_HDzbYu_Dpz8m9YcaW2lWCJPmkwYnl5dVDwNL6x6Ie7L-LCsH9OeM9dDj-QibQ-I7uQlrHqi_kmVd86biJ3LQUv8s1sINtMLm2EPudjcNYVlkgWhB2wBJP26_0shrtyZVfoA7Zz2PKVfIKKrIx3szQFswagSyd74nx7mhL3E2c7Z3aymAaHbWtWR6EYPosln6ojujQmyyCGLMwQ6bwTEsdpIwZhl5PdKgH6s4OblpCFkBVQ",
+        "accept": "application/vnd.interoperability.iso20022.parties+json;version=2",
+        "traceparent": "00-67629f2771f9ca3e58ae98d2b525ff82-a614ea0ed64c1853-01"
+      },
+      "httpsAgent": "[REDACTED]"
+    },
+    "getPartiesResponse": {
+      "body": {
+        "party": {
+          "partyIdInfo": {
+            "partyIdType": "MSISDN",
+            "partyIdentifier": "16665551001",
+            "fspId": "test-zmw-dfsp",
+            "extensionList": {
+              "extension": [
+                {
+                  "key": "Assgnmt.MsgId",
+                  "value": "01K7EV9V3FQ2RYXXE9ARH7DNFA"
+                },
+                {
+                  "key": "Assgnmt.CreDtTm",
+                  "value": "2025-10-13T13:14:05.807Z"
+                },
+                {
+                  "key": "Rpt.Vrfctn",
+                  "value": true
+                }
+              ]
+            }
+          },
+          "name": "Chikondi Banda",
+          "supportedCurrencies": [
+            "ZMW"
+          ]
+        }
+      },
+      "headers": {
+        "host": "conn-test-mwk-dfsp.pm.drpp-onprem.global",
+        "content-type": "application/vnd.interoperability.iso20022.parties+json;version=2.0",
+        "date": "Mon, 13 Oct 2025 13:14:05 GMT",
+        "fspiop-source": "test-zmw-dfsp",
+        "fspiop-destination": "test-mwk-dfsp",
+        "traceparent": "00-67629f2771f9ca3e58ae98d2b525ff82-ebcafa192e12093f-01",
+        "tracestate": "tx_callback_start_ts=1760361245807",
+        "fspiop-http-method": "PUT",
+        "fspiop-uri": "/parties/MSISDN/16665551001",
+        "fspiop-signature": "{\"signature\":\"JlOyt0OLHK_k9Wv6K6rP4zGSk36B4BHMbsYpf3S37umPr5lFDXzfIUFT-CCwxKp--utV1Bc031OYPXWfZFThSmYVLMAmS9mHKFiKKb49J4EdvTG6TlRB_go2ptrFQLltVgozp-xdBd8f1QlZUTUA2zQaVCcFp4K0h86moREwb21IvcCERKZuy9drBXFUS6zCBGh5Yn9_XiuZMwIx8O2wCMovSdFAbw69XdqChGK37j7FzORnJyN17gXPe0HIcqbZpQFuTzRIyAhBtCaVRi17ifBH6eGGzOMKpRvDnK808HW_JNke60g-JteebG4VLKphUe7-gROvrmMu_7mzREt6yg\",\"protectedHeader\":\"eyJhbGciOiJSUzI1NiIsIkZTUElPUC1VUkkiOiIvcGFydGllcy9NU0lTRE4vMTY2NjU1NTEwMDEiLCJGU1BJT1AtSFRUUC1NZXRob2QiOiJQVVQiLCJGU1BJT1AtU291cmNlIjoidGVzdC16bXctZGZzcCIsIkZTUElPUC1EZXN0aW5hdGlvbiI6InRlc3QtbXdrLWRmc3AiLCJEYXRlIjoiTW9uLCAxMyBPY3QgMjAyNSAxMzoxNDowNSBHTVQifQ\"}",
+        "fspiop-proxy": "proxy-mwk",
+        "authorization": "Bearer eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICJkQkxBNEhKNnBmd0pYWlZHTG5IY0w1UEQ0UFYwQWhhd2tmWDVueS1Oa1VFIn0.eyJleHAiOjE3NjAzNjE1MjksImlhdCI6MTc2MDM2MTIyOSwianRpIjoiOTMyZGM2NDgtOTkyZi00NDU5LWE5ZWMtOWJjMmFjMDJkOWJjIiwiaXNzIjoiaHR0cHM6Ly9rZXljbG9hay5tdy5kcnBwLmdsb2JhbC9yZWFsbXMvZGZzcHMiLCJzdWIiOiJlOTI0NzMxNy1jOGEwLTQ5YTQtODE3Ni00NWRkODIwYjQ0YWYiLCJ0eXAiOiJCZWFyZXIiLCJhenAiOiJwcm94eS1td2siLCJhY3IiOiIxIiwicmVhbG1fYWNjZXNzIjp7InJvbGVzIjpbImRlZmF1bHQtcm9sZXMtZGZzcHMiLCJvZmZsaW5lX2FjY2VzcyIsInVtYV9hdXRob3JpemF0aW9uIl19LCJzY29wZSI6ImVtYWlsIHByb2ZpbGUiLCJjbGllbnRIb3N0IjoiMTAuMjAuMi4yMDgiLCJlbWFpbF92ZXJpZmllZCI6ZmFsc2UsInByZWZlcnJlZF91c2VybmFtZSI6InNlcnZpY2UtYWNjb3VudC1wcm94eS1td2siLCJjbGllbnRBZGRyZXNzIjoiMTAuMjAuMi4yMDgiLCJjbGllbnRfaWQiOiJwcm94eS1td2sifQ.9Qz0Zewy9yJ1kGLAI7oM8Kdf9iZ9NA3M3_yvjPm1wUAHerBGz23CKu1O0qmPiM0BhM11XdnOt6yf13PvB9ocYQDkh06LPxvlLTpXf5N44WYCKnRHob4QQI6WkR8fHiYnTlb_Ew-ZjQWkI6a_Z-LKxNOTIYTDpOAEEAGKk6qWQhq511mF8hMQ3wuqPUSA7cYUUoVn1TL6rHJMKJyKouhAdW7M8izb4k-oZirgPL66whttHtPFsH2GJEA38sVPyaSlY-2OMyE-W-ttJsWlRdx3hkBcxduVOQtYbj8jZg_kRdF7o7q4nqx8FPJMColUUlSmL0KSihXTBN_PnH3LrQRA7w",
+        "user-agent": "axios/1.12.2",
+        "accept-encoding": "gzip, compress, deflate, br",
+        "x-forwarded-for": "13.247.23.136,16.28.6.201",
+        "x-forwarded-proto": "https",
+        "x-envoy-external-address": "16.28.6.201",
+        "x-request-id": "644c0ba5-e1df-41d3-ab69-2e20026d5fd5",
+        "x-envoy-attempt-count": "1",
+        "content-length": 469,
+        "x-b3-traceid": "e125d3f87fe6e954809726feadc15861",
+        "x-b3-spanid": "06cae1f3bdf574d9",
+        "x-b3-parentspanid": "45ee19c550908853",
+        "x-b3-sampled": "0"
+      }
+    },
+    "needFx": true,
+    "supportedCurrencies": [
+      "ZMW"
+    ],
+    "acceptParty": true,
+    "fxProviders": [
+      "test-fxp"
+    ],
+    "fxQuoteExpiration": "2025-10-13T13:15:06.497Z",
+    "fxQuoteRequest": {
+      "body": {
+        "conversionRequestId": "01K7EV9VS1V41WTE9SC7JCGFZN",
+        "conversionTerms": {
+          "conversionId": "01K7EV9VS1V41WTE9SC7JCGFZP",
+          "initiatingFsp": "test-mwk-dfsp",
+          "determiningTransferId": "01K7EV9TNQ1VKX84N0GSQH6MDD",
+          "counterPartyFsp": "test-fxp",
+          "amountType": "SEND",
+          "sourceAmount": {
+            "currency": "MWK",
+            "amount": "60"
+          },
+          "targetAmount": {
+            "currency": "ZMW"
+          },
+          "expiration": "2025-10-13T13:15:06.497Z"
+        }
+      },
+      "headers": {
+        "content-type": "application/vnd.interoperability.iso20022.fxQuotes+json;version=2.0",
+        "date": "Mon, 13 Oct 2025 13:14:06 GMT",
+        "fspiop-source": "test-mwk-dfsp",
+        "fspiop-destination": "test-fxp",
+        "Authorization": "Bearer eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICJkQkxBNEhKNnBmd0pYWlZHTG5IY0w1UEQ0UFYwQWhhd2tmWDVueS1Oa1VFIn0.eyJleHAiOjE3NjAzNjEzMjIsImlhdCI6MTc2MDM2MTAyMiwianRpIjoiYTU2MWNkMDQtMDQ3Yy00MzUxLWEwYzAtMzIzODg3NjU4NTkxIiwiaXNzIjoiaHR0cHM6Ly9rZXljbG9hay5tdy5kcnBwLmdsb2JhbC9yZWFsbXMvZGZzcHMiLCJzdWIiOiI5NzVlOWQxYy00MTYzLTRlYmItYjgwOS0yMDBkMmViYTY4NDYiLCJ0eXAiOiJCZWFyZXIiLCJhenAiOiJ0ZXN0LW13ay1kZnNwIiwiYWNyIjoiMSIsInJlYWxtX2FjY2VzcyI6eyJyb2xlcyI6WyJkZWZhdWx0LXJvbGVzLWRmc3BzIiwib2ZmbGluZV9hY2Nlc3MiLCJ1bWFfYXV0aG9yaXphdGlvbiJdfSwic2NvcGUiOiJlbWFpbCBwcm9maWxlIiwiY2xpZW50SG9zdCI6IjEwLjIwLjguNjAiLCJlbWFpbF92ZXJpZmllZCI6ZmFsc2UsInByZWZlcnJlZF91c2VybmFtZSI6InNlcnZpY2UtYWNjb3VudC10ZXN0LW13ay1kZnNwIiwiY2xpZW50QWRkcmVzcyI6IjEwLjIwLjguNjAiLCJjbGllbnRfaWQiOiJ0ZXN0LW13ay1kZnNwIn0.7-pU-f2gKzlu9W-UEF_jqVonlS4iScNjzOaYBFW2j9nlYbIAJHTTRmI9hFc7O5OF-tWbBT_S0GOTr0sTC__Spl-JOMazI7v53Jlm9kr_HDzbYu_Dpz8m9YcaW2lWCJPmkwYnl5dVDwNL6x6Ie7L-LCsH9OeM9dDj-QibQ-I7uQlrHqi_kmVd86biJ3LQUv8s1sINtMLm2EPudjcNYVlkgWhB2wBJP26_0shrtyZVfoA7Zz2PKVfIKKrIx3szQFswagSyd74nx7mhL3E2c7Z3aymAaHbWtWR6EYPosln6ojujQmyyCGLMwQ6bwTEsdpIwZhl5PdKgH6s4OblpCFkBVQ",
+        "accept": "application/vnd.interoperability.iso20022.fxQuotes+json;version=2",
+        "traceparent": "00-67629f2771f9ca3e58ae98d2b525ff82-725045d290ab48f4-01",
+        "fspiop-http-method": "POST",
+        "fspiop-uri": "/fxQuotes",
+        "fspiop-signature": "{\"signature\":\"iMPh6HDRKkMt-yrTzNQigA0lqAM0USj-Cn8GcaihRHT0zM4s4SeNS4zv-F_kOgHSEzO98f9EJdImwlwb1IhIZZQcdZpXCFRyiVjrD56JNECydMdNgP0o0mT1O5x4sNuBpm4UsZOwK2XAxgVCl2ZKXNU2b6k10V2IVoQZ-ZH2NSTl42toPe5h9vqPmvCCDrBjNo7YmAfAfTZC-u7XkbSIH6E4sMCxlXdYbVEdAQZ9Ds75riYeMPSpCYBjsmdxq8xd3AO6p6vEQX3bRZ32cARpw8Qr5U--rxSnokdbpv14r82GixgYnlTQIElftZ5jn4RyqqoB7ZWS_0n1Ad6K76tHHw\",\"protectedHeader\":\"eyJhbGciOiJSUzI1NiIsIkZTUElPUC1VUkkiOiIvZnhRdW90ZXMiLCJGU1BJT1AtSFRUUC1NZXRob2QiOiJQT1NUIiwiRlNQSU9QLVNvdXJjZSI6InRlc3QtbXdrLWRmc3AiLCJGU1BJT1AtRGVzdGluYXRpb24iOiJ0ZXN0LWZ4cCIsIkRhdGUiOiJNb24sIDEzIE9jdCAyMDI1IDEzOjE0OjA2IEdNVCJ9\"}"
+      }
+    },
+    "fxQuoteResponse": {
+      "body": {
+        "condition": "jp435ANRB6qXpvZVPFfyTHwOfK0mq2xvkegWPe0w0d4",
+        "conversionTerms": {
+          "conversionId": "01K7EV9VS1V41WTE9SC7JCGFZP",
+          "determiningTransferId": "01K7EV9TNQ1VKX84N0GSQH6MDD",
+          "initiatingFsp": "test-mwk-dfsp",
+          "counterPartyFsp": "test-fxp",
+          "sourceAmount": {
+            "currency": "MWK",
+            "amount": "60"
+          },
+          "targetAmount": {
+            "currency": "ZMW",
+            "amount": "1"
+          },
+          "expiration": "2025-10-13T13:15:06.497Z",
+          "amountType": "SEND",
+          "extensionList": {
+            "extension": [
+              {
+                "key": "GrpHdr.MsgId",
+                "value": "01K7EV9WDBJ06TM3HY901Q63P8"
+              },
+              {
+                "key": "GrpHdr.CreDtTm",
+                "value": "2025-10-13T13:14:07.147Z"
+              },
+              {
+                "key": "GrpHdr.NbOfTxs",
+                "value": "1"
+              },
+              {
+                "key": "GrpHdr.SttlmInf.SttlmMtd",
+                "value": "CLRG"
+              },
+              {
+                "key": "CdtTrfTxInf.UndrlygCstmrCdtTrf.Dbtr.Id.OrgId.Othr.Id",
+                "value": "test-mwk-dfsp"
+              },
+              {
+                "key": "CdtTrfTxInf.UndrlygCstmrCdtTrf.DbtrAgt.FinInstnId.Othr.Id",
+                "value": "test-mwk-dfsp"
+              },
+              {
+                "key": "CdtTrfTxInf.UndrlygCstmrCdtTrf.Cdtr.Id.OrgId.Othr.Id",
+                "value": "test-fxp"
+              },
+              {
+                "key": "CdtTrfTxInf.UndrlygCstmrCdtTrf.CdtrAgt.FinInstnId.Othr.Id",
+                "value": "test-fxp"
+              }
+            ]
+          }
+        }
+      },
+      "headers": {
+        "host": "conn-test-mwk-dfsp.pm.drpp-onprem.global",
+        "content-type": "application/vnd.interoperability.iso20022.fxQuotes+json;version=2.0",
+        "date": "Mon, 13 Oct 2025 13:14:07 GMT",
+        "fspiop-source": "test-fxp",
+        "fspiop-destination": "test-mwk-dfsp",
+        "fspiop-http-method": "PUT",
+        "fspiop-signature": "{\"signature\":\"SHtjryvi-gyNIpj-Ogm1vrga_0ug34Iyt5OjfqmIKgXGhgxU4lZqIOKDYOkeCH8VYKvS-uZ6AspyqVjPBiifGh5aqbZONjvcryzMsc4hVWNmqaGSbY7OSUkotsqnBx6u5ljE-xzRZQFTIpFj0QOzUw_uz4Z7J8RXYIxS_DWXAN4UOv7Kq8kZ83PEVrrN4iYyRf4vWxTUmM6wsvmky8cbpoWk30zNUUsw4YltmP6cHiNa5JJuN3P6D46_tMc4gWnwIR5AiwBAdM-GxtQp_x0bmBCG70SgYylzKiC9kbBT1FvCEw7HtnuVkSjMtSUggw4KqfqBCE2j09Soihh9SNa42A\",\"protectedHeader\":\"eyJhbGciOiJSUzI1NiIsIkZTUElPUC1VUkkiOiIvZnhRdW90ZXMvMDFLN0VWOVZTMVY0MVdURTlTQzdKQ0dGWk4iLCJGU1BJT1AtSFRUUC1NZXRob2QiOiJQVVQiLCJGU1BJT1AtU291cmNlIjoidGVzdC1meHAiLCJGU1BJT1AtRGVzdGluYXRpb24iOiJ0ZXN0LW13ay1kZnNwIiwiRGF0ZSI6Ik1vbiwgMTMgT2N0IDIwMjUgMTM6MTQ6MDcgR01UIn0\"}",
+        "fspiop-uri": "/fxQuotes/01K7EV9VS1V41WTE9SC7JCGFZN",
+        "traceparent": "00-67629f2771f9ca3e58ae98d2b525ff82-496145aae73b27ea-01",
+        "tracestate": "mojaloop=eyJzcGFuSWQiOiIwODEzZDFmZjFlMTExYjA4In0=",
+        "user-agent": "axios/1.11.0",
+        "content-length": 904,
+        "accept-encoding": "gzip, compress, deflate, br",
+        "x-forwarded-proto": "https",
+        "x-request-id": "3f5c4f0c-0535-46bf-9361-b158c65bc6e2",
+        "x-forwarded-for": "16.28.6.201",
+        "x-envoy-external-address": "16.28.6.201",
+        "x-envoy-attempt-count": "1",
+        "x-b3-traceid": "ad0311c5655e56e0b6c78814a0b9c5ae",
+        "x-b3-spanid": "a4c480a29f4cfd94",
+        "x-b3-parentspanid": "1a34bdfbf1f8ef2d",
+        "x-b3-sampled": "0"
+      }
+    },
+    "fxQuoteResponseSource": "test-fxp",
+    "acceptConversion": true,
+    "quoteId": "01K7EV9X2K4F8J90ZWMRHDNCZN",
+    "quoteRequest": {
+      "body": {
+        "quoteId": "01K7EV9X2K4F8J90ZWMRHDNCZN",
+        "transactionId": "01K7EV9TNQ1VKX84N0GSQH6MDD",
+        "amountType": "SEND",
+        "amount": {
+          "currency": "ZMW",
+          "amount": "1"
+        },
+        "expiration": "2025-10-13T13:15:07.827Z",
+        "payer": {
+          "partyIdInfo": {
+            "partyIdType": "MSISDN",
+            "partyIdentifier": "16665551002",
+            "fspId": "test-mwk-dfsp"
+          },
+          "personalInfo": {
+            "complexName": {
+              "firstName": "Firstname-Test",
+              "middleName": "Middlename-Test",
+              "lastName": "Lastname-Test"
+            },
+            "dateOfBirth": "1984-01-01"
+          },
+          "name": "Display-Test"
+        },
+        "payee": {
+          "partyIdInfo": {
+            "partyIdType": "MSISDN",
+            "partyIdentifier": "16665551001",
+            "fspId": "test-zmw-dfsp",
+            "extensionList": {
+              "extension": [
+                {
+                  "key": "Assgnmt.MsgId",
+                  "value": "01K7EV9V3FQ2RYXXE9ARH7DNFA"
+                },
+                {
+                  "key": "Assgnmt.CreDtTm",
+                  "value": "2025-10-13T13:14:05.807Z"
+                },
+                {
+                  "key": "Rpt.Vrfctn",
+                  "value": true
+                }
+              ]
+            }
+          },
+          "merchantClassificationCode": "123"
+        },
+        "transactionType": {
+          "scenario": "TRANSFER",
+          "initiator": "PAYER",
+          "initiatorType": "CONSUMER"
+        },
+        "note": "test"
+      },
+      "headers": {
+        "content-type": "application/vnd.interoperability.iso20022.quotes+json;version=2.0",
+        "date": "Mon, 13 Oct 2025 13:14:07 GMT",
+        "fspiop-source": "test-mwk-dfsp",
+        "fspiop-destination": "test-zmw-dfsp",
+        "Authorization": "Bearer eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICJkQkxBNEhKNnBmd0pYWlZHTG5IY0w1UEQ0UFYwQWhhd2tmWDVueS1Oa1VFIn0.eyJleHAiOjE3NjAzNjEzMjIsImlhdCI6MTc2MDM2MTAyMiwianRpIjoiYTU2MWNkMDQtMDQ3Yy00MzUxLWEwYzAtMzIzODg3NjU4NTkxIiwiaXNzIjoiaHR0cHM6Ly9rZXljbG9hay5tdy5kcnBwLmdsb2JhbC9yZWFsbXMvZGZzcHMiLCJzdWIiOiI5NzVlOWQxYy00MTYzLTRlYmItYjgwOS0yMDBkMmViYTY4NDYiLCJ0eXAiOiJCZWFyZXIiLCJhenAiOiJ0ZXN0LW13ay1kZnNwIiwiYWNyIjoiMSIsInJlYWxtX2FjY2VzcyI6eyJyb2xlcyI6WyJkZWZhdWx0LXJvbGVzLWRmc3BzIiwib2ZmbGluZV9hY2Nlc3MiLCJ1bWFfYXV0aG9yaXphdGlvbiJdfSwic2NvcGUiOiJlbWFpbCBwcm9maWxlIiwiY2xpZW50SG9zdCI6IjEwLjIwLjguNjAiLCJlbWFpbF92ZXJpZmllZCI6ZmFsc2UsInByZWZlcnJlZF91c2VybmFtZSI6InNlcnZpY2UtYWNjb3VudC10ZXN0LW13ay1kZnNwIiwiY2xpZW50QWRkcmVzcyI6IjEwLjIwLjguNjAiLCJjbGllbnRfaWQiOiJ0ZXN0LW13ay1kZnNwIn0.7-pU-f2gKzlu9W-UEF_jqVonlS4iScNjzOaYBFW2j9nlYbIAJHTTRmI9hFc7O5OF-tWbBT_S0GOTr0sTC__Spl-JOMazI7v53Jlm9kr_HDzbYu_Dpz8m9YcaW2lWCJPmkwYnl5dVDwNL6x6Ie7L-LCsH9OeM9dDj-QibQ-I7uQlrHqi_kmVd86biJ3LQUv8s1sINtMLm2EPudjcNYVlkgWhB2wBJP26_0shrtyZVfoA7Zz2PKVfIKKrIx3szQFswagSyd74nx7mhL3E2c7Z3aymAaHbWtWR6EYPosln6ojujQmyyCGLMwQ6bwTEsdpIwZhl5PdKgH6s4OblpCFkBVQ",
+        "accept": "application/vnd.interoperability.iso20022.quotes+json;version=2",
+        "traceparent": "00-67629f2771f9ca3e58ae98d2b525ff82-3a53758d2faa7c5b-01",
+        "fspiop-http-method": "POST",
+        "fspiop-uri": "/quotes",
+        "fspiop-signature": "{\"signature\":\"aFFxm1JuTiCnbXqw49er89NA2IE8kHY7fg9B4y1pK6l9uDEcy2R2rWLb7doKYPrv7EUGAdZKrlg3m9uQwFdK5bQpn74VyAJXV8Cqz5lCbfbF4LcxBJLFiaGb5HyjAza4Z7zJz60SOdc8Xb_ZPIl_nIU4y9t3WZDoM0mOmReXEACM5qTr0iOvegqkwaunLnHzcOusBXUELP3oahML2e1duhb9hKUCyyUZbcULv5OGZF6WeFYbi0NPQlYJ4eqX_K5Nn71LEyYYZPGB4oMEjfBSzrhIJnj93IKtmwY17GXi547AJx5VHEt-12F8ZMZVquB0WTtStnhz_xtz40wLPvIagw\",\"protectedHeader\":\"eyJhbGciOiJSUzI1NiIsIkZTUElPUC1VUkkiOiIvcXVvdGVzIiwiRlNQSU9QLUhUVFAtTWV0aG9kIjoiUE9TVCIsIkZTUElPUC1Tb3VyY2UiOiJ0ZXN0LW13ay1kZnNwIiwiRlNQSU9QLURlc3RpbmF0aW9uIjoidGVzdC16bXctZGZzcCIsIkRhdGUiOiJNb24sIDEzIE9jdCAyMDI1IDEzOjE0OjA3IEdNVCJ9\"}"
+      }
+    },
+    "quoteResponse": {
+      "headers": {
+        "host": "conn-test-mwk-dfsp.pm.drpp-onprem.global",
+        "content-type": "application/vnd.interoperability.iso20022.quotes+json;version=2.0",
+        "date": "Mon, 13 Oct 2025 13:14:08 GMT",
+        "fspiop-source": "test-zmw-dfsp",
+        "fspiop-destination": "test-mwk-dfsp",
+        "fspiop-http-method": "PUT",
+        "fspiop-signature": "{\"signature\":\"HdzwquoaaLInVnEBOf9ryQiZChpf1Mm5DxNPzLHmWiTDtRcRFDrt5lQZfo9jC2CJQIl89t56Fhl4ZI5yhT6ETbySTtsZCQpOEvbNsjvu3T8uPeb4Y3KS1R3ZvTnVz5Gy5AREh4e5n9eBYp-kzpy4GY8oEn6AKcrvwC_5se36Huvoic9AdCGiJkdcxPae2Go7ZLqa1ne_HN8DS4IXw2QpIw3MIEDC35t2TXNmwelKKTKTPXZmT__uFVihL1VQB3FrXTsYsZMOZUvfpQHqkjcPU1di84Jj9A82B4HWE2I7qP73s3umhc3ruirUlXfBL3T79eKs7aUthW7iCoMfKMe_yA\",\"protectedHeader\":\"eyJhbGciOiJSUzI1NiIsIkZTUElPUC1VUkkiOiIvcXVvdGVzLzAxSzdFVjlYMks0RjhKOTBaV01SSEROQ1pOIiwiRlNQSU9QLUhUVFAtTWV0aG9kIjoiUFVUIiwiRlNQSU9QLVNvdXJjZSI6InRlc3Qtem13LWRmc3AiLCJGU1BJT1AtRGVzdGluYXRpb24iOiJ0ZXN0LW13ay1kZnNwIiwiRGF0ZSI6Ik1vbiwgMTMgT2N0IDIwMjUgMTM6MTQ6MDggR01UIn0\"}",
+        "fspiop-uri": "/quotes/01K7EV9X2K4F8J90ZWMRHDNCZN",
+        "traceparent": "00-67629f2771f9ca3e58ae98d2b525ff82-d51541bc51e1e8b7-01",
+        "tracestate": "tx_callback_start_ts=1760361248386",
+        "user-agent": "axios/1.11.0",
+        "content-length": 1817,
+        "accept-encoding": "gzip, compress, deflate, br",
+        "x-forwarded-proto": "https",
+        "x-request-id": "b42e6f08-871d-45d0-bf4b-8f9dbb98ae5c",
+        "x-forwarded-for": "16.28.6.201",
+        "x-envoy-external-address": "16.28.6.201",
+        "x-envoy-attempt-count": "1",
+        "x-b3-traceid": "51735b103fea5462cac838c52b626579",
+        "x-b3-spanid": "8a5ebb124185804b",
+        "x-b3-parentspanid": "c619f3f158ba7251",
+        "x-b3-sampled": "0"
+      },
+      "body": {
+        "expiration": "2025-10-13T13:15:08.384Z",
+        "transferAmount": {
+          "currency": "ZMW",
+          "amount": "1"
+        },
+        "payeeReceiveAmount": {
+          "currency": "ZMW",
+          "amount": "1"
+        },
+        "payeeFspFee": {
+          "currency": "ZMW",
+          "amount": "0"
+        },
+        "ilpPacket": "DIIC0QAAAAAAAABkMjAyNTEwMTMxMzE1MDgzODQ2alrYQWLyAk7EmjhMu-aJhet2sP2siUYM9o8ZQ7Y_UgpnLm1vamFsb29wggKKZXlKeGRXOTBaVWxrSWpvaU1ERkxOMFZXT1ZneVN6UkdPRW81TUZwWFRWSklSRTVEV2s0aUxDSjBjbUZ1YzJGamRHbHZia2xrSWpvaU1ERkxOMFZXT1ZST1VURldTMWc0TkU0d1IxTlJTRFpOUkVRaUxDSjBjbUZ1YzJGamRHbHZibFI1Y0dVaU9uc2ljMk5sYm1GeWFXOGlPaUpVVWtGT1UwWkZVaUlzSW1sdWFYUnBZWFJ2Y2lJNklsQkJXVVZTSWl3aWFXNXBkR2xoZEc5eVZIbHdaU0k2SWtKVlUwbE9SVk5USW4wc0luQmhlV1ZsSWpwN0luQmhjblI1U1dSSmJtWnZJanA3SW5CaGNuUjVTV1JVZVhCbElqb2lUVk5KVTBST0lpd2ljR0Z5ZEhsSlpHVnVkR2xtYVdWeUlqb2lNVFkyTmpVMU5URXdNREVpTENKbWMzQkpaQ0k2SW5SbGMzUXRlbTEzTFdSbWMzQWlmWDBzSW5CaGVXVnlJanA3SW5CaGNuUjVTV1JKYm1adklqcDdJbkJoY25SNVNXUlVlWEJsSWpvaVRWTkpVMFJPSWl3aWNHRnlkSGxKWkdWdWRHbG1hV1Z5SWpvaU1UWTJOalUxTlRFd01ESWlMQ0ptYzNCSlpDSTZJblJsYzNRdGJYZHJMV1JtYzNBaWZTd2libUZ0WlNJNklrUnBjM0JzWVhrdFZHVnpkQ0o5TENKbGVIQnBjbUYwYVc5dUlqb2lNakF5TlMweE1DMHhNMVF4TXpveE5Ub3dPQzR6T0RSYUlpd2lZVzF2ZFc1MElqcDdJbUZ0YjNWdWRDSTZJakVpTENKamRYSnlaVzVqZVNJNklscE5WeUo5ZlE",
+        "condition": "Nmpa2EFi8gJOxJo4TLvmiYXrdrD9rIlGDPaPGUO2P1I",
+        "extensionList": {
+          "extension": [
+            {
+              "key": "GrpHdr.MsgId",
+              "value": "01K7EV9XM2F00J5V4PZQTKFE38"
+            },
+            {
+              "key": "GrpHdr.CreDtTm",
+              "value": "2025-10-13T13:14:08.386Z"
+            },
+            {
+              "key": "GrpHdr.NbOfTxs",
+              "value": "1"
+            },
+            {
+              "key": "GrpHdr.SttlmInf.SttlmMtd",
+              "value": "CLRG"
+            },
+            {
+              "key": "CdtTrfTxInf.Dbtr.Id.PrvtId.Othr.SchmeNm.Prtry",
+              "value": "MSISDN"
+            },
+            {
+              "key": "CdtTrfTxInf.Dbtr.Id.PrvtId.Othr.Id",
+              "value": "16665551002"
+            },
+            {
+              "key": "CdtTrfTxInf.Dbtr.Name",
+              "value": "Display-Test"
+            },
+            {
+              "key": "CdtTrfTxInf.DbtrAgt.FinInstnId.Othr.Id",
+              "value": "test-mwk-dfsp"
+            },
+            {
+              "key": "CdtTrfTxInf.Cdtr.Id.PrvtId.Othr.SchmeNm.Prtry",
+              "value": "MSISDN"
+            },
+            {
+              "key": "CdtTrfTxInf.Cdtr.Id.PrvtId.Othr.Id",
+              "value": "16665551001"
+            },
+            {
+              "key": "CdtTrfTxInf.CdtrAgt.FinInstnId.Othr.Id",
+              "value": "test-zmw-dfsp"
+            },
+            {
+              "key": "CdtTrfTxInf.ChrgBr",
+              "value": "CRED"
+            },
+            {
+              "key": "CdtTrfTxInf.ChrgsInf.Agt.FinInstnId.Othr.Id",
+              "value": "test-zmw-dfsp"
+            }
+          ]
+        }
+      },
+      "originalIso20022QuoteResponse": {
+        "GrpHdr": {
+          "MsgId": "01K7EV9XM2F00J5V4PZQTKFE38",
+          "CreDtTm": "2025-10-13T13:14:08.386Z",
+          "NbOfTxs": "1",
+          "SttlmInf": {
+            "SttlmMtd": "CLRG"
+          },
+          "PmtInstrXpryDtTm": "2025-10-13T13:15:08.384Z"
+        },
+        "CdtTrfTxInf": {
+          "PmtId": {
+            "TxId": "01K7EV9X2K4F8J90ZWMRHDNCZN"
+          },
+          "Dbtr": {
+            "Id": {
+              "PrvtId": {
+                "Othr": {
+                  "SchmeNm": {
+                    "Prtry": "MSISDN"
+                  },
+                  "Id": "16665551002"
+                }
+              }
+            },
+            "Name": "Display-Test"
+          },
+          "DbtrAgt": {
+            "FinInstnId": {
+              "Othr": {
+                "Id": "test-mwk-dfsp"
+              }
+            }
+          },
+          "Cdtr": {
+            "Id": {
+              "PrvtId": {
+                "Othr": {
+                  "SchmeNm": {
+                    "Prtry": "MSISDN"
+                  },
+                  "Id": "16665551001"
+                }
+              }
+            }
+          },
+          "CdtrAgt": {
+            "FinInstnId": {
+              "Othr": {
+                "Id": "test-zmw-dfsp"
+              }
+            }
+          },
+          "ChrgBr": "CRED",
+          "IntrBkSttlmAmt": {
+            "Ccy": "ZMW",
+            "ActiveCurrencyAndAmount": "1"
+          },
+          "InstdAmt": {
+            "Ccy": "ZMW",
+            "ActiveOrHistoricCurrencyAndAmount": "1"
+          },
+          "ChrgsInf": {
+            "Amt": {
+              "Ccy": "ZMW",
+              "ActiveOrHistoricCurrencyAndAmount": "0"
+            },
+            "Agt": {
+              "FinInstnId": {
+                "Othr": {
+                  "Id": "test-zmw-dfsp"
+                }
+              }
+            }
+          },
+          "VrfctnOfTerms": {
+            "IlpV4PrepPacket": "DIIC0QAAAAAAAABkMjAyNTEwMTMxMzE1MDgzODQ2alrYQWLyAk7EmjhMu-aJhet2sP2siUYM9o8ZQ7Y_UgpnLm1vamFsb29wggKKZXlKeGRXOTBaVWxrSWpvaU1ERkxOMFZXT1ZneVN6UkdPRW81TUZwWFRWSklSRTVEV2s0aUxDSjBjbUZ1YzJGamRHbHZia2xrSWpvaU1ERkxOMFZXT1ZST1VURldTMWc0TkU0d1IxTlJTRFpOUkVRaUxDSjBjbUZ1YzJGamRHbHZibFI1Y0dVaU9uc2ljMk5sYm1GeWFXOGlPaUpVVWtGT1UwWkZVaUlzSW1sdWFYUnBZWFJ2Y2lJNklsQkJXVVZTSWl3aWFXNXBkR2xoZEc5eVZIbHdaU0k2SWtKVlUwbE9SVk5USW4wc0luQmhlV1ZsSWpwN0luQmhjblI1U1dSSmJtWnZJanA3SW5CaGNuUjVTV1JVZVhCbElqb2lUVk5KVTBST0lpd2ljR0Z5ZEhsSlpHVnVkR2xtYVdWeUlqb2lNVFkyTmpVMU5URXdNREVpTENKbWMzQkpaQ0k2SW5SbGMzUXRlbTEzTFdSbWMzQWlmWDBzSW5CaGVXVnlJanA3SW5CaGNuUjVTV1JKYm1adklqcDdJbkJoY25SNVNXUlVlWEJsSWpvaVRWTkpVMFJPSWl3aWNHRnlkSGxKWkdWdWRHbG1hV1Z5SWpvaU1UWTJOalUxTlRFd01ESWlMQ0ptYzNCSlpDSTZJblJsYzNRdGJYZHJMV1JtYzNBaWZTd2libUZ0WlNJNklrUnBjM0JzWVhrdFZHVnpkQ0o5TENKbGVIQnBjbUYwYVc5dUlqb2lNakF5TlMweE1DMHhNMVF4TXpveE5Ub3dPQzR6T0RSYUlpd2lZVzF2ZFc1MElqcDdJbUZ0YjNWdWRDSTZJakVpTENKamRYSnlaVzVqZVNJNklscE5WeUo5ZlE"
+          }
+        }
+      }
+    },
+    "quoteResponseSource": "test-zmw-dfsp",
+    "acceptQuote": true,
+    "fxTransferExpiration": "2025-10-13T13:15:09.272Z",
+    "fxTransferRequest": {
+      "body": {
+        "determiningTransferId": "01K7EV9TNQ1VKX84N0GSQH6MDD",
+        "initiatingFsp": "test-mwk-dfsp",
+        "counterPartyFsp": "test-fxp",
+        "sourceAmount": {
+          "currency": "MWK",
+          "amount": "60"
+        },
+        "targetAmount": {
+          "currency": "ZMW",
+          "amount": "1"
+        },
+        "expiration": "2025-10-13T13:15:09.272Z",
+        "amountType": "SEND",
+        "condition": "jp435ANRB6qXpvZVPFfyTHwOfK0mq2xvkegWPe0w0d4",
+        "commitRequestId": "01K7EV9VS1V41WTE9SC7JCGFZP"
+      },
+      "headers": {
+        "content-type": "application/vnd.interoperability.iso20022.fxTransfers+json;version=2.0",
+        "date": "Mon, 13 Oct 2025 13:14:09 GMT",
+        "fspiop-source": "test-mwk-dfsp",
+        "fspiop-destination": "test-fxp",
+        "Authorization": "Bearer eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICJkQkxBNEhKNnBmd0pYWlZHTG5IY0w1UEQ0UFYwQWhhd2tmWDVueS1Oa1VFIn0.eyJleHAiOjE3NjAzNjEzMjIsImlhdCI6MTc2MDM2MTAyMiwianRpIjoiYTU2MWNkMDQtMDQ3Yy00MzUxLWEwYzAtMzIzODg3NjU4NTkxIiwiaXNzIjoiaHR0cHM6Ly9rZXljbG9hay5tdy5kcnBwLmdsb2JhbC9yZWFsbXMvZGZzcHMiLCJzdWIiOiI5NzVlOWQxYy00MTYzLTRlYmItYjgwOS0yMDBkMmViYTY4NDYiLCJ0eXAiOiJCZWFyZXIiLCJhenAiOiJ0ZXN0LW13ay1kZnNwIiwiYWNyIjoiMSIsInJlYWxtX2FjY2VzcyI6eyJyb2xlcyI6WyJkZWZhdWx0LXJvbGVzLWRmc3BzIiwib2ZmbGluZV9hY2Nlc3MiLCJ1bWFfYXV0aG9yaXphdGlvbiJdfSwic2NvcGUiOiJlbWFpbCBwcm9maWxlIiwiY2xpZW50SG9zdCI6IjEwLjIwLjguNjAiLCJlbWFpbF92ZXJpZmllZCI6ZmFsc2UsInByZWZlcnJlZF91c2VybmFtZSI6InNlcnZpY2UtYWNjb3VudC10ZXN0LW13ay1kZnNwIiwiY2xpZW50QWRkcmVzcyI6IjEwLjIwLjguNjAiLCJjbGllbnRfaWQiOiJ0ZXN0LW13ay1kZnNwIn0.7-pU-f2gKzlu9W-UEF_jqVonlS4iScNjzOaYBFW2j9nlYbIAJHTTRmI9hFc7O5OF-tWbBT_S0GOTr0sTC__Spl-JOMazI7v53Jlm9kr_HDzbYu_Dpz8m9YcaW2lWCJPmkwYnl5dVDwNL6x6Ie7L-LCsH9OeM9dDj-QibQ-I7uQlrHqi_kmVd86biJ3LQUv8s1sINtMLm2EPudjcNYVlkgWhB2wBJP26_0shrtyZVfoA7Zz2PKVfIKKrIx3szQFswagSyd74nx7mhL3E2c7Z3aymAaHbWtWR6EYPosln6ojujQmyyCGLMwQ6bwTEsdpIwZhl5PdKgH6s4OblpCFkBVQ",
+        "accept": "application/vnd.interoperability.iso20022.fxTransfers+json;version=2",
+        "traceparent": "00-67629f2771f9ca3e58ae98d2b525ff82-07114e246f085151-01",
+        "fspiop-http-method": "POST",
+        "fspiop-uri": "/fxTransfers",
+        "fspiop-signature": "{\"signature\":\"eyN3HjjsO14zhDvTYKjEsAZikFuDrLpCub4o660-fqJTHnf8Pg0R9BNJN9Pt3yy9rJPsGOWcIwOaDmEJv-wdCiI17iGlKmICQ3ON7sdZ5fKtLpInooKoJ65842rIQ0qyKbwApZ3tu9HnBRbU1NcDqwTaHhOBvJIS9DrhR1npXf1c1ZolIpVpphX00Klsp67TBn-41C178aVZGp_VcBABOd8mj2dFHQobsoYdJ0zPIzKFsLd8FvbmShEjVggTqPtrSwpKN604EVapGN_wR_63qTiKQVp1monA3QzjXuGGs02p5lSnKIJ2qpZTNa7pRI1EPOl4DRmc-hfUYCN3sXvmUw\",\"protectedHeader\":\"eyJhbGciOiJSUzI1NiIsIkZTUElPUC1VUkkiOiIvZnhUcmFuc2ZlcnMiLCJGU1BJT1AtSFRUUC1NZXRob2QiOiJQT1NUIiwiRlNQSU9QLVNvdXJjZSI6InRlc3QtbXdrLWRmc3AiLCJGU1BJT1AtRGVzdGluYXRpb24iOiJ0ZXN0LWZ4cCIsIkRhdGUiOiJNb24sIDEzIE9jdCAyMDI1IDEzOjE0OjA5IEdNVCJ9\"}"
+      }
+    },
+    "fxTransferResponse": {
+      "body": {
+        "fulfilment": "4nqWiu-ARrNqM3W_GknieZcPMIFVS34SoBTwk7y43E8",
+        "completedTimestamp": "2025-10-13T13:14:09.957Z",
+        "conversionState": "RESERVED",
+        "extensionList": {
+          "extension": [
+            {
+              "key": "GrpHdr.MsgId",
+              "value": "01K7EV9Z5AG750EZJT22PZ0ZAA"
+            },
+            {
+              "key": "GrpHdr.CreDtTm",
+              "value": "2025-10-13T13:14:09.962Z"
+            }
+          ]
+        }
+      },
+      "headers": {
+        "host": "conn-test-mwk-dfsp.pm.drpp-onprem.global",
+        "accept-encoding": "gzip, compress, deflate, br",
+        "authorization": "Bearer eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICJkQkxBNEhKNnBmd0pYWlZHTG5IY0w1UEQ0UFYwQWhhd2tmWDVueS1Oa1VFIn0.eyJleHAiOjE3NjAzNjE1MjksImlhdCI6MTc2MDM2MTIyOSwianRpIjoiOTMyZGM2NDgtOTkyZi00NDU5LWE5ZWMtOWJjMmFjMDJkOWJjIiwiaXNzIjoiaHR0cHM6Ly9rZXljbG9hay5tdy5kcnBwLmdsb2JhbC9yZWFsbXMvZGZzcHMiLCJzdWIiOiJlOTI0NzMxNy1jOGEwLTQ5YTQtODE3Ni00NWRkODIwYjQ0YWYiLCJ0eXAiOiJCZWFyZXIiLCJhenAiOiJwcm94eS1td2siLCJhY3IiOiIxIiwicmVhbG1fYWNjZXNzIjp7InJvbGVzIjpbImRlZmF1bHQtcm9sZXMtZGZzcHMiLCJvZmZsaW5lX2FjY2VzcyIsInVtYV9hdXRob3JpemF0aW9uIl19LCJzY29wZSI6ImVtYWlsIHByb2ZpbGUiLCJjbGllbnRIb3N0IjoiMTAuMjAuMi4yMDgiLCJlbWFpbF92ZXJpZmllZCI6ZmFsc2UsInByZWZlcnJlZF91c2VybmFtZSI6InNlcnZpY2UtYWNjb3VudC1wcm94eS1td2siLCJjbGllbnRBZGRyZXNzIjoiMTAuMjAuMi4yMDgiLCJjbGllbnRfaWQiOiJwcm94eS1td2sifQ.9Qz0Zewy9yJ1kGLAI7oM8Kdf9iZ9NA3M3_yvjPm1wUAHerBGz23CKu1O0qmPiM0BhM11XdnOt6yf13PvB9ocYQDkh06LPxvlLTpXf5N44WYCKnRHob4QQI6WkR8fHiYnTlb_Ew-ZjQWkI6a_Z-LKxNOTIYTDpOAEEAGKk6qWQhq511mF8hMQ3wuqPUSA7cYUUoVn1TL6rHJMKJyKouhAdW7M8izb4k-oZirgPL66whttHtPFsH2GJEA38sVPyaSlY-2OMyE-W-ttJsWlRdx3hkBcxduVOQtYbj8jZg_kRdF7o7q4nqx8FPJMColUUlSmL0KSihXTBN_PnH3LrQRA7w",
+        "content-type": "application/vnd.interoperability.iso20022.fxTransfers+json;version=2.0",
+        "date": "Mon, 13 Oct 2025 13:14:09 GMT",
+        "fspiop-destination": "test-mwk-dfsp",
+        "fspiop-http-method": "PUT",
+        "fspiop-proxy": "proxy-mwk",
+        "fspiop-signature": "{\"signature\":\"gj8ZHI7Zs0lMalWe-T7PYNlPBQZyoPUyiiJ8x1gvTduHFCngwgt0tdVz72IU29NEtUAOrVpy1NDkSiX8ZsArxouhjaCdlOwfFYnix38lFbVrfo6ICudYCId2ICm_67UJ0Ae_a7MIOesG3ttFn9--4l-bu1VfGZFTd-CQjbwWAujoeJ_jHmRvIuXNc3iSewkPAXOWXtmgWkkBFGnRd3Hn8QtFEOg1DN_PoTyR-fVL7W2y6GpY0dLkO9CmLvqMAB6eZXyEHjZAbxJMCBEpetT5xtL5yjkb17qELQOlhv8tLt2hEiFW5PyiTvXJUiUyfMj1MVUHCv1HhKT8_oTr7khYjw\",\"protectedHeader\":\"eyJhbGciOiJSUzI1NiIsIkZTUElPUC1VUkkiOiIvZnhUcmFuc2ZlcnMvMDFLN0VWOVZTMVY0MVdURTlTQzdKQ0dGWlAiLCJGU1BJT1AtSFRUUC1NZXRob2QiOiJQVVQiLCJGU1BJT1AtU291cmNlIjoidGVzdC1meHAiLCJGU1BJT1AtRGVzdGluYXRpb24iOiJ0ZXN0LW13ay1kZnNwIiwiRGF0ZSI6Ik1vbiwgMTMgT2N0IDIwMjUgMTM6MTQ6MDkgR01UIn0\"}",
+        "fspiop-source": "test-fxp",
+        "fspiop-uri": "/fxTransfers/01K7EV9VS1V41WTE9SC7JCGFZP",
+        "traceparent": "00-67629f2771f9ca3e58ae98d2b525ff82-a3c2dca8f2153af2-01",
+        "tracestate": "mojaloop=eyJzcGFuSWQiOiIwZjZhMTE3YzZlYTc0NDEzIiwidGltZUFwaUZ1bGZpbCI6IjE3NjAzNjEyNTAyODciLCJ0aW1lQXBpUHJlcGFyZSI6IjE3NjAzNjEyNDk1OTUifQ==",
+        "user-agent": "axios/1.12.2",
+        "x-envoy-attempt-count": "1",
+        "x-envoy-external-address": "16.28.6.201",
+        "x-forwarded-for": "13.247.23.136,16.28.6.201",
+        "x-forwarded-proto": "https",
+        "x-request-id": "d444dc80-cf52-4fd6-9299-bdd3c7eb6cb7",
+        "content-length": 220,
+        "x-b3-traceid": "f82f54673d8e28d7f953d52316a469b4",
+        "x-b3-spanid": "6dfdbf926da9925a",
+        "x-b3-parentspanid": "242908c5312dd3b6",
+        "x-b3-sampled": "0"
+      }
+    },
+    "prepare": {
+      "body": {
+        "transferId": "01K7EV9TNQ1VKX84N0GSQH6MDD",
+        "payeeFsp": "test-zmw-dfsp",
+        "payerFsp": "test-mwk-dfsp",
+        "amount": {
+          "currency": "ZMW",
+          "amount": "1"
+        },
+        "ilpPacket": "DIIC0QAAAAAAAABkMjAyNTEwMTMxMzE1MDgzODQ2alrYQWLyAk7EmjhMu-aJhet2sP2siUYM9o8ZQ7Y_UgpnLm1vamFsb29wggKKZXlKeGRXOTBaVWxrSWpvaU1ERkxOMFZXT1ZneVN6UkdPRW81TUZwWFRWSklSRTVEV2s0aUxDSjBjbUZ1YzJGamRHbHZia2xrSWpvaU1ERkxOMFZXT1ZST1VURldTMWc0TkU0d1IxTlJTRFpOUkVRaUxDSjBjbUZ1YzJGamRHbHZibFI1Y0dVaU9uc2ljMk5sYm1GeWFXOGlPaUpVVWtGT1UwWkZVaUlzSW1sdWFYUnBZWFJ2Y2lJNklsQkJXVVZTSWl3aWFXNXBkR2xoZEc5eVZIbHdaU0k2SWtKVlUwbE9SVk5USW4wc0luQmhlV1ZsSWpwN0luQmhjblI1U1dSSmJtWnZJanA3SW5CaGNuUjVTV1JVZVhCbElqb2lUVk5KVTBST0lpd2ljR0Z5ZEhsSlpHVnVkR2xtYVdWeUlqb2lNVFkyTmpVMU5URXdNREVpTENKbWMzQkpaQ0k2SW5SbGMzUXRlbTEzTFdSbWMzQWlmWDBzSW5CaGVXVnlJanA3SW5CaGNuUjVTV1JKYm1adklqcDdJbkJoY25SNVNXUlVlWEJsSWpvaVRWTkpVMFJPSWl3aWNHRnlkSGxKWkdWdWRHbG1hV1Z5SWpvaU1UWTJOalUxTlRFd01ESWlMQ0ptYzNCSlpDSTZJblJsYzNRdGJYZHJMV1JtYzNBaWZTd2libUZ0WlNJNklrUnBjM0JzWVhrdFZHVnpkQ0o5TENKbGVIQnBjbUYwYVc5dUlqb2lNakF5TlMweE1DMHhNMVF4TXpveE5Ub3dPQzR6T0RSYUlpd2lZVzF2ZFc1MElqcDdJbUZ0YjNWdWRDSTZJakVpTENKamRYSnlaVzVqZVNJNklscE5WeUo5ZlE",
+        "condition": "Nmpa2EFi8gJOxJo4TLvmiYXrdrD9rIlGDPaPGUO2P1I",
+        "expiration": "2025-10-13T13:15:10.546Z",
+        "extensionList": {
+          "extension": [
+            {
+              "key": "CdtTrfTxInf.Cdtr.Id.PrvtId.Othr.SchmeNm.Prtry",
+              "value": "MSISDN"
+            },
+            {
+              "key": "CdtTrfTxInf.Cdtr.Id.PrvtId.Othr.Id",
+              "value": "16665551001"
+            },
+            {
+              "key": "CdtTrfTxInf.CdtrAgt.FinInstnId.Othr.Id",
+              "value": "test-zmw-dfsp"
+            }
+          ]
+        }
+      },
+      "headers": {
+        "content-type": "application/vnd.interoperability.iso20022.transfers+json;version=2.0",
+        "date": "Mon, 13 Oct 2025 13:14:10 GMT",
+        "fspiop-source": "test-mwk-dfsp",
+        "fspiop-destination": "test-zmw-dfsp",
+        "Authorization": "Bearer eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICJkQkxBNEhKNnBmd0pYWlZHTG5IY0w1UEQ0UFYwQWhhd2tmWDVueS1Oa1VFIn0.eyJleHAiOjE3NjAzNjEzMjIsImlhdCI6MTc2MDM2MTAyMiwianRpIjoiYTU2MWNkMDQtMDQ3Yy00MzUxLWEwYzAtMzIzODg3NjU4NTkxIiwiaXNzIjoiaHR0cHM6Ly9rZXljbG9hay5tdy5kcnBwLmdsb2JhbC9yZWFsbXMvZGZzcHMiLCJzdWIiOiI5NzVlOWQxYy00MTYzLTRlYmItYjgwOS0yMDBkMmViYTY4NDYiLCJ0eXAiOiJCZWFyZXIiLCJhenAiOiJ0ZXN0LW13ay1kZnNwIiwiYWNyIjoiMSIsInJlYWxtX2FjY2VzcyI6eyJyb2xlcyI6WyJkZWZhdWx0LXJvbGVzLWRmc3BzIiwib2ZmbGluZV9hY2Nlc3MiLCJ1bWFfYXV0aG9yaXphdGlvbiJdfSwic2NvcGUiOiJlbWFpbCBwcm9maWxlIiwiY2xpZW50SG9zdCI6IjEwLjIwLjguNjAiLCJlbWFpbF92ZXJpZmllZCI6ZmFsc2UsInByZWZlcnJlZF91c2VybmFtZSI6InNlcnZpY2UtYWNjb3VudC10ZXN0LW13ay1kZnNwIiwiY2xpZW50QWRkcmVzcyI6IjEwLjIwLjguNjAiLCJjbGllbnRfaWQiOiJ0ZXN0LW13ay1kZnNwIn0.7-pU-f2gKzlu9W-UEF_jqVonlS4iScNjzOaYBFW2j9nlYbIAJHTTRmI9hFc7O5OF-tWbBT_S0GOTr0sTC__Spl-JOMazI7v53Jlm9kr_HDzbYu_Dpz8m9YcaW2lWCJPmkwYnl5dVDwNL6x6Ie7L-LCsH9OeM9dDj-QibQ-I7uQlrHqi_kmVd86biJ3LQUv8s1sINtMLm2EPudjcNYVlkgWhB2wBJP26_0shrtyZVfoA7Zz2PKVfIKKrIx3szQFswagSyd74nx7mhL3E2c7Z3aymAaHbWtWR6EYPosln6ojujQmyyCGLMwQ6bwTEsdpIwZhl5PdKgH6s4OblpCFkBVQ",
+        "accept": "application/vnd.interoperability.iso20022.transfers+json;version=2",
+        "traceparent": "00-67629f2771f9ca3e58ae98d2b525ff82-a4f13bce8ca85c75-01",
+        "fspiop-http-method": "POST",
+        "fspiop-uri": "/transfers",
+        "fspiop-signature": "{\"signature\":\"g4nurJqxV4BXKyrd4PWP8vXBjdEP9YtNg-Rktl_tbNx6BckCU6OKmn9IOf93-SttL6c7py1zb99OP0EwW9x8kH02B84Jwzlo4jCewAgJN-ZzEwvmTGTeIc8_URQr4fpz_p1bTLzLUpmuLkWVWcwEoa1toLXyHzzDgCazF9zt8Va7wqJPxaGGvlbT35tvWxOO4Yo2kv4TNna4hFAnE90va_aZ4T8I8eAPhX6Pw8to-qzlZ3QVLS-HDJ6pley9NaEbFWEnVwO0crvo2sSS3TzULxtEaEunF-OfQfT5dRnjR8fOdAkEtr_lMJcNsX4qjbRaw1zGagnBCK-7gs7gq1-kVQ\",\"protectedHeader\":\"eyJhbGciOiJSUzI1NiIsIkZTUElPUC1VUkkiOiIvdHJhbnNmZXJzIiwiRlNQSU9QLUhUVFAtTWV0aG9kIjoiUE9TVCIsIkZTUElPUC1Tb3VyY2UiOiJ0ZXN0LW13ay1kZnNwIiwiRlNQSU9QLURlc3RpbmF0aW9uIjoidGVzdC16bXctZGZzcCIsIkRhdGUiOiJNb24sIDEzIE9jdCAyMDI1IDEzOjE0OjEwIEdNVCJ9\"}"
+      }
+    },
+    "fulfil": {
+      "body": {
+        "fulfilment": "o4qka6jlUcYxhOakMAQ6tNe-KoqCBXkWEb9m981F_Sc",
+        "completedTimestamp": "2025-10-13T13:14:11.252Z",
+        "transferState": "COMMITTED",
+        "extensionList": {
+          "extension": [
+            {
+              "key": "GrpHdr.MsgId",
+              "value": "01K7EVA0DTXE0B1GCTZ744Y2PD"
+            },
+            {
+              "key": "GrpHdr.CreDtTm",
+              "value": "2025-10-13T13:14:11.258Z"
+            }
+          ]
+        }
+      },
+      "headers": {
+        "host": "conn-test-mwk-dfsp.pm.drpp-onprem.global",
+        "accept-encoding": "gzip, compress, deflate, br",
+        "authorization": "Bearer eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICJkQkxBNEhKNnBmd0pYWlZHTG5IY0w1UEQ0UFYwQWhhd2tmWDVueS1Oa1VFIn0.eyJleHAiOjE3NjAzNjE1MjksImlhdCI6MTc2MDM2MTIyOSwianRpIjoiOTMyZGM2NDgtOTkyZi00NDU5LWE5ZWMtOWJjMmFjMDJkOWJjIiwiaXNzIjoiaHR0cHM6Ly9rZXljbG9hay5tdy5kcnBwLmdsb2JhbC9yZWFsbXMvZGZzcHMiLCJzdWIiOiJlOTI0NzMxNy1jOGEwLTQ5YTQtODE3Ni00NWRkODIwYjQ0YWYiLCJ0eXAiOiJCZWFyZXIiLCJhenAiOiJwcm94eS1td2siLCJhY3IiOiIxIiwicmVhbG1fYWNjZXNzIjp7InJvbGVzIjpbImRlZmF1bHQtcm9sZXMtZGZzcHMiLCJvZmZsaW5lX2FjY2VzcyIsInVtYV9hdXRob3JpemF0aW9uIl19LCJzY29wZSI6ImVtYWlsIHByb2ZpbGUiLCJjbGllbnRIb3N0IjoiMTAuMjAuMi4yMDgiLCJlbWFpbF92ZXJpZmllZCI6ZmFsc2UsInByZWZlcnJlZF91c2VybmFtZSI6InNlcnZpY2UtYWNjb3VudC1wcm94eS1td2siLCJjbGllbnRBZGRyZXNzIjoiMTAuMjAuMi4yMDgiLCJjbGllbnRfaWQiOiJwcm94eS1td2sifQ.9Qz0Zewy9yJ1kGLAI7oM8Kdf9iZ9NA3M3_yvjPm1wUAHerBGz23CKu1O0qmPiM0BhM11XdnOt6yf13PvB9ocYQDkh06LPxvlLTpXf5N44WYCKnRHob4QQI6WkR8fHiYnTlb_Ew-ZjQWkI6a_Z-LKxNOTIYTDpOAEEAGKk6qWQhq511mF8hMQ3wuqPUSA7cYUUoVn1TL6rHJMKJyKouhAdW7M8izb4k-oZirgPL66whttHtPFsH2GJEA38sVPyaSlY-2OMyE-W-ttJsWlRdx3hkBcxduVOQtYbj8jZg_kRdF7o7q4nqx8FPJMColUUlSmL0KSihXTBN_PnH3LrQRA7w",
+        "content-type": "application/vnd.interoperability.iso20022.transfers+json;version=2.0",
+        "date": "Mon, 13 Oct 2025 13:14:11 GMT",
+        "fspiop-destination": "test-mwk-dfsp",
+        "fspiop-http-method": "PUT",
+        "fspiop-proxy": "proxy-mwk",
+        "fspiop-signature": "{\"signature\":\"msEL7nv5kIzD3IlR5uV0TTMq7zdYxmWAFpUqPfo7A4VGu2psLdxXzToQiimLeqEGo9_Wtae8ZHf-FAyAdX3pcAcuJjyCef4ubStreOtMjKRn4HTNq8QIWXXFgFnb8qKS5CfXh0qPJHsmP8L8MSPHcaZKE3XvuA8DaWwGWzcz_fMx1I9z6A2Kg3J192qqarcP-qB-QURpwGsspR6SKZSFcpHv6FB_sfLm2kkVYWgARpXVn0NG2f4ITK1zBChjzabEIZClrxYz6qt304-hesWdI6woEsvlzWcd-guwN66gCirnPv7rh_0RlXAAfASJ-w4y2FDPwzX60dgDJK0Iu6b1Uw\",\"protectedHeader\":\"eyJhbGciOiJSUzI1NiIsIkZTUElPUC1VUkkiOiIvdHJhbnNmZXJzLzAxSzdFVjlUTlExVktYODROMEdTUUg2TUREIiwiRlNQSU9QLUhUVFAtTWV0aG9kIjoiUFVUIiwiRlNQSU9QLVNvdXJjZSI6InRlc3Qtem13LWRmc3AiLCJGU1BJT1AtRGVzdGluYXRpb24iOiJ0ZXN0LW13ay1kZnNwIiwiRGF0ZSI6Ik1vbiwgMTMgT2N0IDIwMjUgMTM6MTQ6MTEgR01UIn0\"}",
+        "fspiop-source": "test-zmw-dfsp",
+        "fspiop-uri": "/transfers/01K7EV9TNQ1VKX84N0GSQH6MDD",
+        "traceparent": "00-67629f2771f9ca3e58ae98d2b525ff82-52d304809a892d1d-01",
+        "tracestate": "mojaloop=eyJzcGFuSWQiOiIzODVhMDQ3NTc5NzlhNWFlIiwidGltZUFwaUZ1bGZpbCI6IjE3NjAzNjEyNTIxMzQiLCJ0aW1lQXBpUHJlcGFyZSI6IjE3NjAzNjEyNTA5MzUifQ==",
+        "user-agent": "axios/1.12.2",
+        "x-envoy-attempt-count": "1",
+        "x-envoy-external-address": "16.28.6.201",
+        "x-forwarded-for": "13.247.23.136,16.28.6.201",
+        "x-forwarded-proto": "https",
+        "x-request-id": "0c76f8df-3e4a-4923-b76f-c2411f53d162",
+        "content-length": 220,
+        "x-b3-traceid": "41e991380a5bf9d77ecbd04e0dfe3837",
+        "x-b3-spanid": "ddbad3579c50c700",
+        "x-b3-parentspanid": "16956e03c4db605e",
+        "x-b3-sampled": "0"
+      }
+    }
+  }
+}

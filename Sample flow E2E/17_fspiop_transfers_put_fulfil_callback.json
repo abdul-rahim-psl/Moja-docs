@@ -1,0 +1,59 @@
+{
+  "_meta": {
+    "seq_note": "chronological order of the end-to-end flow",
+    "layer": "FSPIOP / ISO 20022 interoperability API (via DRPP switch)",
+    "direction": "test-zmw-dfsp (payee DFSP) -> test-mwk-dfsp",
+    "method": "PUT",
+    "resource": "/transfers/01K7EV9TNQ1VKX84N0GSQH6MDD",
+    "purpose": "SETTLEMENT — payee DFSP returns the fulfilment; transferState COMMITTED, positions settled across both schemes and the FXP.",
+    "timestamp": "Mon, 13 Oct 2025 13:14:11 GMT",
+    "trace_id": "67629f2771f9ca3e58ae98d2b525ff82",
+    "traceparent": "00-67629f2771f9ca3e58ae98d2b525ff82-52d304809a892d1d-01",
+    "correlation": {
+      "transferId": "01K7EV9TNQ1VKX84N0GSQH6MDD"
+    }
+  },
+  "headers": {
+    "host": "conn-test-mwk-dfsp.pm.drpp-onprem.global",
+    "accept-encoding": "gzip, compress, deflate, br",
+    "authorization": "Bearer eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICJkQkxBNEhKNnBmd0pYWlZHTG5IY0w1UEQ0UFYwQWhhd2tmWDVueS1Oa1VFIn0.eyJleHAiOjE3NjAzNjE1MjksImlhdCI6MTc2MDM2MTIyOSwianRpIjoiOTMyZGM2NDgtOTkyZi00NDU5LWE5ZWMtOWJjMmFjMDJkOWJjIiwiaXNzIjoiaHR0cHM6Ly9rZXljbG9hay5tdy5kcnBwLmdsb2JhbC9yZWFsbXMvZGZzcHMiLCJzdWIiOiJlOTI0NzMxNy1jOGEwLTQ5YTQtODE3Ni00NWRkODIwYjQ0YWYiLCJ0eXAiOiJCZWFyZXIiLCJhenAiOiJwcm94eS1td2siLCJhY3IiOiIxIiwicmVhbG1fYWNjZXNzIjp7InJvbGVzIjpbImRlZmF1bHQtcm9sZXMtZGZzcHMiLCJvZmZsaW5lX2FjY2VzcyIsInVtYV9hdXRob3JpemF0aW9uIl19LCJzY29wZSI6ImVtYWlsIHByb2ZpbGUiLCJjbGllbnRIb3N0IjoiMTAuMjAuMi4yMDgiLCJlbWFpbF92ZXJpZmllZCI6ZmFsc2UsInByZWZlcnJlZF91c2VybmFtZSI6InNlcnZpY2UtYWNjb3VudC1wcm94eS1td2siLCJjbGllbnRBZGRyZXNzIjoiMTAuMjAuMi4yMDgiLCJjbGllbnRfaWQiOiJwcm94eS1td2sifQ.9Qz0Zewy9yJ1kGLAI7oM8Kdf9iZ9NA3M3_yvjPm1wUAHerBGz23CKu1O0qmPiM0BhM11XdnOt6yf13PvB9ocYQDkh06LPxvlLTpXf5N44WYCKnRHob4QQI6WkR8fHiYnTlb_Ew-ZjQWkI6a_Z-LKxNOTIYTDpOAEEAGKk6qWQhq511mF8hMQ3wuqPUSA7cYUUoVn1TL6rHJMKJyKouhAdW7M8izb4k-oZirgPL66whttHtPFsH2GJEA38sVPyaSlY-2OMyE-W-ttJsWlRdx3hkBcxduVOQtYbj8jZg_kRdF7o7q4nqx8FPJMColUUlSmL0KSihXTBN_PnH3LrQRA7w",
+    "content-type": "application/vnd.interoperability.iso20022.transfers+json;version=2.0",
+    "date": "Mon, 13 Oct 2025 13:14:11 GMT",
+    "fspiop-destination": "test-mwk-dfsp",
+    "fspiop-http-method": "PUT",
+    "fspiop-proxy": "proxy-mwk",
+    "fspiop-signature": "{\"signature\":\"msEL7nv5kIzD3IlR5uV0TTMq7zdYxmWAFpUqPfo7A4VGu2psLdxXzToQiimLeqEGo9_Wtae8ZHf-FAyAdX3pcAcuJjyCef4ubStreOtMjKRn4HTNq8QIWXXFgFnb8qKS5CfXh0qPJHsmP8L8MSPHcaZKE3XvuA8DaWwGWzcz_fMx1I9z6A2Kg3J192qqarcP-qB-QURpwGsspR6SKZSFcpHv6FB_sfLm2kkVYWgARpXVn0NG2f4ITK1zBChjzabEIZClrxYz6qt304-hesWdI6woEsvlzWcd-guwN66gCirnPv7rh_0RlXAAfASJ-w4y2FDPwzX60dgDJK0Iu6b1Uw\",\"protectedHeader\":\"eyJhbGciOiJSUzI1NiIsIkZTUElPUC1VUkkiOiIvdHJhbnNmZXJzLzAxSzdFVjlUTlExVktYODROMEdTUUg2TUREIiwiRlNQSU9QLUhUVFAtTWV0aG9kIjoiUFVUIiwiRlNQSU9QLVNvdXJjZSI6InRlc3Qtem13LWRmc3AiLCJGU1BJT1AtRGVzdGluYXRpb24iOiJ0ZXN0LW13ay1kZnNwIiwiRGF0ZSI6Ik1vbiwgMTMgT2N0IDIwMjUgMTM6MTQ6MTEgR01UIn0\"}",
+    "fspiop-source": "test-zmw-dfsp",
+    "fspiop-uri": "/transfers/01K7EV9TNQ1VKX84N0GSQH6MDD",
+    "traceparent": "00-67629f2771f9ca3e58ae98d2b525ff82-52d304809a892d1d-01",
+    "tracestate": "mojaloop=eyJzcGFuSWQiOiIzODVhMDQ3NTc5NzlhNWFlIiwidGltZUFwaUZ1bGZpbCI6IjE3NjAzNjEyNTIxMzQiLCJ0aW1lQXBpUHJlcGFyZSI6IjE3NjAzNjEyNTA5MzUifQ==",
+    "user-agent": "axios/1.12.2",
+    "x-envoy-attempt-count": "1",
+    "x-envoy-external-address": "16.28.6.201",
+    "x-forwarded-for": "13.247.23.136,16.28.6.201",
+    "x-forwarded-proto": "https",
+    "x-request-id": "0c76f8df-3e4a-4923-b76f-c2411f53d162",
+    "content-length": 220,
+    "x-b3-traceid": "41e991380a5bf9d77ecbd04e0dfe3837",
+    "x-b3-spanid": "ddbad3579c50c700",
+    "x-b3-parentspanid": "16956e03c4db605e",
+    "x-b3-sampled": "0"
+  },
+  "body": {
+    "fulfilment": "o4qka6jlUcYxhOakMAQ6tNe-KoqCBXkWEb9m981F_Sc",
+    "completedTimestamp": "2025-10-13T13:14:11.252Z",
+    "transferState": "COMMITTED",
+    "extensionList": {
+      "extension": [
+        {
+          "key": "GrpHdr.MsgId",
+          "value": "01K7EVA0DTXE0B1GCTZ744Y2PD"
+        },
+        {
+          "key": "GrpHdr.CreDtTm",
+          "value": "2025-10-13T13:14:11.258Z"
+        }
+      ]
+    }
+  }
+}

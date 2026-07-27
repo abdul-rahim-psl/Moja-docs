@@ -1,0 +1,23 @@
+{
+  "_meta": {
+    "seq_note": "chronological order of the end-to-end flow",
+    "layer": "SDK Scheme Adapter outbound API (non-FSPIOP)",
+    "direction": "Test harness (Mojaloop Testing Toolkit) -> test-mwk-dfsp SDK outbound API",
+    "method": "PUT",
+    "resource": "/transfers/01K7EV9TNQ1VKX84N0GSQH6MDD",
+    "purpose": "AUTHORIZATION STEP 1 of 3 — payer confirms the resolved payee ({acceptParty: true}); this releases the FX quote request.",
+    "timestamp": "Mon, 13 Oct 2025 13:14:06 GMT",
+    "trace_id": "67629f2771f9ca3e58ae98d2b525ff82",
+    "traceparent": "00-aabbb085054070210f925d85120ad171-0000001300000001-01",
+    "correlation": {
+      "transferId": "01K7EV9TNQ1VKX84N0GSQH6MDD"
+    }
+  },
+  "headers": {
+    "baggage": "testCaseId=14,requestId=2",
+    "traceparent": "00-aabbb085054070210f925d85120ad171-0000001300000001-01"
+  },
+  "body": {
+    "acceptParty": true
+  }
+}

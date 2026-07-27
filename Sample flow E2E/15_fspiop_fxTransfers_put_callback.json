@@ -1,0 +1,60 @@
+{
+  "_meta": {
+    "seq_note": "chronological order of the end-to-end flow",
+    "layer": "FSPIOP / ISO 20022 interoperability API (via DRPP switch)",
+    "direction": "test-fxp (FX provider) -> test-mwk-dfsp",
+    "method": "PUT",
+    "resource": "/fxTransfers/01K7EV9VS1V41WTE9SC7JCGFZP",
+    "purpose": "FXP confirms the conversion leg is RESERVED, returning the fulfilment that satisfies the condition.",
+    "timestamp": "Mon, 13 Oct 2025 13:14:09 GMT",
+    "trace_id": "67629f2771f9ca3e58ae98d2b525ff82",
+    "traceparent": "00-67629f2771f9ca3e58ae98d2b525ff82-a3c2dca8f2153af2-01",
+    "correlation": {
+      "transferId": "01K7EV9TNQ1VKX84N0GSQH6MDD",
+      "commitRequestId": "01K7EV9VS1V41WTE9SC7JCGFZP"
+    }
+  },
+  "headers": {
+    "host": "conn-test-mwk-dfsp.pm.drpp-onprem.global",
+    "accept-encoding": "gzip, compress, deflate, br",
+    "authorization": "Bearer eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICJkQkxBNEhKNnBmd0pYWlZHTG5IY0w1UEQ0UFYwQWhhd2tmWDVueS1Oa1VFIn0.eyJleHAiOjE3NjAzNjE1MjksImlhdCI6MTc2MDM2MTIyOSwianRpIjoiOTMyZGM2NDgtOTkyZi00NDU5LWE5ZWMtOWJjMmFjMDJkOWJjIiwiaXNzIjoiaHR0cHM6Ly9rZXljbG9hay5tdy5kcnBwLmdsb2JhbC9yZWFsbXMvZGZzcHMiLCJzdWIiOiJlOTI0NzMxNy1jOGEwLTQ5YTQtODE3Ni00NWRkODIwYjQ0YWYiLCJ0eXAiOiJCZWFyZXIiLCJhenAiOiJwcm94eS1td2siLCJhY3IiOiIxIiwicmVhbG1fYWNjZXNzIjp7InJvbGVzIjpbImRlZmF1bHQtcm9sZXMtZGZzcHMiLCJvZmZsaW5lX2FjY2VzcyIsInVtYV9hdXRob3JpemF0aW9uIl19LCJzY29wZSI6ImVtYWlsIHByb2ZpbGUiLCJjbGllbnRIb3N0IjoiMTAuMjAuMi4yMDgiLCJlbWFpbF92ZXJpZmllZCI6ZmFsc2UsInByZWZlcnJlZF91c2VybmFtZSI6InNlcnZpY2UtYWNjb3VudC1wcm94eS1td2siLCJjbGllbnRBZGRyZXNzIjoiMTAuMjAuMi4yMDgiLCJjbGllbnRfaWQiOiJwcm94eS1td2sifQ.9Qz0Zewy9yJ1kGLAI7oM8Kdf9iZ9NA3M3_yvjPm1wUAHerBGz23CKu1O0qmPiM0BhM11XdnOt6yf13PvB9ocYQDkh06LPxvlLTpXf5N44WYCKnRHob4QQI6WkR8fHiYnTlb_Ew-ZjQWkI6a_Z-LKxNOTIYTDpOAEEAGKk6qWQhq511mF8hMQ3wuqPUSA7cYUUoVn1TL6rHJMKJyKouhAdW7M8izb4k-oZirgPL66whttHtPFsH2GJEA38sVPyaSlY-2OMyE-W-ttJsWlRdx3hkBcxduVOQtYbj8jZg_kRdF7o7q4nqx8FPJMColUUlSmL0KSihXTBN_PnH3LrQRA7w",
+    "content-type": "application/vnd.interoperability.iso20022.fxTransfers+json;version=2.0",
+    "date": "Mon, 13 Oct 2025 13:14:09 GMT",
+    "fspiop-destination": "test-mwk-dfsp",
+    "fspiop-http-method": "PUT",
+    "fspiop-proxy": "proxy-mwk",
+    "fspiop-signature": "{\"signature\":\"gj8ZHI7Zs0lMalWe-T7PYNlPBQZyoPUyiiJ8x1gvTduHFCngwgt0tdVz72IU29NEtUAOrVpy1NDkSiX8ZsArxouhjaCdlOwfFYnix38lFbVrfo6ICudYCId2ICm_67UJ0Ae_a7MIOesG3ttFn9--4l-bu1VfGZFTd-CQjbwWAujoeJ_jHmRvIuXNc3iSewkPAXOWXtmgWkkBFGnRd3Hn8QtFEOg1DN_PoTyR-fVL7W2y6GpY0dLkO9CmLvqMAB6eZXyEHjZAbxJMCBEpetT5xtL5yjkb17qELQOlhv8tLt2hEiFW5PyiTvXJUiUyfMj1MVUHCv1HhKT8_oTr7khYjw\",\"protectedHeader\":\"eyJhbGciOiJSUzI1NiIsIkZTUElPUC1VUkkiOiIvZnhUcmFuc2ZlcnMvMDFLN0VWOVZTMVY0MVdURTlTQzdKQ0dGWlAiLCJGU1BJT1AtSFRUUC1NZXRob2QiOiJQVVQiLCJGU1BJT1AtU291cmNlIjoidGVzdC1meHAiLCJGU1BJT1AtRGVzdGluYXRpb24iOiJ0ZXN0LW13ay1kZnNwIiwiRGF0ZSI6Ik1vbiwgMTMgT2N0IDIwMjUgMTM6MTQ6MDkgR01UIn0\"}",
+    "fspiop-source": "test-fxp",
+    "fspiop-uri": "/fxTransfers/01K7EV9VS1V41WTE9SC7JCGFZP",
+    "traceparent": "00-67629f2771f9ca3e58ae98d2b525ff82-a3c2dca8f2153af2-01",
+    "tracestate": "mojaloop=eyJzcGFuSWQiOiIwZjZhMTE3YzZlYTc0NDEzIiwidGltZUFwaUZ1bGZpbCI6IjE3NjAzNjEyNTAyODciLCJ0aW1lQXBpUHJlcGFyZSI6IjE3NjAzNjEyNDk1OTUifQ==",
+    "user-agent": "axios/1.12.2",
+    "x-envoy-attempt-count": "1",
+    "x-envoy-external-address": "16.28.6.201",
+    "x-forwarded-for": "13.247.23.136,16.28.6.201",
+    "x-forwarded-proto": "https",
+    "x-request-id": "d444dc80-cf52-4fd6-9299-bdd3c7eb6cb7",
+    "content-length": 220,
+    "x-b3-traceid": "f82f54673d8e28d7f953d52316a469b4",
+    "x-b3-spanid": "6dfdbf926da9925a",
+    "x-b3-parentspanid": "242908c5312dd3b6",
+    "x-b3-sampled": "0"
+  },
+  "body": {
+    "fulfilment": "4nqWiu-ARrNqM3W_GknieZcPMIFVS34SoBTwk7y43E8",
+    "completedTimestamp": "2025-10-13T13:14:09.957Z",
+    "conversionState": "RESERVED",
+    "extensionList": {
+      "extension": [
+        {
+          "key": "GrpHdr.MsgId",
+          "value": "01K7EV9Z5AG750EZJT22PZ0ZAA"
+        },
+        {
+          "key": "GrpHdr.CreDtTm",
+          "value": "2025-10-13T13:14:09.962Z"
+        }
+      ]
+    }
+  }
+}

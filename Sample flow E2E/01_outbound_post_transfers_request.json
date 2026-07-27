@@ -1,0 +1,46 @@
+{
+  "_meta": {
+    "seq_note": "chronological order of the end-to-end flow",
+    "layer": "SDK Scheme Adapter outbound API (non-FSPIOP)",
+    "direction": "Test harness (Mojaloop Testing Toolkit) -> test-mwk-dfsp SDK outbound API",
+    "method": "POST",
+    "resource": "/transfers",
+    "purpose": "Payer DFSP back-office initiates the outbound cross-border transfer (MWK 60 SEND, payee MSISDN 16665551001).",
+    "timestamp": "2025-10-13T13:14:05.367Z",
+    "trace_id": "67629f2771f9ca3e58ae98d2b525ff82",
+    "traceparent": "00-aabbb085054070210f925d85120ad171-0000001300000000-01",
+    "correlation": {
+      "transferId": "01K7EV9TNQ1VKX84N0GSQH6MDD"
+    }
+  },
+  "headers": {
+    "baggage": "testCaseId=14,requestId=1",
+    "traceparent": "00-aabbb085054070210f925d85120ad171-0000001300000000-01"
+  },
+  "body": {
+    "homeTransactionId": "123ABC",
+    "from": {
+      "type": "CONSUMER",
+      "idType": "MSISDN",
+      "idValue": "16665551002",
+      "displayName": "Display-Test",
+      "firstName": "Firstname-Test",
+      "middleName": "Middlename-Test",
+      "lastName": "Lastname-Test",
+      "dateOfBirth": "1984-01-01",
+      "fspId": "test-mwk-dfsp"
+    },
+    "to": {
+      "type": "CONSUMER",
+      "idType": "MSISDN",
+      "idValue": "16665551001",
+      "merchantClassificationCode": "123"
+    },
+    "amountType": "SEND",
+    "currency": "MWK",
+    "amount": "60",
+    "transactionType": "TRANSFER",
+    "note": "test",
+    "skipPartyLookup": false
+  }
+}

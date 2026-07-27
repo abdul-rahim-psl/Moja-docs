@@ -1,0 +1,23 @@
+{
+  "_meta": {
+    "seq_note": "chronological order of the end-to-end flow",
+    "layer": "SDK Scheme Adapter outbound API (non-FSPIOP)",
+    "direction": "Test harness (Mojaloop Testing Toolkit) -> test-mwk-dfsp SDK outbound API",
+    "method": "PUT",
+    "resource": "/transfers/01K7EV9TNQ1VKX84N0GSQH6MDD",
+    "purpose": "AUTHORIZATION STEP 2 of 3 — payer accepts the FX conversion terms ({acceptConversion: true}); this releases the payee quote request.",
+    "timestamp": "Mon, 13 Oct 2025 13:14:07 GMT",
+    "trace_id": "67629f2771f9ca3e58ae98d2b525ff82",
+    "traceparent": "00-aabbb085054070210f925d85120ad171-0000001300000002-01",
+    "correlation": {
+      "transferId": "01K7EV9TNQ1VKX84N0GSQH6MDD"
+    }
+  },
+  "headers": {
+    "baggage": "testCaseId=14,requestId=3",
+    "traceparent": "00-aabbb085054070210f925d85120ad171-0000001300000002-01"
+  },
+  "body": {
+    "acceptConversion": true
+  }
+}

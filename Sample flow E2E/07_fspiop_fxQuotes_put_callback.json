@@ -1,0 +1,96 @@
+{
+  "_meta": {
+    "seq_note": "chronological order of the end-to-end flow",
+    "layer": "FSPIOP / ISO 20022 interoperability API (via DRPP switch)",
+    "direction": "test-fxp (FX provider) -> test-mwk-dfsp",
+    "method": "PUT",
+    "resource": "/fxQuotes/01K7EV9VS1V41WTE9SC7JCGFZN",
+    "purpose": "FXP returns the conversion terms (rate, target amount, charges, expiry) with its ILP condition.",
+    "timestamp": "Mon, 13 Oct 2025 13:14:07 GMT",
+    "trace_id": "67629f2771f9ca3e58ae98d2b525ff82",
+    "traceparent": "00-67629f2771f9ca3e58ae98d2b525ff82-496145aae73b27ea-01",
+    "correlation": {
+      "transferId": "01K7EV9TNQ1VKX84N0GSQH6MDD",
+      "conversionId": "01K7EV9VS1V41WTE9SC7JCGFZP"
+    }
+  },
+  "headers": {
+    "host": "conn-test-mwk-dfsp.pm.drpp-onprem.global",
+    "content-type": "application/vnd.interoperability.iso20022.fxQuotes+json;version=2.0",
+    "date": "Mon, 13 Oct 2025 13:14:07 GMT",
+    "fspiop-source": "test-fxp",
+    "fspiop-destination": "test-mwk-dfsp",
+    "fspiop-http-method": "PUT",
+    "fspiop-signature": "{\"signature\":\"SHtjryvi-gyNIpj-Ogm1vrga_0ug34Iyt5OjfqmIKgXGhgxU4lZqIOKDYOkeCH8VYKvS-uZ6AspyqVjPBiifGh5aqbZONjvcryzMsc4hVWNmqaGSbY7OSUkotsqnBx6u5ljE-xzRZQFTIpFj0QOzUw_uz4Z7J8RXYIxS_DWXAN4UOv7Kq8kZ83PEVrrN4iYyRf4vWxTUmM6wsvmky8cbpoWk30zNUUsw4YltmP6cHiNa5JJuN3P6D46_tMc4gWnwIR5AiwBAdM-GxtQp_x0bmBCG70SgYylzKiC9kbBT1FvCEw7HtnuVkSjMtSUggw4KqfqBCE2j09Soihh9SNa42A\",\"protectedHeader\":\"eyJhbGciOiJSUzI1NiIsIkZTUElPUC1VUkkiOiIvZnhRdW90ZXMvMDFLN0VWOVZTMVY0MVdURTlTQzdKQ0dGWk4iLCJGU1BJT1AtSFRUUC1NZXRob2QiOiJQVVQiLCJGU1BJT1AtU291cmNlIjoidGVzdC1meHAiLCJGU1BJT1AtRGVzdGluYXRpb24iOiJ0ZXN0LW13ay1kZnNwIiwiRGF0ZSI6Ik1vbiwgMTMgT2N0IDIwMjUgMTM6MTQ6MDcgR01UIn0\"}",
+    "fspiop-uri": "/fxQuotes/01K7EV9VS1V41WTE9SC7JCGFZN",
+    "traceparent": "00-67629f2771f9ca3e58ae98d2b525ff82-496145aae73b27ea-01",
+    "tracestate": "mojaloop=eyJzcGFuSWQiOiIwODEzZDFmZjFlMTExYjA4In0=",
+    "user-agent": "axios/1.11.0",
+    "content-length": 904,
+    "accept-encoding": "gzip, compress, deflate, br",
+    "x-forwarded-proto": "https",
+    "x-request-id": "3f5c4f0c-0535-46bf-9361-b158c65bc6e2",
+    "x-forwarded-for": "16.28.6.201",
+    "x-envoy-external-address": "16.28.6.201",
+    "x-envoy-attempt-count": "1",
+    "x-b3-traceid": "ad0311c5655e56e0b6c78814a0b9c5ae",
+    "x-b3-spanid": "a4c480a29f4cfd94",
+    "x-b3-parentspanid": "1a34bdfbf1f8ef2d",
+    "x-b3-sampled": "0"
+  },
+  "body": {
+    "condition": "jp435ANRB6qXpvZVPFfyTHwOfK0mq2xvkegWPe0w0d4",
+    "conversionTerms": {
+      "conversionId": "01K7EV9VS1V41WTE9SC7JCGFZP",
+      "determiningTransferId": "01K7EV9TNQ1VKX84N0GSQH6MDD",
+      "initiatingFsp": "test-mwk-dfsp",
+      "counterPartyFsp": "test-fxp",
+      "sourceAmount": {
+        "currency": "MWK",
+        "amount": "60"
+      },
+      "targetAmount": {
+        "currency": "ZMW",
+        "amount": "1"
+      },
+      "expiration": "2025-10-13T13:15:06.497Z",
+      "amountType": "SEND",
+      "extensionList": {
+        "extension": [
+          {
+            "key": "GrpHdr.MsgId",
+            "value": "01K7EV9WDBJ06TM3HY901Q63P8"
+          },
+          {
+            "key": "GrpHdr.CreDtTm",
+            "value": "2025-10-13T13:14:07.147Z"
+          },
+          {
+            "key": "GrpHdr.NbOfTxs",
+            "value": "1"
+          },
+          {
+            "key": "GrpHdr.SttlmInf.SttlmMtd",
+            "value": "CLRG"
+          },
+          {
+            "key": "CdtTrfTxInf.UndrlygCstmrCdtTrf.Dbtr.Id.OrgId.Othr.Id",
+            "value": "test-mwk-dfsp"
+          },
+          {
+            "key": "CdtTrfTxInf.UndrlygCstmrCdtTrf.DbtrAgt.FinInstnId.Othr.Id",
+            "value": "test-mwk-dfsp"
+          },
+          {
+            "key": "CdtTrfTxInf.UndrlygCstmrCdtTrf.Cdtr.Id.OrgId.Othr.Id",
+            "value": "test-fxp"
+          },
+          {
+            "key": "CdtTrfTxInf.UndrlygCstmrCdtTrf.CdtrAgt.FinInstnId.Othr.Id",
+            "value": "test-fxp"
+          }
+        ]
+      }
+    }
+  }
+}
