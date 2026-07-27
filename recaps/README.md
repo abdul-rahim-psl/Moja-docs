@@ -1,0 +1,1 @@
+This folder contains all the recaps - short summaries - of what we have accomplished till a certain date.
