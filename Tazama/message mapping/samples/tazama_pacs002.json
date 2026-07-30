@@ -1,0 +1,44 @@
+{
+  "TxTp": "pacs.002.001.12",
+  "FIToFIPmtSts": {
+    "GrpHdr": {
+      "MsgId": "01K7EVA0DTXE0B1GCTZ744Y2PD",
+      "CreDtTm": "2025-10-13T13:14:11.258Z"
+    },
+    "TxInfAndSts": {
+      "OrgnlInstrId": "01K7EV9TNQ1VKX84N0GSQH6MDD",
+      "OrgnlEndToEndId": "01K7EV9TNQ1VKX84N0GSQH6MDD",
+      "TxSts": "ACSC",
+      "ChrgsInf": [
+        {
+          "Amt": {
+            "Amt": 0,
+            "Ccy": "ZMW"
+          },
+          "Agt": {
+            "FinInstnId": {
+              "ClrSysMmbId": {
+                "MmbId": "test-zmw-dfsp"
+              }
+            }
+          }
+        }
+      ],
+      "AccptncDtTm": "2025-10-13T13:14:11.252Z",
+      "InstgAgt": {
+        "FinInstnId": {
+          "ClrSysMmbId": {
+            "MmbId": "test-zmw-dfsp"
+          }
+        }
+      },
+      "InstdAgt": {
+        "FinInstnId": {
+          "ClrSysMmbId": {
+            "MmbId": "test-mwk-dfsp"
+          }
+        }
+      }
+    }
+  }
+}
