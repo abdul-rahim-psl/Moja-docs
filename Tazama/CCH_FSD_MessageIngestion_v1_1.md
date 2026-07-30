@@ -51,16 +51,11 @@ Contents
 6.5 ISO 20022 Message Mapping ….. 14
 6.6 Egress - Sending to Tazama TMS ….. 16
 6.7 Error Handling ….. 16
-7. Sample Messages & Transformations ….. 17
-7.1 Domestic P2P Transfer - pacs. 008 / pacs. 002 ….. 17
-7.2 Cross-Border FX Transfer - pacs. 009 ….. 18
+7. Sample Messages & Transformations - Cross-Border FX Transfer ….. 17
 8. End-to-End Flows ….. 19
-8.1 Standard P2P Payment - Full Happy Path ….. 19
-Quote Leg ….. 19
-Transfer Leg ….. 20
-8.2 Cross-Border Payment with Currency Conversion ….. 21
-8.3 Rejected Payment ….. 21
-8.4 Callback Never Arrives ….. 21
+8.1 Cross-Border Payment with Currency Conversion ….. 19
+8.2 Rejected Payment ….. 21
+8.3 Callback Never Arrives ….. 21
 9. Performance ….. 22
 9.1 Performance Assumptions and Targets (TBC) ….. 22
 9.2 Latency Budget - MLA→PPA→TMS Hop Chain ….. 22
@@ -380,11 +375,11 @@ ajv also runs with `coerceTypes: 'array'` (so `"1"` is coerced to `1`) and `useD
 
 | Trigger (Mojaloop) | ISO 20022 Output (Tazama) | Key Mapped Fields |
 | --- | --- | --- |
-| pacs. 081 (request) + pacs. 082 (callback) | pacs. 081 + pacs. 082 | ⚠️ *Not yet corrected — see 6.5.5.* payer/payee → Dbtr/Cdtr; amount → IntrBkSttlmAmt; fees → ChrgsInf; transferAmount → InstdAmt |
-| pacs. 091 (request) + pacs. 092 (callback) | pacs. 091 + pacs. 092 | ⚠️ *Not yet corrected — see 6.5.5.* conversionRequestId → Txld; initiatingFsp → Dbtr; counterPartyFsp → Cdtr; sourceAmount → InstdAmt; targetAmount → IntrBkSttlmAmt |
+| pacs. 081 (request) + pacs. 082 (callback) | pacs. 081 + pacs. 082 | payer/payee → Dbtr/Cdtr; amount → IntrBkSttlmAmt; ilpPacket → VrfctnOfTerms.IlpV4PrepPacket; fees → ChrgsInf; transferAmount → InstdAmt *(out of scope of this revision — unverified; see 6.5.6)* |
+| pacs. 091 (request) + pacs. 092 (callback) | pacs. 091 + pacs. 092 | conversionRequestld → Txld; initiatingFsp → Dbtr; counterPartyFsp → Cdtr; sourceAmount → InstdAmt; targetAmount → IntrBkSttlmAmt *(out of scope of this revision — unverified; see 6.5.6)* |
 | ✅ **POST /transfers (PREPARE)**, enriched from cached PUT /parties, POST+PUT /quotes, PUT /fxQuotes | **pacs. 008** | transferId → PmtId.**InstrId**; ilpPacket.transactionId → PmtId.**EndToEndId**; amount → IntrBkSttlmAmt.**Amt.Amt/.Amt.Ccy**; fxQuote sourceAmount → InstdAmt; derived rate → XchgRate; payerFsp/payeeFsp → DbtrAgt/CdtrAgt.**FinInstnId.ClrSysMmbId.MmbId**; payer (from /quotes) → Dbtr/InitgPty; payee name (from /parties) → Cdtr; payeeFspFee → ChrgsInf; transactionType → Purp.Cd; note → RmtInf.Ustrd |
 | ✅ **PUT /transfers (FULFIL)** | **pacs. 002** | transferState → TxSts (**translated**, see 6.5.4); completedTimestamp → AccptncDtTm; fspiop-source/-destination **headers** → InstgAgt/InstdAgt; ids → OrgnlInstrId/OrgnlEndToEndId; payeeFspFee → ChrgsInf (**array**) |
-| pacs. 009 (request) + pacs. 009 (callback) | pacs. 009 | ⚠️ *Not yet corrected — see 6.5.5.* commitRequestId → Txld; determiningTransferId → EndToEndld; initiatingFsp → DbtrAgt; counterPartyFsp → CdtrAgt |
+| pacs. 009 (request) + pacs. 009 (callback) | pacs. 009 | commitRequestld → Txld; determiningTransferld → EndToEndld; initiatingFsp → DbtrAgt; counterPartyFsp → CdtrAgt; condition → VrfctnOfTerms *(out of scope of this revision — unverified; see 6.5.6)* |
 | ~~Final-state notification, FX (deduplicated)~~ | ~~pacs. 002~~ | ❌ **Row removed.** The FX leg is not a separate Tazama transaction — it is folded into the single payment via InstdAmt / IntrBkSttlmAmt / XchgRate. See 6.5.3 |
 | ✅ **Any error callback (any resource)** | **pacs. 002** | TxSts → `RJCT`; ids from the cached originating transfer; fspiop-source/-destination → InstgAgt/InstdAgt; ChrgsInf → `[]`. ⚠️ **errorCode/errorDescription cannot be carried — no StsRsnInf exists in the schema; they are silently stripped.** Retained in the PPA audit log only |
 
@@ -429,7 +424,7 @@ Revised from earlier drafts of this document, which stated that `GrpHdr.MsgId` a
 
 Rows 1, 2 and 5 (the quote, FX-quote and pacs.009 mappings) are **out of scope of this revision and have not been verified.** They retain known defects — `PmtId.TxId` does not exist in Tazama's schema, and the "pacs.081/082/091/092" labels are not real ISO 20022 message types but placeholders for Mojaloop's `/quotes` and `/fxQuotes` resources, which Tazama maps to **pain.001 / pain.013**. Treat those three rows as illustrative only.
 
-**§7's worked examples have not been updated and now contradict this section.** They use `FIToFIPmtStsRpt` (should be `FIToFIPmtSts`), `OrgnlTxId` (should be `OrgnlInstrId`/`OrgnlEndToEndId`), `ExctnConf`/`PrcgDt` (do not exist), `VrfctnOfTerms` (does not exist — silently stripped), a string `NbOfTxs`, and an untranslated `"TxSts": "COMMITTED"`; they also omit `RgltryRptg`, `RmtInf` and `SplmtryData`, which are **required** and whose absence causes rejection. §7 should be regenerated from `message mapping/samples/`.
+**§7 has been regenerated to match this section.** It now carries the real DRPP cross-border messages and the two schema-validated Tazama payloads, replacing the earlier placeholder samples. Those samples used `FIToFIPmtStsRpt` (should be `FIToFIPmtSts`), `OrgnlTxId` (should be `OrgnlInstrId`/`OrgnlEndToEndId`), `ExctnConf`/`PrcgDt` (do not exist), `VrfctnOfTerms` (does not exist — silently stripped), a string `NbOfTxs` and an untranslated `"TxSts": "COMMITTED"`, and omitted `RgltryRptg`, `RmtInf` and `SplmtryData`, which are **required** and whose absence causes rejection. The separate domestic P2P example has been dropped: the cross-border flow exercises the same pacs.008 / pacs.002 path plus the FX behaviour, so it added no coverage.
 
 Two open data gaps have no Mojaloop source and are currently constant-filled; both need CCH input (see `02_design-decisions.md`, G1–G3): **payee date of birth**, which appears nowhere in the flow yet is a required field, and **payer geolocation**, whose absence disables any geo-velocity typology.
 
@@ -457,180 +452,483 @@ Two open data gaps have no Mojaloop source and are currently constant-filled; bo
 
 ## 7. Sample Messages & Transformations
 
-This section gives complete, worked examples of the transformation from Mojaloop’s messages into Tazama’s specific ISO 20022 message set for each message type, so implementers and reviewers can see the full before/after - not just the field-mapping tables in §6.5.
+This section gives a complete, worked example of the transformation from Mojaloop's messages into Tazama's specific ISO 20022 message set, so implementers and reviewers can see the full before/after - not just the field-mapping tables in §6.5.
 
-### 7.1 Domestic P2P Transfer - pacs. 008 / pacs. 002
+**Every value below is real.** These are the actual on-the-wire messages from the DRPP cross-border golden path, not placeholders. 
 
-Mojaloop request - pacs. 008 request event (decoded from the base64 data: URI on topic-transferprepare):
+| | |
+| :---- | :---- |
+| **Test case** | DRPP-GP-01 Send Money (Source Currency, Multiple FXPs) |
+| **Correlation id (W3C trace-id)** | `67629f2771f9ca3e58ae98d2b525ff82` |
+| **transferId / transactionId** | `01K7EV9TNQ1VKX84N0GSQH6MDD` |
+| **quoteId** | `01K7EV9X2K4F8J90ZWMRHDNCZN` |
+| **conversionRequestId** | `01K7EV9VS1V41WTE9SC7JCGFZN` |
+| **conversionId / commitRequestId** | `01K7EV9VS1V41WTE9SC7JCGFZP` |
+| **Payer → Payee** | `test-mwk-dfsp` (MSISDN 16665551002) → `test-zmw-dfsp` (MSISDN 16665551001) |
+| **FX provider** | `test-fxp` |
+| **Amount** | **MWK 60 → ZMW 1** (SEND, source currency); payeeFspFee ZMW 0 |
+| **Wall clock** | 2025-10-13T13:14:05.367Z → 13:14:11.252Z (5.9 s) |
+
+Full message captures, including headers and the complete ILP packets, are in `docs/Sample flow E2E/`. Bodies are reproduced below with authorization headers and signatures omitted for readability.
+
+#### Messages consumed, in order
 
 ```
+13:14:05.807  PUT  /parties      payee DFSP → payer DFSP   cache: payee name
+13:14:06.497  POST /fxQuotes     payer DFSP → FXP          cache: sourceAmount MWK 60
+13:14:07.147  PUT  /fxQuotes     FXP        → payer DFSP   cache: targetAmount ZMW 1
+13:14:07.827  POST /quotes       payer DFSP → payee DFSP   cache: payer identity, note
+13:14:08.386  PUT  /quotes       payee DFSP → payer DFSP   cache: ChrgBr, fees, SttlmMtd
+13:14:09.272  POST /fxTransfers  payer DFSP → FXP          correlation only
+13:14:09.957  PUT  /fxTransfers  FXP        → payer DFSP   correlation only
+13:14:10.546  POST /transfers    payer DFSP → payee DFSP   ★ EMIT pacs.008
+13:14:11.252  PUT  /transfers    payee DFSP → payer DFSP   ★ EMIT pacs.002
+```
+
+---
+
+#### Party lookup callback - `PUT /parties/MSISDN/16665551001`
+
+`test-zmw-dfsp` → `test-mwk-dfsp`. Confirms the payee is reachable and supports ZMW.
+
+```json
 {
-    "transferld": "b51ec534-ee48-4575-b6a9-ead2955b8069",
-    "payerFsp": "payerfsp",
-    "payeeFsp": "payeefsp",
-    "amount": { "currency": "USD", "amount": "100.00" },
-    "ilpPacket": "AYIBgQAAAAAAAASwGmcuZmluYW5jZS1uZXQ...",
-    "condition": "f5sqb7tBTWPd5Y8BDuhX0Ndph5Q4uOnMt6oS9YZOOgk",
-    "expiration": "2026-07-17T10:15:30.000Z",
-    "extensionList": { "extension": []}
-}
-```
-
-Mojaloop callback - pacs. 008 callback event (on topic-transfer-fulfil):
-
-```
-{
-    "fulfilment": "XoWG6BsPXqfsBb1zRjEcE0-fWnKtvJnGGxsXOgmuXOg",
-    "completedTimestamp": "2026-07-17T10:15:31.500Z",
-    "transferState": "COMMITTED",
-    "extensionList": { "extension": [] }
-}
-```
-
-Resulting Tazama ISO 20022 output - pacs. 008 (sent to TMS on correlation):
-
-```
-{
-    "FIToFICstmrCdtTrf":{
-        "GrpHdr":{
-            "Msgld": "01J9Z3K2Q8W7X6Y5V4T3R2S1P0",
-            "CreDtTm": "2026-07-17T10:15:31.600Z",
-            "NbOfTxs": "1",
-            "SttlmInf":{"SttlmMtd": "CLRG"}
+    "party": {
+        "partyIdInfo": {
+            "partyIdType": "MSISDN",
+            "partyIdentifier": "16665551001",
+            "fspId": "test-zmw-dfsp",
+            "extensionList": { "extension": [
+                { "key": "Assgnmt.MsgId",   "value": "01K7EV9V3FQ2RYXXE9ARH7DNFA" },
+                { "key": "Assgnmt.CreDtTm", "value": "2025-10-13T13:14:05.807Z" },
+                { "key": "Rpt.Vrfctn",      "value": true }
+            ]}
         },
-        "CdtTrfTxInf":{
-            "Pmtld": { "Txld": "b51ec534-ee48-4575-b6a9-ead2955b8069" },
-            "IntrBkSttlmAmt": { "Ccy": "USD", "value": "100.00" },
-            "DbtrAgt": { "FinInstnId": { "Othr": { "ld": "payerfsp"}}},
-            "CdtrAgt": { "FinInstnId": { "Othr": { "ld": "payeefsp" }}},
-            "VrfctnOfTerms":{
-                "IlpV4PrepPacket": "AYIBgQAAAAAAAASwGmcuZmluYW5jZS1uZXQ...",
-                "Condition": "f5sqb7tBTWPd5Y8BDuhX0Ndph5Q4uOnMt6oS9YZOOgk"
-            }
-        }
+        "name": "Chikondi Banda",
+        "supportedCurrencies": [ "ZMW" ]
     }
 }
 ```
 
-Follow-up pacs. 002 - from the deduplicated Central Ledger notification:
+**Taken from this message:** `party.name` → `Cdtr.Nm` and `CdtrAcct.Nm`. This is the **only** message in the entire flow carrying the payee's name; without it the creditor is anonymous. Note it arrives before any transaction id exists, so the party cache must be keyed on MSISDN (§6.4).
 
-```
+---
+
+#### FX quote request - `POST /fxQuotes`
+
+`test-mwk-dfsp` → `test-fxp`. Requests conversion terms, linked to the transfer by `determiningTransferId`.
+
+```json
 {
-    "FIToFIPmtStsRpt":{
-    "GrpHdr": { "MsgId": "01J9Z3K3A1B2C3D4E5F6G7H8I9", "CreDtTm": "2026-07-17T10:15:32.000Z" },
-    "TxInfAndSts":{
-        "OrgnlTxld": "b51ec534-ee48-4575-b6a9-ead2955b8069",
-    "TxSts": "COMMITTED",
-```
-
-```
-    "ExctnConf": "XoWG6BsPXqfsBb1zRjEcE0-fWnKtvJnGGxsXOgmuXOg",
-    "PrcgDt": {"DtTm": "2026-07-17T10:15:31.500Z" }
+    "conversionRequestId": "01K7EV9VS1V41WTE9SC7JCGFZN",
+    "conversionTerms": {
+        "conversionId": "01K7EV9VS1V41WTE9SC7JCGFZP",
+        "initiatingFsp": "test-mwk-dfsp",
+        "determiningTransferId": "01K7EV9TNQ1VKX84N0GSQH6MDD",
+        "counterPartyFsp": "test-fxp",
+        "amountType": "SEND",
+        "sourceAmount": { "currency": "MWK", "amount": "60" },
+        "targetAmount": { "currency": "ZMW" },
+        "expiration": "2025-10-13T13:15:06.497Z"
     }
 }
+```
+
+**Taken from this message:** `sourceAmount` - the amount in the payer's currency. Note `targetAmount` has no amount yet; only the currency is known at request time.
+
+---
+
+#### FX quote callback - `PUT /fxQuotes/01K7EV9VS1V41WTE9SC7JCGFZN`
+
+`test-fxp` → `test-mwk-dfsp`. The FXP commits to a rate.
+
+```json
+{
+    "condition": "jp435ANRB6qXpvZVPFfyTHwOfK0mq2xvkegWPe0w0d4",
+    "conversionTerms": {
+        "conversionId": "01K7EV9VS1V41WTE9SC7JCGFZP",
+        "determiningTransferId": "01K7EV9TNQ1VKX84N0GSQH6MDD",
+        "initiatingFsp": "test-mwk-dfsp",
+        "counterPartyFsp": "test-fxp",
+        "sourceAmount": { "currency": "MWK", "amount": "60" },
+        "targetAmount": { "currency": "ZMW", "amount": "1" },
+        "expiration": "2025-10-13T13:15:06.497Z",
+        "amountType": "SEND",
+        "extensionList": { "extension": [
+            { "key": "GrpHdr.MsgId",   "value": "01K7EV9WDBJ06TM3HY901Q63P8" },
+            { "key": "GrpHdr.CreDtTm", "value": "2025-10-13T13:14:07.147Z" },
+            { "key": "GrpHdr.NbOfTxs", "value": "1" },
+            { "key": "GrpHdr.SttlmInf.SttlmMtd", "value": "CLRG" },
+            { "key": "CdtTrfTxInf.UndrlygCstmrCdtTrf.Dbtr.Id.OrgId.Othr.Id",     "value": "test-mwk-dfsp" },
+            { "key": "CdtTrfTxInf.UndrlygCstmrCdtTrf.DbtrAgt.FinInstnId.Othr.Id","value": "test-mwk-dfsp" },
+            { "key": "CdtTrfTxInf.UndrlygCstmrCdtTrf.Cdtr.Id.OrgId.Othr.Id",     "value": "test-fxp" },
+            { "key": "CdtTrfTxInf.UndrlygCstmrCdtTrf.CdtrAgt.FinInstnId.Othr.Id","value": "test-fxp" }
+        ]}
+    }
 }
 ```
 
-*Transformation walkthrough:* transferld becomes the ISO TxId; payerFsp/payeeFsp map onto DbtrAgt/CdtrAgt; the ILP packet and condition are carried into VrfctnOfTerms unchanged (they are opaque cryptographic material, not translated); Msgld/CreDtTm are generated fresh by the PPA, not copied from Mojaloop’s messages (§6.5).
+**Taken from this message:** the agreed `sourceAmount` / `targetAmount` pair, which together give `InstdAmt` (MWK 60) and the exchange rate **60 ÷ 1 = 60** → `XchgRate`. Per §6.5.3 the FXP itself is **not** carried into the Tazama message - the `UndrlygCstmrCdtTrf.*` extension keys above, which name `test-fxp` as a party, are deliberately not mapped.
 
-### 7.2 Cross-Border FX Transfer - pacs. 009
+---
 
-Mojaloop request - pacs. 009 request event:
+#### Quote request - `POST /quotes`
 
-```
+`test-mwk-dfsp` → `test-zmw-dfsp`. Prices the ZMW leg. **This is the richest identity message in the flow.**
+
+```json
 {
-    "commitRequestId": "d3f1a2b0-1234-4abc-9def-abcdef123456",
-    "determiningTransferld": "b51ec534-ee48-4575-b6a9-ead2955b8069",
-    "initiatingFsp": "payerfsp",
-    "counterPartyFsp": "fxpfsp",
-    "sourceAmount": { "currency": "USD", "amount": "100.00" },
-    "targetAmount": { "currency": "KES", "amount": "12950.00" },
-    "condition": "gT9nSqLp3wXvKcYz8F0BqmVoR6ejWI2NdOtHu4CxIfA",
-    "expiration": "2026-07-17T10:16:00.000Z"
-}
-```
-
-Resulting Tazama ISO 20022 output - pacs.009:
-
-```
-{
-    "FICdtTrf":{
-        "GrpHdr": { "Msgld": "01J9Z3K4M5N6O7P8Q9R0S1T2U3", "CreDtTm": "2026-07-17T10:16:01.200Z" },
-        "CdtTrfTxInf":{
-            "Pmtld":{
-                "Txld": "d3f1a2b0-1234-4abc-9def-abcdef123456",
-                "EndToEndId": "b51ec534-ee48-4575-b6a9-ead2955b8069"
+    "quoteId": "01K7EV9X2K4F8J90ZWMRHDNCZN",
+    "transactionId": "01K7EV9TNQ1VKX84N0GSQH6MDD",
+    "amountType": "SEND",
+    "amount": { "currency": "ZMW", "amount": "1" },
+    "expiration": "2025-10-13T13:15:07.827Z",
+    "payer": {
+        "partyIdInfo": {
+            "partyIdType": "MSISDN",
+            "partyIdentifier": "16665551002",
+            "fspId": "test-mwk-dfsp"
+        },
+        "personalInfo": {
+            "complexName": {
+                "firstName": "Firstname-Test",
+                "middleName": "Middlename-Test",
+                "lastName": "Lastname-Test"
             },
-            "DbtrAgt": { "FinInstnId": { "Othr": { "Id": "payerfsp"}}},
-            "CdtrAgt": { "FinInstnld": { "Othr": { "ld": "fxpfsp" }}},
-            "VrfctnOfTerms": { "Condition": "gT9nSqLp3wXvKcYz8F0BqmVoR6ejWl2NdOtHu4CxIfA" }
+            "dateOfBirth": "1984-01-01"
+        },
+        "name": "Display-Test"
+    },
+    "payee": {
+        "partyIdInfo": {
+            "partyIdType": "MSISDN",
+            "partyIdentifier": "16665551001",
+            "fspId": "test-zmw-dfsp",
+            "extensionList": { "extension": [
+                { "key": "Assgnmt.MsgId",   "value": "01K7EV9V3FQ2RYXXE9ARH7DNFA" },
+                { "key": "Assgnmt.CreDtTm", "value": "2025-10-13T13:14:05.807Z" },
+                { "key": "Rpt.Vrfctn",      "value": true }
+            ]}
+        },
+        "merchantClassificationCode": "123"
+    },
+    "transactionType": { "scenario": "TRANSFER", "initiator": "PAYER", "initiatorType": "CONSUMER" },
+    "note": "test"
+}
+```
+
+**Taken from this message:** `personalInfo.complexName` → `Dbtr.Nm` (the legal name, joined "Firstname-Test Middlename-Test Lastname-Test"); `personalInfo.dateOfBirth` → `Dbtr…BirthDt`; `name` → `DbtrAcct.Nm`; `transactionType` → `Purp.Cd`; `note` → `RmtInf.Ustrd`. The payer's date of birth appears **only** here.
+
+---
+
+#### Quote callback - `PUT /quotes/01K7EV9X2K4F8J90ZWMRHDNCZN`
+
+`test-zmw-dfsp` → `test-mwk-dfsp`. Returns the priced terms, the ILP packet and the condition. The switch also attaches its own ISO field mapping in `extensionList`, and the untranslated ISO payload in `originalIso20022QuoteResponse`.
+
+```json
+{
+    "expiration": "2025-10-13T13:15:08.384Z",
+    "transferAmount":     { "currency": "ZMW", "amount": "1" },
+    "payeeReceiveAmount": { "currency": "ZMW", "amount": "1" },
+    "payeeFspFee":        { "currency": "ZMW", "amount": "0" },
+    "ilpPacket": "DIIC0QAAAAAAAABkMjAyNTEwMTMxMzE1MDgzODQ2alrYQWLyAk7Emjh…",
+    "condition": "Nmpa2EFi8gJOxJo4TLvmiYXrdrD9rIlGDPaPGUO2P1I",
+    "extensionList": { "extension": [
+        { "key": "GrpHdr.MsgId",   "value": "01K7EV9XM2F00J5V4PZQTKFE38" },
+        { "key": "GrpHdr.CreDtTm", "value": "2025-10-13T13:14:08.386Z" },
+        { "key": "GrpHdr.NbOfTxs", "value": "1" },
+        { "key": "GrpHdr.SttlmInf.SttlmMtd", "value": "CLRG" },
+        { "key": "CdtTrfTxInf.Dbtr.Id.PrvtId.Othr.SchmeNm.Prtry", "value": "MSISDN" },
+        { "key": "CdtTrfTxInf.Dbtr.Id.PrvtId.Othr.Id",            "value": "16665551002" },
+        { "key": "CdtTrfTxInf.Dbtr.Name",                         "value": "Display-Test" },
+        { "key": "CdtTrfTxInf.DbtrAgt.FinInstnId.Othr.Id",        "value": "test-mwk-dfsp" },
+        { "key": "CdtTrfTxInf.Cdtr.Id.PrvtId.Othr.SchmeNm.Prtry", "value": "MSISDN" },
+        { "key": "CdtTrfTxInf.Cdtr.Id.PrvtId.Othr.Id",            "value": "16665551001" },
+        { "key": "CdtTrfTxInf.CdtrAgt.FinInstnId.Othr.Id",        "value": "test-zmw-dfsp" },
+        { "key": "CdtTrfTxInf.ChrgBr",                            "value": "CRED" },
+        { "key": "CdtTrfTxInf.ChrgsInf.Agt.FinInstnId.Othr.Id",   "value": "test-zmw-dfsp" }
+    ]}
+}
+```
+
+**Taken from this message:** `ChrgBr` → `CRED` (not the `DEBT` default); `payeeFspFee` and `ChrgsInf.Agt` → `ChrgsInf`; `GrpHdr.SttlmInf.SttlmMtd` → `CLRG`.
+
+> **Important:** Mojaloop's ISO paths here are **not** Tazama's. Mojaloop uses `FinInstnId.Othr.Id`; Tazama requires `FinInstnId.ClrSysMmbId.MmbId`. Mojaloop's `originalIso20022QuoteResponse` likewise uses `IntrBkSttlmAmt.Ccy` + `ActiveCurrencyAndAmount`, where Tazama requires `IntrBkSttlmAmt.Amt.Amt` + `.Amt.Ccy`. These extension keys are useful corroboration, but they cannot be copied through unmodified.
+
+---
+
+#### FX transfer request - `POST /fxTransfers`
+
+`test-mwk-dfsp` → `test-fxp`. Reserves the conversion leg.
+
+```json
+{
+    "determiningTransferId": "01K7EV9TNQ1VKX84N0GSQH6MDD",
+    "initiatingFsp": "test-mwk-dfsp",
+    "counterPartyFsp": "test-fxp",
+    "sourceAmount": { "currency": "MWK", "amount": "60" },
+    "targetAmount": { "currency": "ZMW", "amount": "1" },
+    "expiration": "2025-10-13T13:15:09.272Z",
+    "amountType": "SEND",
+    "condition": "jp435ANRB6qXpvZVPFfyTHwOfK0mq2xvkegWPe0w0d4",
+    "commitRequestId": "01K7EV9VS1V41WTE9SC7JCGFZP"
+}
+```
+
+#### FX transfer callback - `PUT /fxTransfers/01K7EV9VS1V41WTE9SC7JCGFZP`
+
+`test-fxp` → `test-mwk-dfsp`. The FXP confirms the leg is reserved.
+
+```json
+{
+    "fulfilment": "4nqWiu-ARrNqM3W_GknieZcPMIFVS34SoBTwk7y43E8",
+    "completedTimestamp": "2025-10-13T13:14:09.957Z",
+    "conversionState": "RESERVED",
+    "extensionList": { "extension": [
+        { "key": "GrpHdr.MsgId",   "value": "01K7EV9Z5AG750EZJT22PZ0ZAA" },
+        { "key": "GrpHdr.CreDtTm", "value": "2025-10-13T13:14:09.962Z" }
+    ]}
+}
+```
+
+**Taken from these two messages: nothing.** They are consumed for correlation and audit only. Their amounts duplicate the agreed FX quote, and per §6.5.3 the FX leg does not produce its own Tazama transaction - `conversionState: RESERVED` is an intermediate state of a leg, not a terminal state of the payment. Emitting a pacs.002 here would race the real outcome that arrives moments later.
+
+---
+
+#### Transfer prepare - `POST /transfers` ★ triggers pacs.008
+
+`test-mwk-dfsp` → `test-zmw-dfsp`. Reserves positions at the switch.
+
+```json
+{
+    "transferId": "01K7EV9TNQ1VKX84N0GSQH6MDD",
+    "payeeFsp": "test-zmw-dfsp",
+    "payerFsp": "test-mwk-dfsp",
+    "amount": { "currency": "ZMW", "amount": "1" },
+    "ilpPacket": "DIIC0QAAAAAAAABkMjAyNTEwMTMxMzE1MDgzODQ2alrYQWLyAk7Emjh…",
+    "condition": "Nmpa2EFi8gJOxJo4TLvmiYXrdrD9rIlGDPaPGUO2P1I",
+    "expiration": "2025-10-13T13:15:10.546Z",
+    "extensionList": { "extension": [
+        { "key": "CdtTrfTxInf.Cdtr.Id.PrvtId.Othr.SchmeNm.Prtry", "value": "MSISDN" },
+        { "key": "CdtTrfTxInf.Cdtr.Id.PrvtId.Othr.Id",            "value": "16665551001" },
+        { "key": "CdtTrfTxInf.CdtrAgt.FinInstnId.Othr.Id",        "value": "test-zmw-dfsp" }
+    ]}
+}
+```
+
+The `ilpPacket` is **not opaque**. Decoding it (base64url → ILP v4 packet → embedded base64url JSON) yields a structured transaction object:
+
+```json
+{
+    "quoteId": "01K7EV9X2K4F8J90ZWMRHDNCZN",
+    "transactionId": "01K7EV9TNQ1VKX84N0GSQH6MDD",
+    "transactionType": { "scenario": "TRANSFER", "initiator": "PAYER", "initiatorType": "BUSINESS" },
+    "payee": { "partyIdInfo": { "partyIdType": "MSISDN", "partyIdentifier": "16665551001", "fspId": "test-zmw-dfsp" }},
+    "payer": { "partyIdInfo": { "partyIdType": "MSISDN", "partyIdentifier": "16665551002", "fspId": "test-mwk-dfsp" },
+               "name": "Display-Test" },
+    "expiration": "2025-10-13T13:15:08.384Z",
+    "amount": { "amount": "1", "currency": "ZMW" }
+}
+```
+
+**Taken from this message:** `transferId` → `PmtId.InstrId`; the decoded `transactionId` → `PmtId.EndToEndId`; `amount` → `IntrBkSttlmAmt`; `payerFsp` / `payeeFsp` → `DbtrAgt` / `CdtrAgt`; `expiration` → `SplmtryData…Xprtn`; the extension keys and decoded `payee` → `Cdtr` / `CdtrAcct` identifiers.
+
+This is why the pacs.008 can be emitted here rather than waiting for the fulfil (§6.5.4): the prepare alone carries both parties, both agents and the transaction type. Note the decoded packet claims `initiatorType: BUSINESS` while the quote request said `CONSUMER` - the FSPIOP message body takes precedence, so `Purp.Cd` resolves to `MP2P`.
+
+---
+
+#### Transfer fulfil - `PUT /transfers/01K7EV9TNQ1VKX84N0GSQH6MDD` ★ triggers pacs.002
+
+`test-zmw-dfsp` → `test-mwk-dfsp`. Settlement across both schemes and the FXP.
+
+```json
+{
+    "fulfilment": "o4qka6jlUcYxhOakMAQ6tNe-KoqCBXkWEb9m981F_Sc",
+    "completedTimestamp": "2025-10-13T13:14:11.252Z",
+    "transferState": "COMMITTED",
+    "extensionList": { "extension": [
+        { "key": "GrpHdr.MsgId",   "value": "01K7EVA0DTXE0B1GCTZ744Y2PD" },
+        { "key": "GrpHdr.CreDtTm", "value": "2025-10-13T13:14:11.258Z" }
+    ]}
+}
+```
+
+Relevant headers: `fspiop-source: test-zmw-dfsp`, `fspiop-destination: test-mwk-dfsp`.
+
+**Taken from this message:** `transferState` → `TxSts` (**translated** `COMMITTED` → `ACSC`); `completedTimestamp` → `AccptncDtTm`; the two `GrpHdr.*` extension keys → `GrpHdr` (copied, not generated - §6.5.5); and the `fspiop-source` / `fspiop-destination` **headers** → `InstgAgt` / `InstdAgt`. The direction reverses here relative to the pacs.008: the instructing agent is the payee DFSP.
+
+---
+
+### Resulting Tazama messages
+
+Both payloads below have been validated against Tazama's live ingestion schemas (`tms-service/src/schemas/*.json`) using the TMS service's exact ajv configuration. Both pass with no fields stripped.
+
+#### pacs.008.001.10 - emitted on transfer prepare
+
+```json
+{
+    "TxTp": "pacs.008.001.10",
+    "FIToFICstmrCdtTrf": {
+        "GrpHdr": {
+            "MsgId": "01K7EV9ZQ4X8N2R5T7V9W1Y3Z6",
+            "CreDtTm": "2025-10-13T13:14:10.612Z",
+            "NbOfTxs": 1,
+            "SttlmInf": { "SttlmMtd": "CLRG" }
+        },
+        "CdtTrfTxInf": {
+            "PmtId": {
+                "InstrId": "01K7EV9TNQ1VKX84N0GSQH6MDD",
+                "EndToEndId": "01K7EV9TNQ1VKX84N0GSQH6MDD"
+            },
+            "IntrBkSttlmAmt": { "Amt": { "Amt": 1,  "Ccy": "ZMW" } },
+            "InstdAmt":       { "Amt": { "Amt": 60, "Ccy": "MWK" } },
+            "ChrgBr": "CRED",
+            "XchgRate": "60",
+            "ChrgsInf": {
+                "Amt": { "Amt": 0, "Ccy": "ZMW" },
+                "Agt": { "FinInstnId": { "ClrSysMmbId": { "MmbId": "test-zmw-dfsp" } } }
+            },
+            "InitgPty": {
+                "Nm": "Firstname-Test Middlename-Test Lastname-Test",
+                "Id": { "PrvtId": {
+                    "DtAndPlcOfBirth": { "BirthDt": "1984-01-01", "CityOfBirth": "Unknown", "CtryOfBirth": "ZZ" },
+                    "Othr": [ { "Id": "16665551002", "SchmeNm": { "Prtry": "MSISDN" } } ]
+                }},
+                "CtctDtls": { "MobNb": "16665551002" }
+            },
+            "Dbtr": {
+                "Nm": "Firstname-Test Middlename-Test Lastname-Test",
+                "Id": { "PrvtId": {
+                    "DtAndPlcOfBirth": { "BirthDt": "1984-01-01", "CityOfBirth": "Unknown", "CtryOfBirth": "ZZ" },
+                    "Othr": [ { "Id": "16665551002", "SchmeNm": { "Prtry": "MSISDN" } } ]
+                }},
+                "CtctDtls": { "MobNb": "16665551002" }
+            },
+            "DbtrAcct": {
+                "Id": { "Othr": [ { "Id": "16665551002", "SchmeNm": { "Prtry": "MSISDN" } } ] },
+                "Nm": "Display-Test"
+            },
+            "DbtrAgt": { "FinInstnId": { "ClrSysMmbId": { "MmbId": "test-mwk-dfsp" } } },
+            "CdtrAgt": { "FinInstnId": { "ClrSysMmbId": { "MmbId": "test-zmw-dfsp" } } },
+            "Cdtr": {
+                "Nm": "Chikondi Banda",
+                "Id": { "PrvtId": {
+                    "DtAndPlcOfBirth": { "BirthDt": "1900-01-01", "CityOfBirth": "Unknown", "CtryOfBirth": "ZZ" },
+                    "Othr": [ { "Id": "16665551001", "SchmeNm": { "Prtry": "MSISDN" } } ]
+                }},
+                "CtctDtls": { "MobNb": "16665551001" }
+            },
+            "CdtrAcct": {
+                "Id": { "Othr": [ { "Id": "16665551001", "SchmeNm": { "Prtry": "MSISDN" } } ] },
+                "Nm": "Chikondi Banda"
+            },
+            "Purp": { "Cd": "MP2P" }
+        },
+        "RgltryRptg": { "Dtls": { "Tp": "BALANCE OF PAYMENTS", "Cd": "100" } },
+        "RmtInf": { "Ustrd": "test" },
+        "SplmtryData": { "Envlp": { "Doc": {
+            "Xprtn": "2025-10-13T13:15:10.546Z",
+            "InitgPty": { "Glctn": { "Lat": "0", "Long": "0" } }
+        }}}
+    }
+}
+```
+
+#### pacs.002.001.12 - emitted on transfer fulfil
+
+```json
+{
+    "TxTp": "pacs.002.001.12",
+    "FIToFIPmtSts": {
+        "GrpHdr": {
+            "MsgId": "01K7EVA0DTXE0B1GCTZ744Y2PD",
+            "CreDtTm": "2025-10-13T13:14:11.258Z"
+        },
+        "TxInfAndSts": {
+            "OrgnlInstrId": "01K7EV9TNQ1VKX84N0GSQH6MDD",
+            "OrgnlEndToEndId": "01K7EV9TNQ1VKX84N0GSQH6MDD",
+            "TxSts": "ACSC",
+            "ChrgsInf": [ {
+                "Amt": { "Amt": 0, "Ccy": "ZMW" },
+                "Agt": { "FinInstnId": { "ClrSysMmbId": { "MmbId": "test-zmw-dfsp" } } }
+            } ],
+            "AccptncDtTm": "2025-10-13T13:14:11.252Z",
+            "InstgAgt": { "FinInstnId": { "ClrSysMmbId": { "MmbId": "test-zmw-dfsp" } } },
+            "InstdAgt": { "FinInstnId": { "ClrSysMmbId": { "MmbId": "test-mwk-dfsp" } } }
         }
     }
 }
 ```
 
-*Transformation walkthrough:* commitRequestld becomes TxId, while the originating domestic transfer’s determiningTransferld is preserved as EndToEndld so the FX leg can still be traced back to the underlying transfer it converts for.
+### Transformation walkthrough
+
+**The cross-border conversion is the point.** `InstdAmt` carries what the payer was instructed to send (MWK 60) and `IntrBkSttlmAmt` what actually settled (ZMW 1), with `XchgRate` (60) connecting them. Two currencies in one transaction. Under a per-leg model this relationship would be split across two Tazama transactions and lost.
+
+**The FXP never appears.** `test-fxp` is absent from both outputs. It is FX plumbing, not a party to the customer's payment (§6.5.3).
+
+**Nine Mojaloop messages, seven consumed, two emitted.** Neither output corresponds one-to-one with a Mojaloop message: the pacs.008 draws on five messages (prepare, both quotes, the FX quote callback and the party lookup) and the pacs.002 on two (the fulfil, plus the cached quote fees).
+
+**The identifiers are what make the pair a pair.** `OrgnlInstrId` and `OrgnlEndToEndId` on the pacs.002 must exactly match `PmtId.InstrId` and `PmtId.EndToEndId` on the pacs.008. If they do not, TMS still accepts the pacs.002, but Tazama's graph never links it to its transfer and the transaction silently never completes a chain.
+
+**Three fields carry no Mojaloop data.** `Cdtr…BirthDt` (`1900-01-01`), `RgltryRptg` and `Glctn` (`0,0`) are constants - the payee's date of birth, regulatory reporting code and payer geolocation do not exist anywhere in the Mojaloop flow, yet all three are required. See §6.5.6 and the gap register in `message mapping/02_design-decisions.md`.
+
+**And what is discarded:** `condition`, `fulfilment`, `commitRequestId` and `conversionId` are not carried. Tazama's schema has no field for them, and because TMS runs ajv with `removeAdditional: 'all'`, attempting to attach them would return HTTP 200 with the fields silently deleted (§6.5.1).
 
 ## 8. End-to-End Flows
 
 The following flows trace what happens from the moment an FSP initiates a payment to the point where Tazama has received the full picture. Each flow reflects the async nature of Mojaloop - requests and callbacks are separate events that the MLA captures at different times.
 
-### 8.1 Standard P2P Payment - Full Happy Path
+### 8.1 Cross-Border Payment with Currency Conversion
 
-This is the most common flow. A payer FSP sends money to a payee FSP on the same switch. The full sequence is broken into diagrams below - one per leg - rather than a single combined diagram, so each stays readable on its own.
+This is the reference flow, traced against the real DRPP golden path reproduced in §7 (MWK 60 → ZMW 1, `test-mwk-dfsp` → `test-zmw-dfsp` via `test-fxp`, 5.9 s end to end). A domestic payment is the same flow with the two FX stages absent.
 
-Quote Leg
+Nine messages cross the wire. The PPA consumes seven of them and sends **two** messages to TMS.
 
-![](CCH_FSD_MessageIngestion_v1_0/imagesdb35d88f-73cd-4da1-a673-2f7d9f8b3685-18_1199_1624_275_249.jpg)
+**Stage 1 - Party lookup.** The payee DFSP returns the resolved party on `PUT /parties`. The MLA relays it; the PPA caches the payee's **name**, which appears in no other message in the flow. This callback arrives before any transaction id exists, so the entry is keyed on the party identifier (MSISDN), not on the transaction - see §6.4.
 
-Quote leg: request, callback, correlation, and translation to pacs. 081 + pacs. 082
+**Stage 2 - FX quote.** The payer DFSP requests conversion terms from the FXP (`POST /fxQuotes`); the FXP commits to a rate (`PUT /fxQuotes`). The PPA caches the agreed `sourceAmount` / `targetAmount` pair. Nothing is sent to TMS at this stage.
 
-1. Payer FSP sends the pacs. 081 quote request to the Quoting Service. Switch returns HTTP 202.
-2. Quoting Service publishes the quote request event to topic-quotes-post.
-3. MLA picks it up, wraps it in an Event Envelope (msgType: request, eventType: QUOTE), sends to PPA /QUOTES.
-4. PPA stores the envelope in cache keyed by quoteld. Waits for the callback.
-5. Payee FSP responds with agreed terms. Quoting Service publishes to topic-quotes-put.
-6. MLA picks up the callback, sends to PPA /QUOTES (msgType: callback).
-7. PPA finds the cached request event, combines both halves, builds pacs. 081 + pacs.082, sends to TMS.
+**Stage 3 - Quote.** The payer DFSP prices the target-currency leg with the payee DFSP (`POST` / `PUT /quotes`). The PPA caches the payer's identity (name, date of birth), the charge bearer, the payee fee and the settlement method. This is the richest identity message in the flow, and the only source of the payer's date of birth.
 
-## Transfer Leg
+**Stage 4 - FX transfer.** The payer DFSP reserves the conversion leg with the FXP (`POST` / `PUT /fxTransfers`). The PPA consumes both for correlation and audit but **derives no fields from them and emits nothing** - under §6.5.3 the FX leg is not a separate Tazama transaction, and `conversionState: RESERVED` is an intermediate state of a leg rather than a terminal state of the payment.
 
-Transfer request & callback:
+**Stage 5 - Transfer prepare → ★ pacs.008 to TMS.** The payer DFSP sends `POST /transfers`. The MLA relays it; the PPA decodes the ILP packet, drains everything cached in stages 1-3, assembles the pacs.008 and sends it to TMS **immediately, without waiting for the fulfil** (§6.5.4). This is what preserves the pre-settlement evaluation window: prepare → fulfil is roughly one second, so a PPA that waited for the pair would be handing Tazama payments that had already settled.
 
-![](CCH_FSD_MessageIngestion_v1_0/imagesdb35d88f-73cd-4da1-a673-2f7d9f8b3685-19_1287_1624_273_249.jpg)
+**Stage 6 - Transfer fulfil → ★ pacs.002 to TMS.** The payee DFSP returns `PUT /transfers` with `transferState: COMMITTED`. The PPA translates the state to an ISO code (`ACSC`), reads `InstgAgt` / `InstdAgt` from the `fspiop-source` / `fspiop-destination` headers, and sends the pacs.002 carrying the same `InstrId` / `EndToEndId` as the pacs.008 so Tazama can join the pair.
 
-Transfer leg: request, callback, correlation, and translation to pacs. 008
+```
+PUT  /parties      ──┐
+POST /fxQuotes     ──┤
+PUT  /fxQuotes     ──┤
+POST /quotes       ──┼──► PPA cache
+PUT  /quotes       ──┘
+POST /fxTransfers  ──── correlation only, nothing derived
+PUT  /fxTransfers  ──── correlation only, nothing derived
+POST /transfers    ──────────────────► ★ pacs.008 → TMS
+PUT  /transfers    ──────────────────► ★ pacs.002 → TMS
+```
 
-1. Payer FSP sends the pacs. 008 transfer request to the ML API Adapter. Switch returns HTTP 202.
-2. ML API Adapter publishes the transfer prepare event to topic-transfer-prepare.
-3. MLA picks it up, decodes the base64 payload (§4.6), sends to PPA /TRANSFERS (msgType: request, eventType: TRANSFER).
-4. PPA stores in cache keyed by transferld. Waits.
-5. Switch commits the transfer. ML API Adapter publishes the fulfilment to topic-transfer-fulfil.
-6. MLA picks up the callback, sends to PPA /TRANSFERS (msgType: callback).
-7. PPA correlates, builds pacs.008, sends to TMS.
+**Messages sent to TMS.** The transfer stage produces exactly **two**: one pacs.008 and one pacs.002. The FX quote and FX transfer stages produce none, because the conversion is folded into the single payment via `InstdAmt` (MWK 60), `IntrBkSttlmAmt` (ZMW 1) and `XchgRate` (60) rather than modelled as its own transaction (§6.5.3). The quote stage additionally maps to Tazama's pain.001 / pain.013 pair, but that mapping is out of scope of this revision and unverified (§6.5.6), so the verified total for a cross-border payment is two.
 
-Final-state notification:
+**Degraded operation.** If the stage 1-3 cache entries are missing - a cache miss, a late callback, or a scheme that skips quoting altogether - the pacs.008 is **still constructible** from the prepare message alone, because its decoded ILP packet carries both parties, both agents and the transaction type. What is lost is the payee name, the payer's date of birth, the charge bearer and the source amount, each of which falls back to a documented default. Degraded messages are structurally valid and indistinguishable from complete ones at the TMS door, so the PPA must flag them in the audit log.
 
-![](CCH_FSD_MessageIngestion_v1_0/imagesdb35d88f-73cd-4da1-a673-2f7d9f8b3685-20_728_1626_277_249.jpg)
+### 8.2 Rejected Payment
 
-Final-state notification: Central Ledger → dedup → MLA → PPA → TMS
+If the payee rejects a quote or the switch rejects a transfer, the switch publishes an error callback to Kafka instead of a normal callback. The MLA relays it to the PPA in the same way, and the PPA builds a pacs. 002 with `TxSts: RJCT` and sends it to TMS. Error events are still valuable for fraud analysis.
 
-1. Central Ledger publishes the final-state notification to topic-notification-event.
-2. The Notification Filter/Dedup component checks the idempotency key; if this is the first occurrence, MLA picks up the (deduplicated) event and sends to PPA /TRANSFERS.
-3. PPA builds pacs. 002 from the notification payload and sends to TMS.
-4. Tazama evaluates all received messages. No alert triggered on this flow. Case Management is not involved.
+Two constraints apply, both differing from earlier drafts of this document:
 
-### 8.2 Cross-Border Payment with Currency Conversion
+- **A cached request event is required.** `OrgnlInstrId` and `OrgnlEndToEndId` are mandatory fields on the pacs. 002 and cannot be derived from the error payload, which carries only the resource id. Without the cached originating transfer the PPA cannot build a linkable message; an error arriving with no cached counterpart is logged and alerted rather than forwarded.
+- **The error reason cannot be carried.** Tazama's pacs. 002 schema has no `StsRsnInf`, so `errorCode` and `errorDescription` have nowhere to go, and because TMS runs ajv with `removeAdditional: 'all'` any attempt to attach them returns HTTP 200 with the fields silently deleted (§6.5.1). Tazama therefore learns *that* a payment was rejected but never *why*; the reason is retained in the PPA audit log. Adding `StsRsnInf` to the TMS schema is logged as a follow-up with Tazama.
 
-Same as 8.1 but two additional stages are inserted - FX Quote and FX Transfer - before the standard quote and transfer. Each FX stage follows the same request+callback pattern. The PPA processes pacs.091/092 for FX quotes and pacs. 009 for FX transfers (worked example in §7.2). A full cross-border payment sends up to 6 ISO 20022 messages to TMS across all stages.
+### 8.3 Callback Never Arrives
 
-### 8.3 Rejected Payment
+Because the pacs.008 is emitted on the transfer prepare rather than on the prepare+fulfil pair (§6.5.4), a missing callback no longer suppresses the whole transaction - the consequences differ by stage:
 
-If the payee rejects a quote or the switch rejects a transfer, the switch publishes an error callback (pacs.002) to Kafka instead of a normal callback. The MLA relays it to the PPA in the same way. The PPA does not need a cached request event to build an error response - it builds a pacs. 002 with the errorCode and errorDescription directly from the error payload and sends it to TMS. Error events are still valuable for fraud analysis.
+- **Fulfil never arrives.** The pacs.008 has already been sent, so Tazama holds the transfer request but never learns its outcome. The PPA logs a timeout and raises an alert. No partial or speculative pacs.002 is sent - Tazama must not be told a payment settled on the strength of a prepare.
+- **A quote-stage or party-lookup callback never arrives.** The cache entry expires. If the transfer prepare then arrives, the pacs.008 is still built in degraded form (§8.1) and flagged in the audit log; if no prepare follows, the entry is simply discarded.
 
-### 8.4 Callback Never Arrives
-
-If the PPA is holding a cached request event and the matching callback does not arrive before the cache TTL expires, the PPA discards the cached entry, logs a timeout, and raises an alert. It does not send any message to TMS. This situation should be investigated - it may indicate a Mojaloop switch issue or a Kafka delivery problem.
+In both cases the situation should be investigated - it may indicate a Mojaloop switch issue or a Kafka delivery problem.
 
 ## 9. Performance
 
@@ -641,8 +939,8 @@ No document in this project currently states a concrete transaction-volume targe
 | :— | :— | :— |
 | Sustained transaction TPS (steady state) | 20-100 TPS [TBC confirm with CCH, Open Item #4] | Regional/corridor-scale Mojaloop deployments typically run well below reference-implementation ceilings |
 | Peak burst TPS (multiplier) | $3-5 \mathrm{x}$ sustained | Standard payment-switch peak-to-average ratio |
-| Messages/transaction (P2P domestic) | up to 4 (quote × 2, transfer ×2) | §8.1 |
-| Messages/transaction (cross-border) | up to 6 | §8.2 |
+| Mojaloop messages consumed/transaction (cross-border) | 7 of 9 on the wire | §8.1 |
+| ISO 20022 messages sent to TMS/transaction | 2 verified (pacs.008 + pacs.002); up to 4 if the out-of-scope quote-stage mapping is implemented | §8.1, §6.5.6 |
 | MLA end-to-end ack latency (p95) | < 200 ms | Typical HTTP + Kafka-commit round trip |
 | PPA correlation-to-TMS latency (p95, cache hit) | < 500 ms | Includes decode/decrypt, translate, TMS POST |
 
@@ -665,7 +963,7 @@ External reference: Mojaloop reference-implementation benchmarking has demonstra
 
 ### 9.3 Cache (ValKey) Sizing and TTL Policy
 
-- TTL formula: TTL = max(expiration field on the Mojaloop message, expected worst-case MLA-to-PPA transit + Kafka lag) + fixed buffer (5-10s). TTL must not be derived from the expiration field alone - it must also cover MLA-side ingestion delay under lag, or genuine in-flight correlations will time out falsely (§8.4).
+- TTL formula: TTL = max(expiration field on the Mojaloop message, expected worst-case MLA-to-PPA transit + Kafka lag) + fixed buffer (5-10s). TTL must not be derived from the expiration field alone - it must also cover MLA-side ingestion delay under lag, or genuine in-flight correlations will time out falsely (§8.3).
 - Memory sizing formula: Peak concurrent cached entries $\approx T T L(\mathrm{~s}) \times$ in-flight request rate $(\mathrm{req} / \mathrm{s}) \times$ avg payload size (bytes) × safety factor (1.5-2x). Final sizing is blocked on the TPS assumption in §9.1 being confirmed (Open Item #4).
 - Eviction policy: volatile-lru (every correlation key carries an explicit TTL); alert - do not silently evict - on memory pressure, since an evicted correlation key is equivalent to a lost transaction pair.
 - Monitor cache hit ratio; a sustained drop signals either TTL misconfiguration or MLA backlog.
