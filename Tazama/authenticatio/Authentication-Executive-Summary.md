@@ -24,24 +24,7 @@ Authentication in Tazama splits cleanly into two phases that happen in different
 
 ### 1. Login (credential exchange) — happens only in auth-service
 
-```mermaid
-sequenceDiagram
-    actor Client as User / Service caller
-    participant AuthSvc as auth-service
-    participant AuthLib as auth-lib
-    participant Provider as auth-lib-provider-keycloak
-    participant KC as Keycloak
-
-    Client->>AuthSvc: POST /v1/auth/login {username, password}
-    AuthSvc->>AuthLib: authService.getToken(username, password)
-    AuthLib->>Provider: delegate to active provider
-    Provider->>KC: POST /realms/{realm}/protocol/openid-connect/token (grant_type=password)
-    KC-->>Provider: Keycloak access_token (+ refresh_token)
-    Provider->>Provider: decode Keycloak JWT, map realm/client roles to Tazama "claims"
-    Provider->>AuthLib: sign TazamaToken (RS256, private key)
-    AuthLib-->>AuthSvc: Tazama JWT string
-    AuthSvc-->>Client: 200 OK, body = Tazama JWT string
-```
+![Authentication flow](pics/authentication%20flow.png)
 
 - Invalid credentials → Keycloak rejects → propagates up as a `401`.
 - Too many failed attempts → Keycloak account lockout → auth-service returns `429`.
@@ -49,23 +32,7 @@ sequenceDiagram
 
 ### 2. Authorization (token verification) — happens in every protected service, on every request
 
-```mermaid
-sequenceDiagram
-    actor Client as User / Service caller
-    participant Svc as Any Tazama service (e.g. admin-service)
-    participant AuthLib as auth-lib
-
-    Client->>Svc: Request with "Authorization: Bearer <TazamaJWT>"
-    Svc->>AuthLib: extractTenant(...) / validateTokenAndClaims(token, requiredClaims)
-    AuthLib->>AuthLib: verifyToken() — RS256 signature check with public key
-    alt invalid / expired / missing claim
-        AuthLib-->>Svc: throws / false
-        Svc-->>Client: 401 Unauthorized
-    else valid + authorized
-        AuthLib-->>Svc: decoded TazamaToken + claim results
-        Svc-->>Client: proceeds to handler, tenant scoping applied
-    end
-```
+![Authorization flow](pics/authorization%20flow.png)
 
 No network call is made here — verification is a **local, offline RS256 signature check** against a public key file. This is what makes Tazama's authorization model fast and horizontally scalable: any service instance can verify a token without calling back to Keycloak or auth-service.
 
@@ -105,18 +72,4 @@ Every request into a protected service also resolves a `tenantId`:
 
 ## At a glance: who talks to whom
 
-```mermaid
-flowchart LR
-    U[User / Client] -->|1\. credentials| AS[auth-service]
-    AS -->|delegates| AL1[auth-lib]
-    AL1 -->|loads via AUTH_PROVIDER env var| PK[auth-lib-provider-keycloak]
-    PK -->|password grant| KC[(Keycloak)]
-    KC -->|Keycloak JWT| PK
-    PK -->|signs w/ private key| AL1
-    AL1 -->|Tazama JWT| AS
-    AS -->|2\. Tazama JWT| U
-
-    U -->|3\. Bearer Tazama JWT| SVC[Any protected service]
-    SVC -->|verify w/ public key| AL2[auth-lib]
-    AL2 -->|claims + tenantId| SVC
-```
+![Who talks to whom](pics/who%20talks%20to%20whom.png)
