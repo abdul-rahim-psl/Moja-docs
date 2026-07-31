@@ -2,7 +2,7 @@ const Ajv = require('/home/abdul-rahim/tazama/tms-service/node_modules/ajv');
 const fs = require('fs');
 
 const S = '/home/abdul-rahim/tazama/tms-service/src/schemas/';
-const D = '/home/abdul-rahim/mojaloop/docs/Tazama/message mapping/samples/';
+const D = __dirname + '/';
 
 // exact options from tms-service/src/clients/fastify.ts
 const ajv = new Ajv({ removeAdditional: 'all', useDefaults: true, coerceTypes: 'array', strictTuples: false, strict: false });

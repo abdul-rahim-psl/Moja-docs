@@ -25,57 +25,58 @@ Contents
 1. Introduction ….. 2
 2. Glossary ….. 3
 3. System Context ….. 5
-3.1 How Mojaloop Works ….. 5
-3.2 Where Ingestion Fits ….. 5
-3.3 Transaction Stages Covered in Phase 1 ….. 5
+   - 3.1 How Mojaloop Works ….. 5
+   - 3.2 Where Ingestion Fits ….. 5
+   - 3.3 Transaction Stages Covered in Phase 1 ….. 5
 4. Architecture ….. 7
-4.1 Component Overview ….. 7
-4.2 Deployment Topology ….. 7
-4.3 Failure Isolation Boundaries ….. 7
-4.4 Kafka Topic and Consumer Group Model ….. 8
-4.5 Correlation State (ValKey) - Scale and HA ….. 8
-4.6 Data Handling Note ….. 8
-4.7 Dead-Letter Queue (DLQ) ….. 9
+   - 4.1 Component Overview ….. 7
+   - 4.2 Deployment Topology ….. 7
+   - 4.3 Failure Isolation Boundaries ….. 7
+   - 4.4 Kafka Topic and Consumer Group Model ….. 8
+   - 4.5 Correlation State (ValKey) - Scale and HA ….. 8
+   - 4.6 Data Handling Note ….. 8
+   - 4.7 Dead-Letter Queue (DLQ) ….. 9
 5. Mojaloop Adaptor (MLA) ….. 10
-5.1 What It Does ….. 10
-5.2 Ingress - Kafka Subscriptions ….. 10
-5.3 How the MLA Processes Each Event ….. 10
-5.4 Event Envelope Structure ….. 10
-5.5 Egress - Sending Events to the PPA ….. 11
-5.6 Error Handling ….. 11
+   - 5.1 What It Does ….. 10
+   - 5.2 Ingress - Kafka Subscriptions ….. 10
+   - 5.3 How the MLA Processes Each Event ….. 10
+   - 5.4 Event Envelope Structure ….. 10
+   - 5.5 Egress - Sending Events to the PPA ….. 11
+   - 5.6 Error Handling ….. 11
 6. Payment Platform Adaptor (PPA) ….. 12
-6.1 What It Does ….. 12
-6.2 Ingress - API Endpoints ….. 12
-6.3 Processing Pipeline ….. 12
-6.4 Correlation - Matching Request and Callback Events ….. 14
-6.5 ISO 20022 Message Mapping ….. 14
-6.6 Egress - Sending to Tazama TMS ….. 16
-6.7 Error Handling ….. 16
+   - 6.1 What It Does ….. 12
+   - 6.2 Ingress - API Endpoints ….. 12
+   - 6.3 Processing Pipeline ….. 12
+   - 6.4 Correlation - Assembling a Complete Message ….. 14
+   - 6.5 ISO 20022 Message Mapping ….. 14
+   - 6.6 Egress - Sending to Tazama TMS ….. 16
+   - 6.7 Error Handling ….. 16
 7. Sample Messages & Transformations - Cross-Border FX Transfer ….. 17
 8. End-to-End Flows ….. 19
-8.1 Cross-Border Payment with Currency Conversion ….. 19
-8.2 Rejected Payment ….. 21
-8.3 Callback Never Arrives ….. 21
+   - 8.1 Cross-Border Payment with Currency Conversion ….. 19
+   - 8.2 Rejected Payment ….. 21
+   - 8.3 Callback Never Arrives ….. 21
 9. Performance ….. 22
-9.1 Performance Assumptions and Targets (TBC) ….. 22
-9.2 Latency Budget - MLA→PPA→TMS Hop Chain ….. 22
-9.3 Cache (ValKey) Sizing and TTL Policy ….. 23
-9.4 Backpressure and Consumer Lag Handling ….. 23
-9.5 Retry/Backoff Budget and Failure Isolation ….. 23
-9.6 Capacity Planning Guidance ….. 23
+   - 9.1 Performance Assumptions and Targets (TBC) ….. 22
+   - 9.2 Latency Budget - MLA→PPA→TMS Hop Chain ….. 22
+   - 9.3 Cache (ValKey) Sizing and TTL Policy ….. 23
+   - 9.4 Backpressure and Consumer Lag Handling ….. 23
+   - 9.5 Retry/Backoff Budget and Failure Isolation ….. 23
+   - 9.6 Capacity Planning Guidance ….. 23
 10. Security ….. 24
-10.1 Transport Security ….. 24
-10.2 Authentication & Authorization ….. 24
-10.3 Data Protection (PII & Financial Data) ….. 24
-10.4 Audit Logging & Monitoring ….. 25
-10.5 Alignment with Project Security Baseline ….. 25
+    - 10.1 Transport Security ….. 24
+    - 10.2 Authentication & Authorization ….. 24
+    - 10.3 Data Protection (PII & Financial Data) ….. 24
+    - 10.4 Audit Logging & Monitoring ….. 25
+    - 10.5 Alignment with Project Security Baseline ….. 25
 11. Phase 1 Exclusions ….. 26
 12. Open Items ….. 27
-Annex A - API Endpoint Quick Reference ….. 28
-A. 1 Mojaloop DRPP → MLA (Kafka Topics) ….. 28
-A. 2 MLA → PPA ….. 28
-A. 3 PPA → Tazama TMS ….. 28
-Annex B - Mojaloop Message Body Reference ….. 30
+
+- Annex A - API Endpoint Quick Reference ….. 28
+  - A.1 Mojaloop DRPP → MLA (Kafka Topics) ….. 28
+  - A.2 MLA → PPA ….. 28
+  - A.3 PPA → Tazama TMS ….. 28
+- Annex B - Mojaloop Message Body Reference ….. 30
 
 ## 1. Introduction
 
@@ -325,16 +326,41 @@ Every event envelope received follows these steps in sequence:
 | 2 | Validate | Check that the envelope is complete: required fields present (msgType, eventType, id, fspiop-source, body), body is non-null, eventType is recognised. |
 | 3 | Dedup (notification events only) | For events sourced from the Central Ledger notification topic, check the idempotency key (transferld + final state) against previously processed notifications; discard duplicates before proceeding (§4.1, §6.4). |
 | 4 | Decrypt | Body arrives already decoded by the MLA (§5.3 step 3, §5.4) - no decoding happens at this step. Decrypt any fields protected under the scheme defined in §10.3, if enabled. |
-| 5 | Cache check | Use the transaction/quote ID to look up the ValKey cache. Determine whether this is the first or second event in the pair for this transaction leg. |
-| 6 | Store or correlate | First event: store in cache keyed by ID + eventType. Second event: retrieve the stored first event from cache and combine the two. |
-| 7 | Translate | Build one complete message in Tazama’s specific ISO 20022 message set from the combined data. Apply the field mapping rules (§6.5, with worked examples in §7). Generate required header fields (Msgld, CreDtTm, NbOfTxs, SttlmMtd). |
+| 5 | Cache check | Look up the accumulated transaction state in ValKey on the correlator for this stage (§6.4.4). Determine whether this event is a **trigger** - one that produces an outbound TMS message - or an **enrichment** event that only contributes state (§6.4.1). |
+| 6 | Store or assemble | Enrichment event: merge into the cached transaction state and stop. Trigger event: read the accumulated state and assemble the outbound message from it plus the trigger's own content (§6.4.3). |
+| 7 | Translate | Build one complete message in Tazama’s specific ISO 20022 message set. Apply the field mapping rules (§6.5, with worked examples in §7). Generate the header fields Mojaloop does not supply and copy those it does (§6.5.5). Note that `NbOfTxs` and `SttlmMtd` are **sourced from Mojaloop**, not generated. |
 | 8 | Send to TMS | POST the completed message to the correct Tazama TMS endpoint for that message type. |
-| 9 | Handle TMS response | HTTP 200: log success, clear the completed transaction from cache. Error or timeout: apply retry policy (§6.7); log and alert if all retries exhausted. |
+| 9 | Handle TMS response | HTTP 200: log success. **Do not clear the transaction state on the pacs.008** - the pacs.002 still needs it for identifier resolution (§6.4.5). State is cleared only after the terminal message for the transaction, or on TTL expiry (§6.4.6). Error or timeout: apply retry policy (§6.7); log and alert if all retries exhausted. |
 | 10 | Audit log | Write a full audit entry: what came in, what was sent, all timestamps, TMS response, any errors — masked per §10.4. |
 
-### 6.4 Correlation - Matching Request and Callback Events
+### 6.4 Correlation - Assembling a Complete Message
 
-Because Mojaloop is asynchronous, every transaction stage produces two separate Kafka events: the outgoing request (e.g. pacs. 081 quote request) and the incoming callback (e.g. pacs. 082 quote callback). Each carries different data. The TMS needs a single complete message combining both.
+Because Mojaloop is asynchronous, a single payment produces many separate Kafka events, each carrying different data. The TMS needs complete messages assembled from them.
+
+A simple request-callback pairing pattern - pair each request event with its callback, combine the two, emit - holds for the quote stages, but **not for the transfer stage**. Applying it there produces pacs.008 and pacs.002 messages that pass TMS validation while silently carrying degraded data (§6.4.3), because the transfer prepare and fulfil are not a symmetric request/response pair the way a quote and its callback are.
+
+#### 6.4.1 Two kinds of event
+
+| | Definition | Behaviour |
+| --- | --- | --- |
+| **Trigger event** | An event that causes an outbound TMS message | Read the accumulated state, assemble, send |
+| **Enrichment event** | An event that contributes data but produces no TMS message of its own | Merge into cached state, stop |
+
+For the transfer stage in scope (§6.5 rows 3, 4, 7):
+
+| Mojaloop event | Role | Produces |
+| --- | --- | --- |
+| `PUT /parties` callback | Enrichment | - |
+| `POST` / `PUT /fxQuotes` | Enrichment | - |
+| `POST` / `PUT /quotes` | Enrichment | - |
+| `POST` / `PUT /fxTransfers` | Correlation/audit only | - |
+| **`POST /transfers` (PREPARE)** | **Trigger** | **pacs.008** |
+| **Final-state event (FULFIL / notification)** | **Trigger** | **pacs.002** |
+| **Error callback** | **Trigger** | **pacs.002** (`TxSts: RJCT`) |
+
+The transfer **prepare** is a trigger on its own, not half of a pair: it produces the pacs.008 immediately, rather than waiting for the fulfil. Waiting would destroy the pre-settlement evaluation window - the two are about one second apart (§6.5.4).
+
+#### 6.4.2 What each Mojaloop event carries
 
 | Stage | Request Event Carries | Callback Event Carries |
 | --- | --- | --- |
@@ -345,14 +371,86 @@ Because Mojaloop is asynchronous, every transaction stage produces two separate 
 | Final-state notification (Central Ledger, pacs.002) | - | completedTimestamp, transferState - may be emitted more than once per transfer; deduplicated at pipeline step 3 (§6.3) before being treated as a distinct event |
 | Error callback (pacs.002) | - | errorInformation with errorCode and errorDescription |
 
-Cache keys used for correlation:
+The transfer request row understates what is available: the prepare's `ilpPacket` **decodes** to a structured object carrying both parties' identifiers, both fspIds, the payer's name, the transaction type and the `transactionId` (§6.5.4, §7). It is a data source, not opaque material.
 
-- quoteld for quotes
-- transferld for transfers
-- conversionRequestId for FX quotes
-- commitRequestld for FX transfers
+#### 6.4.3 Cross-stage enrichment - formalized
 
-If the callback event never arrives within the configured TTL, the PPA does not forward a partial message to TMS. It logs a timeout and raises an alert. The TTL formula and sizing approach are in §9.3.
+A pacs.008 assembled from the transfer prepare alone is schema-valid but materially degraded. The following field-to-stage provenance is **normative**; the leaf-level detail is in `message mapping/pacs 002-008/03_pacs008_mapping.md`.
+
+**pacs.008** - trigger: transfer PREPARE
+
+| Contributing stage | Fields it supplies |
+| --- | --- |
+| **Transfer PREPARE** (trigger) | `PmtId.InstrId`; `PmtId.EndToEndId` (decoded ILP `transactionId`); `IntrBkSttlmAmt`; `DbtrAgt`; `CdtrAgt`; `Cdtr` + `CdtrAcct` identifiers; `Dbtr` identifiers; `SplmtryData…Xprtn` |
+| Party lookup callback | `Cdtr.Nm`, `CdtrAcct.Nm` - the **only** source of the payee name |
+| Quote request | `Dbtr.Nm` (legal name), `Dbtr…BirthDt`, `DbtrAcct.Nm`, `Purp.Cd`, `RmtInf.Ustrd` |
+| Quote callback | `ChrgBr`, `ChrgsInf`, `GrpHdr.SttlmInf.SttlmMtd`, `GrpHdr.NbOfTxs` |
+| FX quote request + callback | `InstdAmt` (source amount), `XchgRate` |
+| PPA-generated | `GrpHdr.MsgId`, `GrpHdr.CreDtTm`, `RgltryRptg`, `SplmtryData…Glctn` |
+
+**pacs.002** - trigger: final-state event
+
+| Contributing stage | Fields it supplies |
+| --- | --- |
+| **Final-state event** (trigger) | `TxSts` (translated - §6.5.4), `AccptncDtTm`, `InstgAgt`/`InstdAgt` (from `fspiop-source`/`fspiop-destination` headers), `GrpHdr.MsgId`/`CreDtTm` where supplied |
+| Cached state | `OrgnlInstrId`, `OrgnlEndToEndId` (identifier resolution - §6.4.5); `ChrgsInf` |
+
+**Degraded operation.** If enrichment state is missing - cache miss, late callback, or a scheme with no quote stage - the pacs.008 is still assembled from the prepare alone, with these losses:
+
+| Lost | Falls back to |
+| --- | --- |
+| Payee name | Payee MSISDN |
+| Payer legal name, date of birth | ILP packet's display name; sentinel date |
+| `ChrgBr`, `ChrgsInf` | `SLEV`, zero charge |
+| `InstdAmt` source amount, `XchgRate` | `InstdAmt` = `IntrBkSttlmAmt`; rate omitted |
+| `RmtInf.Ustrd` | Empty string |
+
+**Degraded messages are structurally valid and indistinguishable from complete ones at the TMS door**, so the PPA must flag them in the audit log.
+
+#### 6.4.4 Cache keys and lifetime
+
+| Purpose | Key |
+| --- | --- |
+| Transaction state, all stages | `transactionId` / `transferId` |
+| Quote stage | `quoteld` |
+| FX quote stage | `conversionRequestId` |
+| FX transfer stage | `commitRequestld` |
+| **Party lookup** | **Payee MSISDN (party identifier)** |
+
+The party-lookup entry is the exception: `PUT /parties` arrives **before any transaction identifier exists**, so it cannot be keyed on the transaction. It is keyed on the party identifier, and concurrent transactions to the same payee share it. Acceptable for a name lookup; **must not** be extended to transaction-scoped data.
+
+State is retained until the terminal message for the transaction has been sent, not until the pacs.008 (§6.3 step 9). TTL sizing is in §9.3.
+
+#### 6.4.5 Identifier resolution - why pacs.002 still needs a lookup
+
+The pacs.008's `EndToEndId` is the `transactionId` carried in the decoded ILP packet. The final-state event carries `transferId`. FSPIOP models these as **distinct fields**; in the golden path they happen to be the same ULID, but the PPA must not assume that.
+
+Therefore, when the pacs.008 is emitted the PPA writes `transferId → { InstrId, EndToEndId }` into the transaction state, and the pacs.002 resolves its `OrgnlInstrId` / `OrgnlEndToEndId` from that entry.
+
+This is a **small, bounded lookup for identifiers only**, not a full enrichment read - but it is required. Without it, any transaction where `transactionId ≠ transferId` produces a pacs.002 whose `OrgnlEndToEndId` never matches its pacs.008. TMS accepts it; Tazama's own DataCache retrieval (keyed `TenantId:EndToEndId`, falling back to a pacs.008 rebuild) then finds nothing, and the transaction silently never completes a chain.
+
+#### 6.4.6 Missing events and TTL expiry
+
+Behaviour differs by stage, because the pacs.008 is no longer withheld pending the fulfil:
+
+| Situation | PPA behaviour |
+| --- | --- |
+| A quote-stage or party-lookup callback never arrives | Cache entry expires. If the prepare then arrives, emit a **degraded** pacs.008 (§6.4.3) and flag it in the audit log. If no prepare follows, discard silently |
+| The final-state event never arrives | The pacs.008 has already been sent. Log a timeout and raise an alert. **Never synthesize a pacs.002** - Tazama must not be told a payment settled on the strength of a prepare |
+| An error callback arrives with no cached transaction | Cannot resolve `OrgnlInstrId`/`OrgnlEndToEndId` (§6.4.5). Log and alert; do not forward an unlinkable message |
+
+#### 6.4.7 Open decision - the pacs.002 trigger
+
+Two candidate triggers carry `transferState` and `completedTimestamp`:
+
+- the **Central Ledger notification** (`topic-notification-event`), deduplicated at §6.3 step 3, and
+- the **FSPIOP fulfil callback** (`PUT /transfers`), which the mapping in §6.5 and §7 currently uses.
+
+The corridor capture in §7 is an **FSPIOP wire capture containing no Kafka events**, so the notification was not available to verify a mapping from.
+
+Settling this requires a Kafka-side capture from CCH, and turns on one question: **does the Central Ledger notification carry `fspiop-source` and `fspiop-destination`?** `InstgAgt` and `InstdAgt` are required fields sourced from those headers (§6.4.3). If it does, the notification is preferable - it is the authoritative settlement record. If it does not, the fulfil callback is the only viable trigger.
+
+Until resolved, the mapping documents the fulfil callback and flags the dependency. Tracked as an open item.
 
 ### 6.5 ISO 20022 Message Mapping
 
@@ -375,15 +473,15 @@ ajv also runs with `coerceTypes: 'array'` (so `"1"` is coerced to `1`) and `useD
 
 | Trigger (Mojaloop) | ISO 20022 Output (Tazama) | Key Mapped Fields |
 | --- | --- | --- |
-| pacs. 081 (request) + pacs. 082 (callback) | pacs. 081 + pacs. 082 | payer/payee → Dbtr/Cdtr; amount → IntrBkSttlmAmt; ilpPacket → VrfctnOfTerms.IlpV4PrepPacket; fees → ChrgsInf; transferAmount → InstdAmt *(out of scope of this revision — unverified; see 6.5.6)* |
-| pacs. 091 (request) + pacs. 092 (callback) | pacs. 091 + pacs. 092 | conversionRequestld → Txld; initiatingFsp → Dbtr; counterPartyFsp → Cdtr; sourceAmount → InstdAmt; targetAmount → IntrBkSttlmAmt *(out of scope of this revision — unverified; see 6.5.6)* |
+| pacs. 081 (request) + pacs. 082 (callback) | pacs. 081 + pacs. 082 | payer/payee → Dbtr/Cdtr; amount → IntrBkSttlmAmt; ilpPacket → VrfctnOfTerms.IlpV4PrepPacket; fees → ChrgsInf; transferAmount → InstdAmt *(not yet verified against Tazama's schema — see §6.5.6)* |
+| pacs. 091 (request) + pacs. 092 (callback) | pacs. 091 + pacs. 092 | conversionRequestld → Txld; initiatingFsp → Dbtr; counterPartyFsp → Cdtr; sourceAmount → InstdAmt; targetAmount → IntrBkSttlmAmt *(not yet verified against Tazama's schema — see §6.5.6)* |
 | ✅ **POST /transfers (PREPARE)**, enriched from cached PUT /parties, POST+PUT /quotes, PUT /fxQuotes | **pacs. 008** | transferId → PmtId.**InstrId**; ilpPacket.transactionId → PmtId.**EndToEndId**; amount → IntrBkSttlmAmt.**Amt.Amt/.Amt.Ccy**; fxQuote sourceAmount → InstdAmt; derived rate → XchgRate; payerFsp/payeeFsp → DbtrAgt/CdtrAgt.**FinInstnId.ClrSysMmbId.MmbId**; payer (from /quotes) → Dbtr/InitgPty; payee name (from /parties) → Cdtr; payeeFspFee → ChrgsInf; transactionType → Purp.Cd; note → RmtInf.Ustrd |
 | ✅ **PUT /transfers (FULFIL)** | **pacs. 002** | transferState → TxSts (**translated**, see 6.5.4); completedTimestamp → AccptncDtTm; fspiop-source/-destination **headers** → InstgAgt/InstdAgt; ids → OrgnlInstrId/OrgnlEndToEndId; payeeFspFee → ChrgsInf (**array**) |
-| pacs. 009 (request) + pacs. 009 (callback) | pacs. 009 | commitRequestld → Txld; determiningTransferld → EndToEndld; initiatingFsp → DbtrAgt; counterPartyFsp → CdtrAgt; condition → VrfctnOfTerms *(out of scope of this revision — unverified; see 6.5.6)* |
+| pacs. 009 (request) + pacs. 009 (callback) | pacs. 009 | commitRequestld → Txld; determiningTransferld → EndToEndld; initiatingFsp → DbtrAgt; counterPartyFsp → CdtrAgt; condition → VrfctnOfTerms *(not yet verified against Tazama's schema — see §6.5.6)* |
 | ~~Final-state notification, FX (deduplicated)~~ | ~~pacs. 002~~ | ❌ **Row removed.** The FX leg is not a separate Tazama transaction — it is folded into the single payment via InstdAmt / IntrBkSttlmAmt / XchgRate. See 6.5.3 |
 | ✅ **Any error callback (any resource)** | **pacs. 002** | TxSts → `RJCT`; ids from the cached originating transfer; fspiop-source/-destination → InstgAgt/InstdAgt; ChrgsInf → `[]`. ⚠️ **errorCode/errorDescription cannot be carried — no StsRsnInf exists in the schema; they are silently stripped.** Retained in the PPA audit log only |
 
-**The full field-by-field mapping, with provenance and golden-path values for every leaf field, is in [`message mapping/`](message%20mapping/)** — `03_pacs008_mapping.md`, `04_pacs002_mapping.md`, decisions in `02_design-decisions.md`, and schema-validated payloads in `samples/`.
+**The full field-by-field mapping, with provenance and golden-path values for every leaf field, is in [`message mapping/pacs 002-008/`](message%20mapping/pacs%20002-008/)** — `03_pacs008_mapping.md`, `04_pacs002_mapping.md`, decisions in `02_design-decisions.md`, and schema-validated payloads in `samples/`. Work on the quote-stage mappings (rows 1, 2 and 5) is tracked separately in [`message mapping/pain001-013/`](message%20mapping/pain001-013/).
 
 #### 6.5.3 One transaction per payment, not one per leg
 
@@ -416,15 +514,15 @@ This is viable because the prepare message carries more than its FSPIOP body sug
 
 #### 6.5.5 Header field generation
 
-Revised from earlier drafts of this document, which stated that `GrpHdr.MsgId` and `GrpHdr.CreDtTm` are always PPA-generated. The golden path shows Mojaloop supplying both in the `extensionList` of the fulfil callback.
+`GrpHdr.MsgId` and `GrpHdr.CreDtTm` are not always PPA-generated. The golden path shows Mojaloop supplying both in the `extensionList` of the fulfil callback.
 
 **Rule: copy the scheme-supplied value when present in `extensionList`; generate otherwise** (a new ULID for `MsgId`, the PPA construction timestamp for `CreDtTm`). In practice pacs.002 copies, and pacs.008 generates. Copying preserves traceability between the Tazama message and the Mojaloop message that produced it.
 
 #### 6.5.6 Status of the remaining rows
 
-Rows 1, 2 and 5 (the quote, FX-quote and pacs.009 mappings) are **out of scope of this revision and have not been verified.** They retain known defects — `PmtId.TxId` does not exist in Tazama's schema, and the "pacs.081/082/091/092" labels are not real ISO 20022 message types but placeholders for Mojaloop's `/quotes` and `/fxQuotes` resources, which Tazama maps to **pain.001 / pain.013**. Treat those three rows as illustrative only.
+Rows 1, 2 and 5 (the quote, FX-quote and pacs.009 mappings) **have not yet been verified against Tazama's live schema.** The "pacs.081/082/091/092" labels are not real ISO 20022 message types — they are placeholders for Mojaloop's `/quotes` and `/fxQuotes` resources, which Tazama maps instead to **pain.001 / pain.013**. `PmtId.TxId`, named in the pacs.009 row, does not exist in Tazama's schema. Treat those three rows as illustrative only until the pain.001/013 mapping is complete (tracked in `message mapping/pain001-013/`).
 
-**§7 has been regenerated to match this section.** It now carries the real DRPP cross-border messages and the two schema-validated Tazama payloads, replacing the earlier placeholder samples. Those samples used `FIToFIPmtStsRpt` (should be `FIToFIPmtSts`), `OrgnlTxId` (should be `OrgnlInstrId`/`OrgnlEndToEndId`), `ExctnConf`/`PrcgDt` (do not exist), `VrfctnOfTerms` (does not exist — silently stripped), a string `NbOfTxs` and an untranslated `"TxSts": "COMMITTED"`, and omitted `RgltryRptg`, `RmtInf` and `SplmtryData`, which are **required** and whose absence causes rejection. The separate domestic P2P example has been dropped: the cross-border flow exercises the same pacs.008 / pacs.002 path plus the FX behaviour, so it added no coverage.
+§7 gives complete worked examples for the flow described in this section, using the real DRPP cross-border messages and two schema-validated Tazama payloads. A separate domestic P2P example is not included: the cross-border flow exercises the same pacs.008 / pacs.002 path plus the FX behaviour, so a domestic-only example would add no further coverage.
 
 Two open data gaps have no Mojaloop source and are currently constant-filled; both need CCH input (see `02_design-decisions.md`, G1–G3): **payee date of birth**, which appears nowhere in the flow yet is a required field, and **payer geolocation**, whose absence disables any geo-velocity typology.
 
@@ -870,7 +968,7 @@ Both payloads below have been validated against Tazama's live ingestion schemas 
 
 **The identifiers are what make the pair a pair.** `OrgnlInstrId` and `OrgnlEndToEndId` on the pacs.002 must exactly match `PmtId.InstrId` and `PmtId.EndToEndId` on the pacs.008. If they do not, TMS still accepts the pacs.002, but Tazama's graph never links it to its transfer and the transaction silently never completes a chain.
 
-**Three fields carry no Mojaloop data.** `Cdtr…BirthDt` (`1900-01-01`), `RgltryRptg` and `Glctn` (`0,0`) are constants - the payee's date of birth, regulatory reporting code and payer geolocation do not exist anywhere in the Mojaloop flow, yet all three are required. See §6.5.6 and the gap register in `message mapping/02_design-decisions.md`.
+**Three fields carry no Mojaloop data.** `Cdtr…BirthDt` (`1900-01-01`), `RgltryRptg` and `Glctn` (`0,0`) are constants - the payee's date of birth, regulatory reporting code and payer geolocation do not exist anywhere in the Mojaloop flow, yet all three are required. See §6.5.6 and the gap register in `message mapping/pacs 002-008/02_design-decisions.md`.
 
 **And what is discarded:** `condition`, `fulfilment`, `commitRequestId` and `conversionId` are not carried. Tazama's schema has no field for them, and because TMS runs ajv with `removeAdditional: 'all'`, attempting to attach them would return HTTP 200 with the fields silently deleted (§6.5.1).
 
@@ -908,7 +1006,7 @@ POST /transfers    ──────────────────► ★
 PUT  /transfers    ──────────────────► ★ pacs.002 → TMS
 ```
 
-**Messages sent to TMS.** The transfer stage produces exactly **two**: one pacs.008 and one pacs.002. The FX quote and FX transfer stages produce none, because the conversion is folded into the single payment via `InstdAmt` (MWK 60), `IntrBkSttlmAmt` (ZMW 1) and `XchgRate` (60) rather than modelled as its own transaction (§6.5.3). The quote stage additionally maps to Tazama's pain.001 / pain.013 pair, but that mapping is out of scope of this revision and unverified (§6.5.6), so the verified total for a cross-border payment is two.
+**Messages sent to TMS.** The transfer stage produces exactly **two**: one pacs.008 and one pacs.002. The FX quote and FX transfer stages produce none, because the conversion is folded into the single payment via `InstdAmt` (MWK 60), `IntrBkSttlmAmt` (ZMW 1) and `XchgRate` (60) rather than modelled as its own transaction (§6.5.3). The quote stage additionally maps to Tazama's pain.001 / pain.013 pair, but that mapping has not yet been verified (§6.5.6), so the verified total for a cross-border payment is two.
 
 **Degraded operation.** If the stage 1-3 cache entries are missing - a cache miss, a late callback, or a scheme that skips quoting altogether - the pacs.008 is **still constructible** from the prepare message alone, because its decoded ILP packet carries both parties, both agents and the transaction type. What is lost is the payee name, the payer's date of birth, the charge bearer and the source amount, each of which falls back to a documented default. Degraded messages are structurally valid and indistinguishable from complete ones at the TMS door, so the PPA must flag them in the audit log.
 
@@ -916,7 +1014,7 @@ PUT  /transfers    ──────────────────► ★
 
 If the payee rejects a quote or the switch rejects a transfer, the switch publishes an error callback to Kafka instead of a normal callback. The MLA relays it to the PPA in the same way, and the PPA builds a pacs. 002 with `TxSts: RJCT` and sends it to TMS. Error events are still valuable for fraud analysis.
 
-Two constraints apply, both differing from earlier drafts of this document:
+Two constraints apply:
 
 - **A cached request event is required.** `OrgnlInstrId` and `OrgnlEndToEndId` are mandatory fields on the pacs. 002 and cannot be derived from the error payload, which carries only the resource id. Without the cached originating transfer the PPA cannot build a linkable message; an error arriving with no cached counterpart is logged and alerted rather than forwarded.
 - **The error reason cannot be carried.** Tazama's pacs. 002 schema has no `StsRsnInf`, so `errorCode` and `errorDescription` have nowhere to go, and because TMS runs ajv with `removeAdditional: 'all'` any attempt to attach them returns HTTP 200 with the fields silently deleted (§6.5.1). Tazama therefore learns *that* a payment was rejected but never *why*; the reason is retained in the PPA audit log. Adding `StsRsnInf` to the TMS schema is logged as a follow-up with Tazama.

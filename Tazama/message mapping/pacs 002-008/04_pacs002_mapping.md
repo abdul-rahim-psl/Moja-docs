@@ -1,6 +1,12 @@
 # pacs.002.001.12 — field-by-field mapping
 
 **Replaces §6.5 rows 4, 6 and 7.** Trigger: **msg 17** `PUT /transfers` (FULFIL), or an error callback.
+
+> ⚠️ **The trigger source is an open decision — see FSD §6.4.7.** The FSD names the **Central Ledger notification** (`topic-notification-event`) as the final-state trigger; this mapping uses the **FSPIOP fulfil callback** for an evidential reason rather than a design one — the golden path is an FSPIOP *wire* capture containing no Kafka events, so the notification was not available to map from. Both carry `transferState` and `completedTimestamp`.
+>
+> The deciding question: **does the Central Ledger notification carry `fspiop-source` / `fspiop-destination`?** `InstgAgt` and `InstdAgt` are required and sourced from those headers. If it does, the notification is preferable — it is the authoritative settlement record. If not, the fulfil callback is the only viable trigger. Needs a Kafka-side capture from CCH to settle.
+>
+> Everything else in this mapping is unaffected: the two events carry the same status fields, so only the *locator* column changes if the decision flips.
 Contract: `tms-service/src/schemas/pacs.002.json` (ajv). Endpoint: `POST /v1/evaluate/iso20022/pacs.002.001.12`.
 Validated output: [`samples/tazama_pacs002.json`](samples/tazama_pacs002.json) — **passes**.
 

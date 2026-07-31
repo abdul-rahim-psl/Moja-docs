@@ -76,7 +76,7 @@ Validated output: [`samples/tazama_pacs008.json`](samples/tazama_pacs008.json) �
 
 ### Accounts
 
-Mojaloop has no account construct — the party identifier doubles as the account identifier. See [`../../ppa/party identifier/`](../../ppa/party%20identifier/) for the wider treatment.
+Mojaloop has no account construct — the party identifier doubles as the account identifier. See [`../../../ppa/party identifier/`](../../../ppa/party%20identifier/) for the wider treatment.
 
 | Tazama field | Type | Req | Source msg | Locator | Prov. | Rule | Golden-path value |
 |---|---|---|---|---|---|---|---|
