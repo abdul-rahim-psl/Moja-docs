@@ -1,8 +1,8 @@
 # pain.001 / pain.013 — findings
 
-Covers §6.5 **rows 1, 2 and 5** (the quote, FX-quote and fxTransfer mappings), which were out of scope of the pacs.008/pacs.002 revision and remain unverified.
+Covers §6.5 **rows 1, 2 and 5** (the quote, FX-quote and fxTransfer mappings), deferred from the pacs.008/pacs.002 revision.
 
-Status: **analysis only — no mapping work started.** Everything below is verified against source; nothing here has been implemented.
+Status: **mapping complete and schema-validated.** Field-level tables in [`01_pain001_mapping.md`](01_pain001_mapping.md) and [`02_pain013_mapping.md`](02_pain013_mapping.md); validated payloads in [`samples/`](samples/).
 
 Companion work: [`../pacs 002-008/`](../pacs%20002-008/) — the completed pacs.008 / pacs.002 mapping.
 
@@ -36,7 +36,7 @@ Tazama's own doctrine (`iso20022-and-tazama.md`): *"In Mojaloop, the QUOTES mess
 | **2** | **Deleted as an output row.** fxQuotes emit nothing; they are an **enrichment source** supplying the source amount and exchange rate to rows 1 and 3 |
 | **5** | **Deleted.** Identical reasoning to row 6, already removed: under D1 the FX leg is not a separate Tazama transaction — and no pacs.009 endpoint exists regardless |
 
-Rows 2 and 5 need no new analysis; D1 (one transaction per payment) already decided them, and §8.1 already documents that fxTransfers contribute no fields. Only row 1 requires real mapping work.
+Rows 2 and 5 need no new analysis; D1 (one transaction per payment) already decided them, and §8.1 already documents that fxTransfers contribute no fields. Row 1 required the mapping work, and is now complete.
 
 ---
 
@@ -117,7 +117,7 @@ const lat  = transaction.CstmrCdtTrfInitn.SplmtryData.Envlp.Doc.InitgPty.Glctn.L
 const long = ...Glctn.Long;
 ```
 
-Read straight into `TransactionDetails.lat/long`. Our `"0"` / `"0"` default would not read as *missing* — it lands as a real coordinate in the Gulf of Guinea, which is worse than null for any geo rule. If pain.001 is implemented, the defaulting policy for `Glctn` needs revisiting.
+Read straight into `TransactionDetails.lat/long`. The `"0"` / `"0"` default does not read as *missing* — it lands as a real coordinate in the Gulf of Guinea, which is worse than null for any geo rule. Now that the mapping is live, the defaulting policy for `Glctn` needs a decision (gap G3).
 
 ### 3.7 pain.013 reverses source and destination
 
@@ -138,7 +138,7 @@ Same method that worked for pacs.008/pacs.002; the harness already exists.
 1. **Ground truth** — extract required fields, type divergences and the `TenantId` prohibition from `src/schemas/pain.001.json` and `pain.013.json`; cross-check the `Pain.001.001.11.ts` / `Pain.013.001.09.ts` interfaces.
 2. **Validate Tazama's own fixtures** (`frms-coe-lib/src/tests/data/pain001.ts`, `pain013.ts`) against the real schemas — the pacs.008 fixture failed the stale swagger, so this is worth repeating.
 3. **Map field by field** from msg 10 (`POST /quotes`) → pain.001 and msg 11 (`PUT /quotes`) → pain.013, enriched from msg 03 (payee name) and msgs 06/07 (FX amounts, if §3.3 is decided that way).
-4. **Reuse the identifier strategy** — D2 already anticipated it: `EndToEndId` = `transactionId` (constant across all four messages), `InstrId` = `quoteId` for the quote pair. Verify `PmtId` nesting: pain.001 places it under `PmtInf.CdtTrfTxInf.PmtId`, not at the same depth as pacs.008.
+4. **Identifier strategy — resolved, with one correction.** `EndToEndId` = `transactionId` holds across all four messages, as D2 anticipated. But `PmtId` on pain.001/pain.013 contains **only** `EndToEndId` — there is no `InstrId` element, and one added there is silently stripped (verified). The `quoteId` is therefore carried in **`PmtInf.PmtInfId`**. `PmtId` also nests deeper than on pacs.008: `PmtInf.CdtTrfTxInf.PmtId`.
 5. **Build and validate** golden-path samples with `samples/ajv-check.js`, extended by two lines.
 6. **Patch §6.5** rows 1/2/5 and append the two resulting payloads to §7 — cheap, since §7 already reproduces both `/quotes` bodies.
 

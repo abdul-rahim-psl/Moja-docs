@@ -1,7 +1,7 @@
 # Executive Summary — pain.001 / pain.013 (quote-stage mapping)
 
 **Living document — updated as this workstream progresses.**
-Last updated: 2026-07-30 · Status: **analysis only, nothing implemented**
+Last updated: 2026-08-03 · Status: **mapping complete and schema-validated**
 
 Scope: §6.5 **rows 1, 2 and 5** — the quote, FX-quote and fxTransfer mappings, deferred from the completed pacs.008/pacs.002 revision ([`../pacs 002-008/`](../pacs%20002-008/)).
 
@@ -9,7 +9,14 @@ Scope: §6.5 **rows 1, 2 and 5** — the quote, FX-quote and fxTransfer mappings
 
 ## Where this stands
 
-Nothing has been built. We have established **what these rows should become** and **why the current ones cannot work**, and we have read enough of Tazama's ingestion code to know the constraints. The field-level mapping has not started.
+The quote-stage mapping is **complete and verified**. Both messages have been built from the real DRPP golden path and validated against Tazama's live ajv schemas using the TMS service's exact configuration:
+
+```
+tazama_pain001.json  vs  pain.001.json   VALID: true   STRIPPED: (nothing)
+tazama_pain013.json  vs  pain.013.json   VALID: true   STRIPPED: (nothing)
+```
+
+Seven negative controls confirm the individual claims. Field-by-field tables are in [`01_pain001_mapping.md`](01_pain001_mapping.md) and [`02_pain013_mapping.md`](02_pain013_mapping.md); the FSD's §6.5.2 mapping table now carries both rows as verified.
 
 ## The problem in one line
 
@@ -21,11 +28,11 @@ This is a premise error, not a field-path error. No amount of careful field mapp
 
 | Row | Today | Becomes | Needs work? |
 |---|---|---|---|
-| 1 — quotes | `pacs.081 + pacs.082` | **Two rows:** `POST /quotes` → pain.001, `PUT /quotes` → pain.013 | **Yes** — real mapping |
+| 1 — quotes | `pacs.081 + pacs.082` | **Two rows:** `POST /quotes` → pain.001, `PUT /quotes` → pain.013 | **Done** — mapped and validated |
 | 2 — fxQuotes | `pacs.091 + pacs.092` | **Deleted as output.** Becomes an enrichment source feeding source amount + exchange rate | No |
 | 5 — fxTransfers | `pacs.009` | **Deleted** | No |
 
-Rows 2 and 5 fall out of **D1** (one Tazama transaction per payment), already signed off — the same reasoning that removed row 6. Only row 1 is genuine work.
+Rows 2 and 5 fall out of **D1** (one Tazama transaction per payment), already signed off — the same reasoning that removed row 6. Row 1 was the genuine work and is now complete.
 
 ## What we learned from Tazama's source
 
@@ -38,11 +45,11 @@ Reading `tms-service/src/logic.service.ts` produced one correction and one findi
 Two smaller results worth keeping:
 
 - **The identifier construction is now pinned exactly** (`Othr[0].Id + SchmeNm.Prtry`, plus the agent's `MmbId` for accounts). This retroactively validates the completed pacs.008 mapping — those are precisely the fields that become graph keys — and confirms the array-vs-object question we resolved was load-bearing.
-- **Geolocation is read unconditionally** into transaction details by pain.001. Our `0,0` default would not read as missing data; it lands as a real coordinate in the Gulf of Guinea. If row 1 is implemented, that defaulting policy needs revisiting.
+- **Geolocation is read unconditionally** into transaction details by pain.001. The `0,0` default does not read as missing data; it lands as a real coordinate in the Gulf of Guinea. Now that the mapping is live, that defaulting policy needs a decision (gap G3).
 
 ## Priority
 
-**Low, for now.** `QUOTING=false` is Tazama's shipped default, and with it the current two-message scope is functionally complete for the POC — so this is tidy-up that can be deferred.
+**Ready to implement, gated on one setting.** `QUOTING=false` is Tazama's shipped default, and with it the pain routes do not exist — so nothing is blocked today.
 
 **One sequencing constraint matters more than the priority.** `QUOTING` is a *single coupled switch*: with it off, the pain routes aren't registered at all (404); with it on, pacs.008 stops creating entities and account-holder edges. There is no intermediate state. So enabling the quote stage without row 1 already built would break entity resolution immediately — **row 1 must land before or together with that flip, never after.**
 
@@ -50,4 +57,14 @@ Two smaller results worth keeping:
 
 Confirm `QUOTING` is false in the POC deployment (Q5) — expected, but worth verifying with whoever deployed it. Beyond that, Q1–Q4 are now answered from source and need confirmation rather than investigation; only Q6 (ordering under RECEIVE-amount flows) needs something we don't have — a non-SEND capture from CCH.
 
-Full technical detail, including the six open questions and the six-step plan for row 1, is in [`findings.md`](findings.md).
+## What the mapping added
+
+Three things the pacs.008/pacs.002 pair could not carry, now reaching Tazama via the quote stage:
+
+- **The payer's name components** (`FrstNm`/`MddlNm`/`LastNm`) and merchant classification, in pain.001's `SplmtryData` — the pacs.008 has no element for them.
+- **The payee-side economics** — `payeeReceiveAmount`, `payeeFspFee`, `payeeFspCommission` — in pain.013's `SplmtryData`. These have no home in the pacs.008 at all.
+- **The quote's validity deadline** (`XpryDt`), required on pain.013 only.
+
+Two constraints found during the mapping, both documented in the FSD (§6.5.7): `ChrgBr` is required on pain.001 but is only stated in the callback that follows it, so it defaults to `SLEV` there and carries the payee-stated value on pain.013; and `Cdtr.Nm` has no source in the quote messages at all, because the FSPIOP quote schema carries no payee personal information.
+
+Full technical detail, including the open questions and the identifier correction, is in [`findings.md`](findings.md); field-level tables in [`01_pain001_mapping.md`](01_pain001_mapping.md) and [`02_pain013_mapping.md`](02_pain013_mapping.md).

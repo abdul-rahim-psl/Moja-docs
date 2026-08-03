@@ -1,0 +1,211 @@
+{
+  "TxTp": "pain.001.001.11",
+  "CstmrCdtTrfInitn": {
+    "GrpHdr": {
+      "MsgId": "01K7EV9X8QW2M4T6Y8B1D3F5H7",
+      "CreDtTm": "2025-10-13T13:14:07.900Z",
+      "NbOfTxs": 1,
+      "InitgPty": {
+        "Nm": "Firstname-Test Middlename-Test Lastname-Test",
+        "Id": {
+          "PrvtId": {
+            "DtAndPlcOfBirth": {
+              "BirthDt": "1984-01-01",
+              "CityOfBirth": "Unknown",
+              "CtryOfBirth": "ZZ"
+            },
+            "Othr": [
+              {
+                "Id": "16665551002",
+                "SchmeNm": {
+                  "Prtry": "MSISDN"
+                }
+              }
+            ]
+          }
+        },
+        "CtctDtls": {
+          "MobNb": "16665551002"
+        }
+      }
+    },
+    "PmtInf": {
+      "PmtInfId": "01K7EV9X2K4F8J90ZWMRHDNCZN",
+      "PmtMtd": "TRA",
+      "ReqdAdvcTp": {
+        "DbtAdvc": {
+          "Cd": "ADWD",
+          "Prtry": "Advice with transaction details"
+        }
+      },
+      "ReqdExctnDt": {
+        "Dt": "2025-10-13",
+        "DtTm": "2025-10-13T13:14:07.827Z"
+      },
+      "Dbtr": {
+        "Nm": "Firstname-Test Middlename-Test Lastname-Test",
+        "Id": {
+          "PrvtId": {
+            "DtAndPlcOfBirth": {
+              "BirthDt": "1984-01-01",
+              "CityOfBirth": "Unknown",
+              "CtryOfBirth": "ZZ"
+            },
+            "Othr": [
+              {
+                "Id": "16665551002",
+                "SchmeNm": {
+                  "Prtry": "MSISDN"
+                }
+              }
+            ]
+          }
+        },
+        "CtctDtls": {
+          "MobNb": "16665551002"
+        }
+      },
+      "DbtrAcct": {
+        "Id": {
+          "Othr": [
+            {
+              "Id": "16665551002",
+              "SchmeNm": {
+                "Prtry": "MSISDN"
+              }
+            }
+          ]
+        },
+        "Nm": "Display-Test"
+      },
+      "DbtrAgt": {
+        "FinInstnId": {
+          "ClrSysMmbId": {
+            "MmbId": "test-mwk-dfsp"
+          }
+        }
+      },
+      "CdtTrfTxInf": {
+        "PmtId": {
+          "EndToEndId": "01K7EV9TNQ1VKX84N0GSQH6MDD"
+        },
+        "PmtTpInf": {
+          "CtgyPurp": {
+            "Prtry": "TRANSFER CONSUMER"
+          }
+        },
+        "Amt": {
+          "InstdAmt": {
+            "Amt": {
+              "Amt": 60,
+              "Ccy": "MWK"
+            }
+          },
+          "EqvtAmt": {
+            "Amt": {
+              "Amt": 1,
+              "Ccy": "ZMW"
+            },
+            "CcyOfTrf": "ZMW",
+            "XchgRateInf": {
+              "UnitCcy": "MWK",
+              "XchgRate": 60
+            }
+          }
+        },
+        "ChrgBr": "SLEV",
+        "CdtrAgt": {
+          "FinInstnId": {
+            "ClrSysMmbId": {
+              "MmbId": "test-zmw-dfsp"
+            }
+          }
+        },
+        "Cdtr": {
+          "Nm": "Chikondi Banda",
+          "Id": {
+            "PrvtId": {
+              "DtAndPlcOfBirth": {
+                "BirthDt": "1900-01-01",
+                "CityOfBirth": "Unknown",
+                "CtryOfBirth": "ZZ"
+              },
+              "Othr": [
+                {
+                  "Id": "16665551001",
+                  "SchmeNm": {
+                    "Prtry": "MSISDN"
+                  }
+                }
+              ]
+            }
+          },
+          "CtctDtls": {
+            "MobNb": "16665551001"
+          }
+        },
+        "CdtrAcct": {
+          "Id": {
+            "Othr": [
+              {
+                "Id": "16665551001",
+                "SchmeNm": {
+                  "Prtry": "MSISDN"
+                }
+              }
+            ]
+          },
+          "Nm": "Chikondi Banda"
+        },
+        "Purp": {
+          "Cd": "MP2P"
+        },
+        "RgltryRptg": {
+          "Dtls": {
+            "Tp": "BALANCE OF PAYMENTS",
+            "Cd": "100"
+          }
+        },
+        "RmtInf": {
+          "Ustrd": "test"
+        },
+        "SplmtryData": {
+          "Envlp": {
+            "Doc": {
+              "Dbtr": {
+                "FrstNm": "Firstname-Test",
+                "MddlNm": "Middlename-Test",
+                "LastNm": "Lastname-Test",
+                "MrchntClssfctnCd": "BLANK"
+              },
+              "Cdtr": {
+                "FrstNm": "BLANK",
+                "MddlNm": "BLANK",
+                "LastNm": "BLANK",
+                "MrchntClssfctnCd": "123"
+              },
+              "DbtrFinSvcsPrvdrFees": {
+                "Ccy": "ZMW",
+                "Amt": 0
+              },
+              "Xprtn": "2025-10-13T13:15:07.827Z"
+            }
+          }
+        }
+      }
+    },
+    "SplmtryData": {
+      "Envlp": {
+        "Doc": {
+          "InitgPty": {
+            "InitrTp": "CONSUMER",
+            "Glctn": {
+              "Lat": "0",
+              "Long": "0"
+            }
+          }
+        }
+      }
+    }
+  }
+}

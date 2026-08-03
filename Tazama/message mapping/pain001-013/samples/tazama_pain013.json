@@ -1,0 +1,206 @@
+{
+  "TxTp": "pain.013.001.09",
+  "CdtrPmtActvtnReq": {
+    "GrpHdr": {
+      "MsgId": "01K7EV9XM2F00J5V4PZQTKFE38",
+      "CreDtTm": "2025-10-13T13:14:08.386Z",
+      "NbOfTxs": 1,
+      "InitgPty": {
+        "Nm": "Firstname-Test Middlename-Test Lastname-Test",
+        "Id": {
+          "PrvtId": {
+            "DtAndPlcOfBirth": {
+              "BirthDt": "1984-01-01",
+              "CityOfBirth": "Unknown",
+              "CtryOfBirth": "ZZ"
+            },
+            "Othr": [
+              {
+                "Id": "16665551002",
+                "SchmeNm": {
+                  "Prtry": "MSISDN"
+                }
+              }
+            ]
+          }
+        },
+        "CtctDtls": {
+          "MobNb": "16665551002"
+        }
+      }
+    },
+    "PmtInf": {
+      "PmtInfId": "01K7EV9X2K4F8J90ZWMRHDNCZN",
+      "PmtMtd": "TRA",
+      "ReqdAdvcTp": {
+        "DbtAdvc": {
+          "Cd": "ADWD",
+          "Prtry": "Advice with transaction details"
+        }
+      },
+      "ReqdExctnDt": {
+        "DtTm": "2025-10-13T13:14:08.386Z"
+      },
+      "XpryDt": {
+        "DtTm": "2025-10-13T13:15:08.384Z"
+      },
+      "Dbtr": {
+        "Nm": "Firstname-Test Middlename-Test Lastname-Test",
+        "Id": {
+          "PrvtId": {
+            "DtAndPlcOfBirth": {
+              "BirthDt": "1984-01-01",
+              "CityOfBirth": "Unknown",
+              "CtryOfBirth": "ZZ"
+            },
+            "Othr": [
+              {
+                "Id": "16665551002",
+                "SchmeNm": {
+                  "Prtry": "MSISDN"
+                }
+              }
+            ]
+          }
+        },
+        "CtctDtls": {
+          "MobNb": "16665551002"
+        }
+      },
+      "DbtrAcct": {
+        "Id": {
+          "Othr": [
+            {
+              "Id": "16665551002",
+              "SchmeNm": {
+                "Prtry": "MSISDN"
+              }
+            }
+          ]
+        },
+        "Nm": "Display-Test"
+      },
+      "DbtrAgt": {
+        "FinInstnId": {
+          "ClrSysMmbId": {
+            "MmbId": "test-mwk-dfsp"
+          }
+        }
+      },
+      "CdtTrfTxInf": {
+        "PmtId": {
+          "EndToEndId": "01K7EV9TNQ1VKX84N0GSQH6MDD"
+        },
+        "PmtTpInf": {
+          "CtgyPurp": {
+            "Prtry": "TRANSFER CONSUMER"
+          }
+        },
+        "Amt": {
+          "InstdAmt": {
+            "Amt": {
+              "Amt": 60,
+              "Ccy": "MWK"
+            }
+          },
+          "EqvtAmt": {
+            "Amt": {
+              "Amt": 1,
+              "Ccy": "ZMW"
+            },
+            "CcyOfTrf": "ZMW"
+          }
+        },
+        "ChrgBr": "CRED",
+        "CdtrAgt": {
+          "FinInstnId": {
+            "ClrSysMmbId": {
+              "MmbId": "test-zmw-dfsp"
+            }
+          }
+        },
+        "Cdtr": {
+          "Nm": "Chikondi Banda",
+          "Id": {
+            "PrvtId": {
+              "DtAndPlcOfBirth": {
+                "BirthDt": "1900-01-01",
+                "CityOfBirth": "Unknown",
+                "CtryOfBirth": "ZZ"
+              },
+              "Othr": [
+                {
+                  "Id": "16665551001",
+                  "SchmeNm": {
+                    "Prtry": "MSISDN"
+                  }
+                }
+              ]
+            }
+          },
+          "CtctDtls": {
+            "MobNb": "16665551001"
+          }
+        },
+        "CdtrAcct": {
+          "Id": {
+            "Othr": [
+              {
+                "Id": "16665551001",
+                "SchmeNm": {
+                  "Prtry": "MSISDN"
+                }
+              }
+            ]
+          },
+          "Nm": "Chikondi Banda"
+        },
+        "Purp": {
+          "Cd": "MP2P"
+        },
+        "RgltryRptg": {
+          "Dtls": {
+            "Tp": "BALANCE OF PAYMENTS",
+            "Cd": "100"
+          }
+        },
+        "SplmtryData": {
+          "Envlp": {
+            "Doc": {
+              "PyeeRcvAmt": {
+                "Amt": {
+                  "Amt": 1,
+                  "Ccy": "ZMW"
+                }
+              },
+              "PyeeFinSvcsPrvdrFee": {
+                "Amt": {
+                  "Amt": 0,
+                  "Ccy": "ZMW"
+                }
+              },
+              "PyeeFinSvcsPrvdrComssn": {
+                "Amt": {
+                  "Amt": 0,
+                  "Ccy": "ZMW"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "SplmtryData": {
+      "Envlp": {
+        "Doc": {
+          "InitgPty": {
+            "Glctn": {
+              "Lat": "0",
+              "Long": "0"
+            }
+          }
+        }
+      }
+    }
+  }
+}
