@@ -163,27 +163,31 @@ Note: The final transfer-state notification is published by Central Ledger, not 
 
 ## 4. Architecture
 
-4.1 Component Overview
+### 4.1 Component Overview
+
 | Component | Responsibility | Status | Failure impact if down |
-| :— | :— | :— | :— |
-| MLA | Consumes Kafka topics (quotes, transfers, FX variants, notifications); wraps each event in an Event Envelope; POSTs to PPA | Existing, topic list corrected (§4.4) | Kafka consumer lag builds; no impact to live payments |
-| Notification Filter / Dedup | Consumes Central Ledger’s topic-notification-event; suppresses duplicate final-state notifications for the same transfer before MLA/PPA processes them | New - ownership (MLA-side vs. PPA-side) is an open item (§12) | Without it, duplicate pacs. 002 messages may reach TMS |
-| PPA | Correlates request/callback pairs via the ValKey cache; translates the combined data to Tazama’s specific ISO 20022 message set; sends to TMS | Existing | Payments unaffected; fraud pipeline stalls until restored |
-| ValKey cache | Holds one half of a correlation pair until its match arrives or the TTL expires | Existing | Halts PPA processing (§6.7) - a deliberate hard-stop, not a silent data-loss path |
-| Tazama TMS | Evaluates translated messages against fraud rules | Existing/external | Out of scope for this document |
+|---|---|---|---|
+| **MLA** | Consumes Kafka topics (quotes, transfers, FX variants, notifications); wraps each event in an Event Envelope; POSTs to PPA | Existing, topic list corrected (§4.4) | Kafka consumer lag builds; no impact to live payments |
+| **Notification Filter / Dedup** | Consumes Central Ledger's `topic-notification-event`; suppresses duplicate final-state notifications for the same transfer before MLA/PPA processes them | **New** — ownership (MLA-side vs. PPA-side) is an open item (§12) | Without it, duplicate `pacs.002` messages may reach TMS |
+| **PPA** | Correlates request/callback pairs via the ValKey cache; translates the combined data to Tazama's specific ISO 20022 message set; sends to TMS | Existing | Payments unaffected; fraud pipeline stalls until restored |
+| **ValKey cache** | Holds one half of a correlation pair until its match arrives or the TTL expires | Existing | Halts PPA processing (§6.7) — a deliberate hard-stop, not a silent data-loss path |
+| **Tazama TMS** | Evaluates translated messages against fraud rules | Existing/external | Out of scope for this document |
 
 ### 4.2 Deployment Topology
 
-MLA and PPA are independently deployable, independently scalable services connected by a synchronous HTTP handoff gated on Kafka offset commits (§5.3, §6.3). Hosting location (Paysys DC vs. COMESA infrastructure) is tracked as Open Item #5 and covered in the separate Infrastructure Design Document.
+MLA and PPA are independently deployable, independently scalable services connected by a synchronous HTTP handoff gated on Kafka offset commits (§5.3, §6.3). Hosting location (Paysys DC vs. COMESA infrastructure) is tracked as Open Item #5 and covered in the separate Infrastructure Design Document.
 
 PPA is stateless application logic backed entirely by the external ValKey cache, and is horizontally scalable behind a load balancer; MLA can distribute calls across PPA replicas.
 
+
 ### 4.3 Failure Isolation Boundaries
 
-- PPA ack-before-durability: PPA acknowledges MLA at step 1 of its processing pipeline (§6.3), before validation, correlation, translation, or the TMS send have run - and MLA commits its Kafka offset on that same ack (§5.3 step 7). If PPA crashes after acking but before completing the pipeline, the event has no way back: the Kafka offset is already committed, so it can’t be replayed, and nothing else yet holds it durably. This needs an explicit decision - PPA persists the envelope to its own durable store before acking, or MLA’s offset commit is deferred until PPA confirms durable acceptance rather than bare receipt.
-- MLA ↔︎ PPA: coupled via Kafka-offset-gated HTTP handoff (§5.3 step 6) - MLA only commits a Kafka offset after PPA acknowledges receipt with HTTP 200. A PPA outage back-pressures MLA’s Kafka consumption per-partition; it never touches the live payment switch, since MLA is a passive subscriber.
-- Central Ledger dedup: if the Notification Filter/Dedup component is unavailable, the pipeline must make an explicit choice - either drop notification events (favoring no-duplicates-to-TMS over completeness) or pass them through with dedup deferred to a PPA-side idempotency key. This decision is currently unresolved and is tracked as Open Item (§12).
-- ValKey unavailable: MLA/PPA halts processing and does not commit Kafka offsets (§6.7) - this is a correct, deliberate hard-stop, not a gap, but it makes ValKey HA a release-blocking NFR (§4.5).
+- **PPA ack-before-durability**: PPA acknowledges MLA at step 1 of its processing pipeline (§6.3), before validation, correlation, translation, or the TMS send have run — and MLA commits its Kafka offset on that same ack (§5.3 step 7). If PPA crashes after acking but before completing the pipeline, the event has no way back: the Kafka offset is already committed, so it can't be replayed, and nothing else yet holds it durably. This needs an explicit decision — PPA persists the envelope to its own durable store before acking, or MLA's offset commit is deferred until PPA confirms durable acceptance rather than bare receipt.
+- **MLA ↔ PPA**: coupled via Kafka-offset-gated HTTP handoff (§5.3 step 6) — MLA only commits a Kafka offset after PPA acknowledges receipt with HTTP 200. A PPA outage back-pressures MLA's Kafka consumption per-partition; it never touches the live payment switch, since MLA is a passive subscriber.
+- **Central Ledger dedup**: if the Notification Filter/Dedup component is unavailable, the pipeline must make an explicit choice — either drop notification events (favoring no-duplicates-to-TMS over completeness) or pass them through with dedup deferred to a PPA-side idempotency key. This decision is currently unresolved and is tracked as Open Item (§12).
+- **ValKey unavailable**: MLA/PPA halts processing and does not commit Kafka offsets (§6.7) — this is a correct, deliberate hard-stop, not a gap, but it makes ValKey HA a release-blocking NFR (§4.5).
+
+
 
 ### 4.4 Kafka Topic and Consumer Group Model
 
@@ -256,29 +260,26 @@ Topic names for the FX quote/transfer channel are to be confirmed with the Mojal
 The Event Envelope is the standard wrapper the MLA uses for every event it sends to the PPA:
 
 | Field | Type | Description |
-| --- | --- | --- |
-| msgType | string | Type of the original event: request, callback, or the Central Ledger notification type |
-| eventType | string | Resource type: QUOTE, FXQUOTE, TRANSFER, or FXTRANSFER |
-| id | string | The unique ID for this transaction leg. See per-type scheme below. |
-| correlationld | string | Technical trace ID (e.g. UUID), generated by the MLA per event - distinct from the business id above. Propagated through PPA, ValKey, audit logs, DLQ, and the outbound TMS call for cross-component tracing. |
-| fspiop-source | string | FSPIOP-Source header value: identifies the DFSP that originated the request |
-| fspiopdestination | string | FSPIOP-Destination header value: identifies the intended recipient DFSP |
-| body | object | The full original message body (decoded, if applicable - §4.6) |
-| timestamp | string | ISO 8601 datetime of when the MLA consumed the event from Kafka |
+|---|---|---|
+| `msgType` | string | Type of the original event: request, callback, or the Central Ledger notification type |
+| `eventType` | string | Resource type: `QUOTE`, `FXQUOTE`, `TRANSFER`, or `FXTRANSFER` |
+| `id` | string | The unique ID for this transaction leg. See per-type scheme below. |
+| `correlationId` | string | Technical trace ID (e.g. UUID), generated by the MLA per event — distinct from the business `id` above. Propagated through PPA, ValKey, audit logs, DLQ, and the outbound TMS call for cross-component tracing. |
+| `fspiop-source` | string | `FSPIOP-Source` header value: identifies the DFSP that originated the request |
+| `fspiop-destination` | string | `FSPIOP-Destination` header value: identifies the intended recipient DFSP |
+| `body` | object | The full original message body (decoded, if applicable — §4.6) |
+| `timestamp` | string | ISO 8601 datetime of when the MLA consumed the event from Kafka |
 
-id scheme by resource type:
-
-| eventType | id format |
-| --- | --- |
-| QUOTE | quoteld |
-| FXQUOTE | conversionRequestld |
+**`id` scheme by resource type:**
 
 | eventType | id format |
-| --- | --- |
-| TRANSFER | transferld |
-| FXTRANSFER | commitRequestld |
+|---|---|
+| QUOTE | `quoteId` |
+| FXQUOTE | `conversionRequestId` |
+| TRANSFER | `transferId` |
+| FXTRANSFER | `commitRequestId` |
 
-fspiop-source and fspiop-destination are mandatory in the envelope. They identify which DFSPs are involved in the transaction and are required by the PPA for routing and audit purposes.
+> `fspiop-source` and `fspiop-destination` are **mandatory** in the envelope. They identify which DFSPs are involved in the transaction and are required by the PPA for routing and audit purposes.
 
 ### 5.5 Egress - Sending Events to the PPA
 
@@ -1030,53 +1031,51 @@ In both cases the situation should be investigated - it may indicate a Mojaloop 
 
 ## 9. Performance
 
-No document in this project currently states a concrete transaction-volume target - CCH’s Project Inception Report defers throughput KPIs to a future Non-Functional Design Document. Rather than leave performance unaddressed until that document exists, this section states working assumptions now, explicitly marked TBC, so that TTL, partition, and hosting decisions have a basis to start from.
+No document in this project currently states a concrete transaction-volume target — CCH's Project Inception Report defers throughput KPIs to a future Non-Functional Design Document. Rather than leave performance unaddressed until that document exists, this section states working assumptions now, explicitly marked TBC, so that TTL, partition, and hosting decisions have a basis to start from.
 
-9.1 Performance Assumptions and Targets (TBC)
+### 9.1 Performance Assumptions and Targets (TBC)
+
 | Metric | Proposed Target (TBC) | Basis |
-| :— | :— | :— |
-| Sustained transaction TPS (steady state) | 20-100 TPS [TBC confirm with CCH, Open Item #4] | Regional/corridor-scale Mojaloop deployments typically run well below reference-implementation ceilings |
-| Peak burst TPS (multiplier) | $3-5 \mathrm{x}$ sustained | Standard payment-switch peak-to-average ratio |
-| Mojaloop messages consumed/transaction (cross-border) | 7 of 9 on the wire | §8.1 |
-| ISO 20022 messages sent to TMS/transaction | 2 verified (pacs.008 + pacs.002); up to 4 if the out-of-scope quote-stage mapping is implemented | §8.1, §6.5.6 |
+|---|---|---|
+| Sustained transaction TPS (steady state) | 20–100 TPS **[TBC — confirm with CCH, Open Item #4]** | Regional/corridor-scale Mojaloop deployments typically run well below reference-implementation ceilings |
+| Peak burst TPS (multiplier) | 3–5x sustained | Standard payment-switch peak-to-average ratio |
+| Messages/transaction (P2P domestic) | up to 4 (quote ×2, transfer ×2) | §8.1 |
+| Messages/transaction (cross-border) | up to 6 | §8.2 |
 | MLA end-to-end ack latency (p95) | < 200 ms | Typical HTTP + Kafka-commit round trip |
 | PPA correlation-to-TMS latency (p95, cache hit) | < 500 ms | Includes decode/decrypt, translate, TMS POST |
 
-External reference: Mojaloop reference-implementation benchmarking has demonstrated sustained throughput in the ~1,000 TPS range on well-provisioned clusters, with wide variance depending on hardware/topology - this confirms COMESA’s actual figure must be measured against its own deployment, not assumed from generic Mojaloop literature.
+External reference: Mojaloop reference-implementation benchmarking has demonstrated sustained throughput in the ~1,000 TPS range on well-provisioned clusters, with wide variance depending on hardware/topology — this confirms COMESA's actual figure must be measured against its own deployment, not assumed from generic Mojaloop literature.
 
-9.2 Latency Budget - MLA→PPA→TMS Hop Chain
+### 9.2 Latency Budget — MLA→PPA→TMS Hop Chain
+
 | Hop | Component | Budget (p95) | Notes |
-| :— | :— | :— | :— |
-| 1 | DRPP → Kafka publish | (Mojaloopowned) | Outside MLA/PPA control |
-| 2 | Kafka publish → MLA consume | $<100 \mathrm{~ms}$ (no backlog) | Degrades under consumer lag - §9.4 |
+|---|---|---|---|
+| 1 | DRPP → Kafka publish | (Mojaloop-owned) | Outside MLA/PPA control |
+| 2 | Kafka publish → MLA consume | < 100 ms (no backlog) | Degrades under consumer lag — §9.4 |
 | 3 | MLA → PPA POST + ack | < 100 ms | Excludes retries |
-| 4 | PPA validate/dedup/decode | $<50 \mathrm{~ms}$ | |
-| 5 | PPA correlate + translate to Tazama’s ISO 20022 message set | $<50 \mathrm{~ms}$ | |
+| 4 | PPA validate/dedup/decode | < 50 ms | |
+| 5 | PPA correlate + translate to Tazama's ISO 20022 message set | < 50 ms | |
 | 6 | PPA → TMS POST + ack | < 200 ms | Excludes retries |
-| Total (happy path, | | < ~500 ms per event, per leg | Retry paths add up to ~7s per hop before deadletter |
-
-| Hop | Component | Budget (p95) | Notes |
-| --- | --- | --- | --- |
-| no retries) |  |  |  |
+| **Total (happy path, no retries)** | | **< ~500 ms per event, per leg** | Retry paths add up to ~7s per hop before dead-letter |
 
 ### 9.3 Cache (ValKey) Sizing and TTL Policy
 
-- TTL formula: TTL = max(expiration field on the Mojaloop message, expected worst-case MLA-to-PPA transit + Kafka lag) + fixed buffer (5-10s). TTL must not be derived from the expiration field alone - it must also cover MLA-side ingestion delay under lag, or genuine in-flight correlations will time out falsely (§8.3).
-- Memory sizing formula: Peak concurrent cached entries $\approx T T L(\mathrm{~s}) \times$ in-flight request rate $(\mathrm{req} / \mathrm{s}) \times$ avg payload size (bytes) × safety factor (1.5-2x). Final sizing is blocked on the TPS assumption in §9.1 being confirmed (Open Item #4).
-- Eviction policy: volatile-lru (every correlation key carries an explicit TTL); alert - do not silently evict - on memory pressure, since an evicted correlation key is equivalent to a lost transaction pair.
+- **TTL formula:** `TTL = max(expiration field on the Mojaloop message, expected worst-case MLA-to-PPA transit + Kafka lag) + fixed buffer (5–10s)`. TTL must not be derived from the `expiration` field alone — it must also cover MLA-side ingestion delay under lag, or genuine in-flight correlations will time out falsely (§8.4).
+- **Memory sizing formula:** `Peak concurrent cached entries ≈ TTL(s) × in-flight request rate (req/s) × avg payload size (bytes) × safety factor (1.5–2x)`. Final sizing is blocked on the TPS assumption in §9.1 being confirmed (Open Item #4).
+- **Eviction policy:** `volatile-lru` (every correlation key carries an explicit TTL); alert — do not silently evict — on memory pressure, since an evicted correlation key is equivalent to a lost transaction pair.
 - Monitor cache hit ratio; a sustained drop signals either TTL misconfiguration or MLA backlog.
 
 ### 9.4 Backpressure and Consumer Lag Handling
 
 - Size MLA consumer parallelism relative to the per-action topic partition counts (§4.4), not the old 3-consolidated-topic model.
 - Alert on consumer lag (leading indicator) separately from dead-letter rate (lagging indicator).
-- Bound MLA’s per-call PPA timeout independently from the retry/backoff budget - do not let the synchronous “wait for PPA 200” block indefinitely.
+- Bound MLA's per-call PPA timeout independently from the retry/backoff budget — do not let the synchronous "wait for PPA 200" block indefinitely.
 
 ### 9.5 Retry/Backoff Budget and Failure Isolation
 
-- Add jitter to the existing $1 \mathrm{~s} / 2 \mathrm{~s} / 4 \mathrm{~s}$ exponential backoff at both the MLA→PPA and PPA→TMS hops, to avoid synchronized retry storms across concurrent workers.
-- Add a circuit breaker at both hops: after N consecutive failures, trip and fail fast to the dead-letter log rather than continuing full retry cycles against a downstream known to be down. Without this, 3x retries at each of two hops can amplify load exactly when a downstream component is least able to absorb it.
-- ValKey-down remains a hard-stop (§6.7) - quantify how long Kafka can safely buffer unconsumed events before broker retention limits are hit at the target TPS.
+- Add **jitter** to the existing 1s/2s/4s exponential backoff at both the MLA→PPA and PPA→TMS hops, to avoid synchronized retry storms across concurrent workers.
+- Add a **circuit breaker** at both hops: after N consecutive failures, trip and fail fast to the dead-letter log rather than continuing full retry cycles against a downstream known to be down. Without this, 3x retries at each of two hops can amplify load exactly when a downstream component is least able to absorb it.
+- ValKey-down remains a hard-stop (§6.7) — quantify how long Kafka can safely buffer unconsumed events before broker retention limits are hit at the target TPS.
 
 ### 9.6 Capacity Planning Guidance
 
@@ -1084,12 +1083,14 @@ External reference: Mojaloop reference-implementation benchmarking has demonstra
 - PPA is stateless and horizontally scalable behind a load balancer (§4.2); MLA can round-robin across replicas.
 - Account for the message-volume reduction the Notification Filter/Dedup component provides when sizing PPA→TMS throughput.
 
+
+---
+
 ## 10. Security
 
 ### 10.1 Transport Security
 
-All MLA↔︎PPA and PPA↔︎TMS communication uses TLS 1.2 or higher. Aligned with Mojaloop’s own DFSP-to-switch requirement, MLA↔︎PPA and PPA↔︎TMS should use mutual TLS (client + server certificates), not
-bearer-token-over-TLS alone, given both endpoints are internal trusted services carrying live financial data. Certificate issuance/rotation policy is to be defined (Open Item, §12), minimum 2048-bit RSA, consistent with Mojaloop’s own PKI best practices.
+All MLA↔PPA and PPA↔TMS communication uses TLS 1.2 or higher. Aligned with Mojaloop's own DFSP-to-switch requirement, MLA↔PPA and PPA↔TMS **should use mutual TLS** (client + server certificates), not bearer-token-over-TLS alone, given both endpoints are internal trusted services carrying live financial data. Certificate issuance/rotation policy is to be defined (Open Item, §12), minimum 2048-bit RSA, consistent with Mojaloop's own PKI best practices.
 
 ### 10.2 Authentication & Authorization
 
@@ -1147,33 +1148,41 @@ These items must be confirmed before the design is finalised, ideally at the JAD
 | --- | --- | --- |
 | 9 | Confirm FX quote/transfer topic names (topic-fx-quotes-*, topic-fx-transfer-* equivalents) against Mojaloop’s actual deployment (§4.4, §5.2) | Mojaloop Partner |
 
-## Annex A - API Endpoint Quick Reference
+---
 
-A. 1 Mojaloop DRPP → MLA (Kafka Topics)
+## Annex A — API Endpoint Quick Reference
+
+### A.1 Mojaloop DRPP → MLA (Kafka Topics)
+
 | Topic | Published By | Events |
-| :— | :— | :— |
-| topic-quotes-post / topic-quotes-put | Quoting Service | pacs.081/pacs.082, error variants |
-| topic-fx-quotes-post / topic-fx-quotes-put | Quoting Service | pacs.091/pacs.092, error variants [TBC - Open Item #13] |
-| topic-transfer-prepare / topic-transfer-fulfil | ML API Adapter | pacs. 008 request/callback, error variants |
-| topic-notification-event | Central Ledger | Final transfer-state notification - pacs. 002 (deduplicated before use - §4.1) |
+|---|---|---|
+| `topic-quotes-post` / `topic-quotes-put` | Quoting Service | `pacs.081`/`pacs.082`, error variants |
+| `topic-fx-quotes-post` / `topic-fx-quotes-put` | Quoting Service | `pacs.091`/`pacs.092`, error variants [TBC — Open Item #13] |
+| `topic-transfer-prepare` / `topic-transfer-fulfil` | ML API Adapter | `pacs.008` request/callback, error variants |
+| `topic-notification-event` | **Central Ledger** | Final transfer-state notification — `pacs.002` (deduplicated before use — §4.1) |
 
-A. 2 MLA → PPA
+### A.2 MLA → PPA
+
 | PPA Endpoint | Method | Receives |
-| :— | :— | :— |
-| /QUOTES | POST | All quote and FX quote events (request, callback, error variants) |
-| /TRANSFERS | POST | All transfer and FX transfer events (request, callback, final-state notifications, error variants) |
-| /health | GET | Health check |
+|---|---|---|
+| `/QUOTES` | POST | All quote and FX quote events (request, callback, error variants) |
+| `/TRANSFERS` | POST | All transfer and FX transfer events (request, callback, final-state notifications, error variants) |
+| `/health` | GET | Health check |
 
-A. 3 PPA → Tazama TMS
+### A.3 PPA → Tazama TMS[^1][^2]
+
 | Event Pair | ISO 20022 Message | TMS Endpoint |
-| :— | :— | :— |
-| pacs. 081 + pacs. 082 | pacs. 081 + pacs. 082 | /api/transaction/pacs. 081 + /api/transaction/pacs. 082 |
-| pacs. 091 + pacs. 092 | pacs. 091 + pacs. 092 | /api/transaction/pacs. 091 + /api/transaction/pacs. 092 |
-| pacs. 008 request + callback | pacs. 008 | /api/transaction/pacs. 008 |
-| Final-state notification (Central Ledger, deduplicated) | pacs. 002 | /api/transaction/pacs. 002 |
-| pacs. 009 request + callback | pacs. 009 | /api/transaction/pacs. 009 |
-| Final-state notification, FX (deduplicated) | pacs. 002 | /api/transaction/pacs. 002 |
-| Any error callback (any resource) | pacs. 002 | /api/transaction/pacs. 002 |
+|---|---|---|
+| `pacs.081` + `pacs.082` | **pacs.081 + pacs.082** | `/api/transaction/pacs.081` + `/api/transaction/pacs.082` |
+| `pacs.091` + `pacs.092` | **pacs.091 + pacs.092** | `/api/transaction/pacs.091` + `/api/transaction/pacs.092` |
+| `pacs.008` request + callback | **pacs.008** | `/api/transaction/pacs.008` |
+| Final-state notification (Central Ledger, deduplicated) | **pacs.002** | `/api/transaction/pacs.002` |
+| `pacs.009` request + callback | **pacs.009** | `/api/transaction/pacs.009` |
+| Final-state notification, FX (deduplicated) | **pacs.002** | `/api/transaction/pacs.002` |
+| Any error callback (any resource) | **pacs.002** | `/api/transaction/pacs.002` |
+
+
+---
 
 ## Annex B - Mojaloop Message Body Reference
 
