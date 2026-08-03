@@ -513,7 +513,6 @@ ajv also runs with `coerceTypes: 'array'` (so `"1"` is coerced to `1`) and `useD
 
 **Legend.** ✅ - the mapping has been applied to the real DRPP cross-border golden path and the resulting payload validated against Tazama's live ajv schema, using the TMS service's exact ajv configuration, with no fields stripped.
 
-**The full field-by-field mapping, with provenance and golden-path values for every leaf field, is in [`message mapping/pacs 002-008/`](message%20mapping/pacs%20002-008/)** — `03_pacs008_mapping.md`, `04_pacs002_mapping.md`, decisions in `02_design-decisions.md`, and schema-validated payloads in `samples/`. The quote-stage mapping is tracked in [`message mapping/pain001-013/`](message%20mapping/pain001-013/).
 
 #### 6.5.3 One transaction per payment, not one per leg
 
