@@ -41,6 +41,12 @@ Request a raw Kafka consumer dump (even a handful of messages, one per topic in 
 
 ## Gap 2 — the discovery leg was scoped out, but it's the only source of `Cdtr.Nm`
 
+> ✅ **CLOSED — option 2 adopted.** `CCH_FSD_MessageIngestion.md` V1.2 (6th August 2026) settled this. **`Cdtr.Nm` is accepted as permanently unsourced and degrades to the payee MSISDN**, with FSD **Open Item #4** left open to confirm a payee display-name field inside the quote messages with the Mojaloop Implementation Partner.
+>
+> The FSD also corrected the false premise this gap identified. §11's exclusion no longer claims discovery data is redundantly available via the quote stage; it now rests on the delivery-path fact — *"ALS is confirmed HTTPS end-to-end and never publishes to Kafka, so there is no Kafka event for this pipeline to capture in the first place… this exclusion is about there being nothing to capture, not a claim that the data is already redundantly available elsewhere."*
+>
+> The dependent mapping rows have been corrected: `01_pain001_mapping.md`, `02_pain013_mapping.md` and `03_pacs008_mapping.md` now source `Cdtr.Nm`/`CdtrAcct.Nm` from the payee MSISDN. The analysis below is retained as the record of how the gap was found and what the options were.
+
 ### The finding
 
 FSD §11 (Phase 1 Exclusions) explicitly drops party discovery capture:
@@ -78,7 +84,9 @@ This is not a mapping-table typo. It is a scope decision in §11 resting on a fa
 2. **Accept `Cdtr.Nm` as permanently unsourced and default it** — consistent with how `Cdtr…BirthDt` is already handled (G1 in `02_design-decisions.md`, sentinel `1900-01-01`). Every payee would carry a placeholder name; anything in Tazama doing name-based screening or entity resolution on the creditor side gets nothing.
 3. **Source it from elsewhere** — no candidate found in the current 18-message flow. Would need confirmation that no other Mojoloop message (bulk lookup, a different ALS response shape, a scheme-specific extension) carries it.
 
-None of these is implemented. This file records the gap and the options; §11, §4.4, §6.4 and `03_pacs008_mapping.md` are **not yet corrected** pending a decision on which option to take.
+**Outcome: option 2 was adopted** in FSD V1.2 (6th August 2026), which records `Cdtr.Nm` as a deliberate deviation from the field-mapping default and degrades it to the payee MSISDN. Option 1 was ruled out on the delivery-path fact rather than on cost — there is no ALS Kafka topic to list, because ALS never publishes to Kafka at all. Option 3 remains partially live as FSD Open Item #4: the Mojaloop Implementation Partner is still to confirm whether a payee display-name field exists somewhere in the production quote messages.
+
+FSD §11, §6.4.3 and §6.4.4 were corrected accordingly; the mapping rows in `01_pain001_mapping.md`, `02_pain013_mapping.md` and `03_pacs008_mapping.md` have now been brought in line.
 
 ### Relationship to Gap 1
 

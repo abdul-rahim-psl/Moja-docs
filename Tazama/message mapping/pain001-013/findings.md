@@ -137,7 +137,7 @@ Same method that worked for pacs.008/pacs.002; the harness already exists.
 
 1. **Ground truth** — extract required fields, type divergences and the `TenantId` prohibition from `src/schemas/pain.001.json` and `pain.013.json`; cross-check the `Pain.001.001.11.ts` / `Pain.013.001.09.ts` interfaces.
 2. **Validate Tazama's own fixtures** (`frms-coe-lib/src/tests/data/pain001.ts`, `pain013.ts`) against the real schemas — the pacs.008 fixture failed the stale swagger, so this is worth repeating.
-3. **Map field by field** from msg 10 (`POST /quotes`) → pain.001 and msg 11 (`PUT /quotes`) → pain.013, enriched from msg 03 (payee name) and msgs 06/07 (FX amounts, if §3.3 is decided that way).
+3. **Map field by field** from msg 10 (`POST /quotes`) → pain.001 and msg 11 (`PUT /quotes`) → pain.013, enriched from msgs 06/07 (FX amounts, if §3.3 is decided that way). Not from msg 03 — ALS never publishes to Kafka, so the payee name is unavailable and `Cdtr.Nm` degrades to the payee MSISDN (FSD §6.4.4, §11).
 4. **Identifier strategy — resolved, with one correction.** `EndToEndId` = `transactionId` holds across all four messages, as D2 anticipated. But `PmtId` on pain.001/pain.013 contains **only** `EndToEndId` — there is no `InstrId` element, and one added there is silently stripped (verified). The `quoteId` is therefore carried in **`PmtInf.PmtInfId`**. `PmtId` also nests deeper than on pacs.008: `PmtInf.CdtTrfTxInf.PmtId`.
 5. **Build and validate** golden-path samples with `samples/ajv-check.js`, extended by two lines.
 6. **Patch §6.5** rows 1/2/5 and append the two resulting payloads to §7 — cheap, since §7 already reproduces both `/quotes` bodies.

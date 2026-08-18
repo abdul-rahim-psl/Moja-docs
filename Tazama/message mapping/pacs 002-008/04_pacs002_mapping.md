@@ -8,6 +8,10 @@
 >
 > Everything else in this mapping is unaffected: the two events carry the same status fields, so only the *locator* column changes if the decision flips.
 Contract: `tms-service/src/schemas/pacs.002.json` (ajv). Endpoint: `POST /v1/evaluate/iso20022/pacs.002.001.12`.
+
+> **Precedence.** Where this mapping and `CCH_FSD_MessageIngestion.md` V4.0 (Final) differ, **the FSD is the authority**. `GrpHdr.MsgId`/`CreDtTm` below were corrected against §6.5.4, superseding **D9** in [`02_design-decisions.md`](02_design-decisions.md).
+>
+> Note the FSD contradicts itself on this field: §6.4.3's pacs.002 provenance table lists `GrpHdr.MsgId/CreDtTm` as supplied by the final-state event "where supplied", while §6.5.4 admits no exception. §6.5.4 is the dedicated rule clause and is followed here; §6.4.3 needs correcting at source (tracked as R-11 in `CCH-PL-USR-MSGING-001`).
 Validated output: [`samples/tazama_pacs002.json`](samples/tazama_pacs002.json) — **passes**.
 
 Legend as in [`03_pacs008_mapping.md`](03_pacs008_mapping.md).
@@ -25,8 +29,8 @@ Legend as in [`03_pacs008_mapping.md`](03_pacs008_mapping.md).
 
 | Tazama field | Type | Req | Source | Locator | Prov. | Rule | Golden-path value |
 |---|---|---|---|---|---|---|---|
-| `MsgId` | string | ✔ | 17 | `ext[GrpHdr.MsgId]` | Copied | **D9** — scheme-supplied; generate a ULID only if absent | `"01K7EVA0DTXE0B1GCTZ744Y2PD"` |
-| `CreDtTm` | string | ✔ | 17 | `ext[GrpHdr.CreDtTm]` | Copied | **D9** — falls back to PPA construction time | `"2025-10-13T13:14:11.258Z"` |
+| `MsgId` | string | ✔ | — | — | Created | New ULID — **always** PPA-generated (FSD §6.5.4); pinned at first assembly, reused verbatim on retry. Supersedes **D9** | `01K7EVA0DTXE0B1GCTZ744Y2PD` |
+| `CreDtTm` | string | ✔ | — | — | Created | PPA construction timestamp, fixed at first assembly (FSD §6.5.4). Not `AccptncDtTm` — that carries settlement time. Supersedes **D9** | `"2025-10-13T13:14:11.258Z"` |
 
 > Both **are** supplied by Mojaloop here, contradicting FSD v1.1's claim that they are always PPA-generated (**D9**).
 
@@ -94,7 +98,7 @@ An FSPIOP error callback (`PUT /transfers/{id}/error`, `PUT /quotes/{id}/error`,
 | `AccptncDtTm` | `hdr.date` | Inferred | No `completedTimestamp` exists on an error |
 | `InstgAgt` / `InstdAgt` | `hdr.fspiop-source` / `-destination` | Copied | |
 | `ChrgsInf` | — | Defaulted | `[]` — verified valid |
-| `GrpHdr.MsgId` / `CreDtTm` | `ext[…]` if present, else generated | **D9** | |
+| `GrpHdr.MsgId` / `CreDtTm` | — | Created | Always PPA-generated (FSD §6.5.4) — supersedes **D9** |
 
 > ⚠️ **`errorCode` and `errorDescription` have nowhere to go.** FSD v1.1 maps them to `StsRsnInf.Rsn.Prtry` and `StsRsnInf.AddtlInf` — **`StsRsnInf` does not exist** in Tazama's pacs.002 schema, so `removeAdditional: 'all'` deletes it silently. The message would be accepted with the failure reason stripped out.
 >

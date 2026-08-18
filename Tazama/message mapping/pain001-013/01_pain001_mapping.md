@@ -1,8 +1,10 @@
 # pain.001.001.11 — field-by-field mapping
 
-**Trigger:** `POST /quotes` (msg 10), enriched from cached `PUT /parties` (msg 03) and `PUT /fxQuotes` (msgs 06/07).
+**Trigger:** `POST /quotes` (msg 10), enriched from cached `PUT /fxQuotes` (msgs 06/07).
 Contract: `tms-service/src/schemas/pain.001.json` (ajv). Endpoint: `POST /v1/evaluate/iso20022/pain.001.001.11` — **registered only when `QUOTING=true`**.
 Validated output: [`samples/tazama_pain001.json`](samples/tazama_pain001.json) — **passes, nothing stripped**.
+
+> **Precedence.** Where this mapping and `CCH_FSD_MessageIngestion.md` V4.0 (Final) differ, **the FSD is the authority**. This document is built from the DRPP-GP-01 golden path, which is an FSPIOP *wire* capture — it shows what flowed between DFSPs over HTTPS, not what lands on the Kafka topics the MLA actually subscribes to. Two consequences are reflected below: `PUT /parties` (msg 03) is not a source for this pipeline, and `GrpHdr.MsgId` is PPA-generated regardless of what the wire supplies.
 
 **Legend** — *Provenance*: `Copied` · `Calculated` · `Inferred` · `Created` · `Defaulted`. *Locator*: `body` · `hdr` · `ext[key]` · `—` (no source).
 
@@ -59,13 +61,13 @@ Validated output: [`samples/tazama_pain001.json`](samples/tazama_pain001.json) �
 | `Amt.EqvtAmt.XchgRateInf.XchgRate` | number | — | 06/07 | | Calculated | `InstdAmt ÷ EqvtAmt` | `60` |
 | `ChrgBr` | string | ✔ | — | — | Defaulted | ⚠️ **Not knowable at this point** — see below | `"SLEV"` |
 | `CdtrAgt…ClrSysMmbId.MmbId` | string | ✔ | 10 | `body.payee.partyIdInfo.fspId` | Copied | | `"test-zmw-dfsp"` |
-| `Cdtr.Nm` | string | ✔ | **03** | `body.party.name` | Copied | ⚠️ **Only source in the flow** — see gap below | `"Chikondi Banda"` |
+| `Cdtr.Nm` | string | ✔ | 10 | `body.payee.partyIdInfo.partyIdentifier` | Inferred | ⚠️ **Degrades to the payee MSISDN** — no payee name reaches this pipeline; see gap below | `"16665551001"` |
 | `Cdtr…BirthDt` | string | ✔ | — | — | Defaulted | ⚠️ No source anywhere | `"1900-01-01"` |
 | `Cdtr…CityOfBirth` / `CtryOfBirth` | string | ✔ | — | — | Defaulted | | `"Unknown"` / `"ZZ"` |
 | `Cdtr…Othr[0].Id` / `SchmeNm.Prtry` | string | ✔ | 10 | `body.payee.partyIdInfo` | Copied | | `"16665551001"` / `"MSISDN"` |
 | `Cdtr.CtctDtls.MobNb` | string | ✔ | 10 | `body.payee.partyIdInfo.partyIdentifier` | Inferred | | `"16665551001"` |
 | `CdtrAcct.Id.Othr[0].*` | | ✔ | 10 | `body.payee.partyIdInfo` | Inferred | | `"16665551001"` / `"MSISDN"` |
-| `CdtrAcct.Nm` | string | ✔ | 03 | `body.party.name` | Copied | | `"Chikondi Banda"` |
+| `CdtrAcct.Nm` | string | ✔ | 10 | `body.payee.partyIdInfo.partyIdentifier` | Inferred | Same MSISDN fallback as `Cdtr.Nm` | `"16665551001"` |
 | `Purp.Cd` | string | ✔ | 10 | `body.transactionType` | Calculated | `TRANSFER` + `CONSUMER` → `MP2P` | `"MP2P"` |
 | `RgltryRptg.Dtls.Tp` / `.Cd` | string | ✔ | — | — | Defaulted | No source | `"BALANCE OF PAYMENTS"` / `"100"` |
 | `RmtInf.Ustrd` | string | ✔ | 10 | `body.note` | Copied | | `"test"` |
@@ -100,7 +102,11 @@ This is where the quote's richest personal data lands.
 
 **1. `ChrgBr` is required but not yet known.** The charge bearer is stated only by the payee, in the `PUT /quotes` callback (`ext[CdtTrfTxInf.ChrgBr]` = `CRED`), which arrives *after* pain.001 is emitted. Every other enrichment source precedes its trigger; this one follows it, and nothing re-emits a pain.001. **Rule: default to `SLEV` on pain.001 and carry the payee-stated value on pain.013.** The two messages may legitimately differ on this field.
 
-**2. The payee name is not in the quote messages.** `Cdtr.Nm` is required. The `payee` object in `POST /quotes` carries `partyIdInfo` and `merchantClassificationCode` only — the FSPIOP quote schema has no element for payee personal information, so this is a property of the protocol, not of this capture. The sole source is `PUT /parties`, which Phase 1 excludes from capture. Without it, `Cdtr.Nm` falls back to the payee identifier. This blocks pain.001, pain.013 and pacs.008 alike.
+**2. The payee name reaches this pipeline from nowhere.** `Cdtr.Nm` is required. The `payee` object in `POST /quotes` carries `partyIdInfo` and `merchantClassificationCode` only — the FSPIOP quote schema has no element for payee personal information, so this is a property of the protocol, not of this capture.
+
+`PUT /parties` (msg 03) is **not** an alternative source. ALS is HTTPS end-to-end and never publishes to Kafka (FSD §6.4.4, §11 — confirmed with CCH), so no party-lookup event reaches the MLA at all. This is not a capture the project deferred; it is one that does not exist for this pipeline. `Cdtr.Nm` and `CdtrAcct.Nm` therefore degrade to the payee MSISDN on pain.001, pain.013 and pacs.008 alike, and the resulting message must be flagged degraded in the audit log — a required name field carrying an identifier is structurally valid and indistinguishable from a real one at the TMS door.
+
+**FSD Open Item #4** tracks confirming a payee display-name field inside the quote messages with the Mojaloop Implementation Partner. Until it closes, anything in Tazama performing name-based screening or entity resolution on the creditor side receives an MSISDN.
 
 ## Verification
 

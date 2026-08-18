@@ -1,8 +1,10 @@
 # pacs.008.001.10 — field-by-field mapping
 
-**Replaces §6.5 row 3.** Trigger: **msg 16** `POST /transfers` (PREPARE), enriched from cached msgs 03 / 06 / 07 / 10 / 11.
+Trigger: **msg 16** `POST /transfers` (PREPARE), enriched from cached msgs 06 / 07 / 10 / 11.
 Contract: `tms-service/src/schemas/pacs.008.json` (ajv). Endpoint: `POST /v1/evaluate/iso20022/pacs.008.001.10`.
 Validated output: [`samples/tazama_pacs008.json`](samples/tazama_pacs008.json) — **passes**.
+
+> **Precedence.** Where this mapping and `CCH_FSD_MessageIngestion.md` V4.0 (Final) differ, **the FSD is the authority**. `Cdtr.Nm`/`CdtrAcct.Nm` below were corrected against it: `PUT /parties` (msg 03) is not a source for this pipeline, because ALS is HTTPS end-to-end and never publishes to Kafka (FSD §6.4.4, §11 — confirmed with CCH). This closes Gap 2 in [`07_open-gaps-wire-vs-kafka-and-discovery.md`](07_open-gaps-wire-vs-kafka-and-discovery.md).
 
 **Legend** — *Provenance*: `Copied` (verbatim) · `Calculated` (derived) · `Inferred` (deduced) · `Created` (PPA-generated) · `Defaulted` (constant, no source).
 *Locator*: `body` · `hdr` · `ext[key]` · `ilp` (decoded ILP packet) · `—` (no source).
@@ -66,7 +68,7 @@ Validated output: [`samples/tazama_pacs008.json`](samples/tazama_pacs008.json) �
 | `Dbtr…PrvtId.Othr[0].Id` | string | ✔ | 10 | `body.payer.partyIdInfo.partyIdentifier` | Copied | ⚠️ **Array**, not object | `"16665551002"` |
 | `Dbtr…PrvtId.Othr[0].SchmeNm.Prtry` | string | ✔ | 10 | `body.payer.partyIdInfo.partyIdType` | Copied | | `"MSISDN"` |
 | `Dbtr.CtctDtls.MobNb` | string | ✔ | 10 | `body.payer.partyIdInfo.partyIdentifier` | Inferred | Raw MSISDN — **no country-code inference** (**G4**) | `"16665551002"` |
-| `Cdtr.Nm` | string | ✔ | **03** | `body.party.name` | Copied | **Only source in the whole flow** | `"Chikondi Banda"` |
+| `Cdtr.Nm` | string | ✔ | 16 | `ext[CdtTrfTxInf.Cdtr.Id.PrvtId.Othr.Id]` | Inferred | ⚠️ **Degrades to the payee MSISDN** — no payee name reaches this pipeline (FSD §6.4.3) | `"16665551001"` |
 | `Cdtr…DtAndPlcOfBirth.BirthDt` | string | ✔ | — | — | Defaulted | ⚠️ **No source anywhere — G1** | `"1900-01-01"` |
 | `Cdtr…DtAndPlcOfBirth.CityOfBirth` | string | ✔ | — | — | Defaulted | | `"Unknown"` |
 | `Cdtr…DtAndPlcOfBirth.CtryOfBirth` | string | ✔ | — | — | Defaulted | | `"ZZ"` |
@@ -85,7 +87,7 @@ Mojaloop has no account construct — the party identifier doubles as the accoun
 | `DbtrAcct.Nm` | string | ✔ | 10 | `body.payer.name` | Copied | **Display** name here (**D10**) | `"Display-Test"` |
 | `CdtrAcct.Id.Othr[0].Id` | string | ✔ | 16 | `ext[…Cdtr…Othr.Id]` | Inferred | | `"16665551001"` |
 | `CdtrAcct.Id.Othr[0].SchmeNm.Prtry` | string | ✔ | 16 | `ext[…SchmeNm.Prtry]` | Copied | | `"MSISDN"` |
-| `CdtrAcct.Nm` | string | ✔ | 03 | `body.party.name` | Copied | | `"Chikondi Banda"` |
+| `CdtrAcct.Nm` | string | ✔ | 16 | `ext[CdtTrfTxInf.Cdtr.Id.PrvtId.Othr.Id]` | Inferred | Same MSISDN fallback as `Cdtr.Nm` | `"16665551001"` |
 
 ### Agents
 

@@ -108,7 +108,7 @@ The premise that makes most of this work is **insight #15**: a pacs.008 is not a
 | `payer.personalInfo.dateOfBirth` `1984-01-01` | 10 | `Dbtr.Id.PrvtId.DtAndPlcOfBirth.BirthDt` |
 | `payer.name` `Display-Test` | 10 | `DbtrAcct.Nm` (**D10**) |
 | `payer.personalInfo.complexName` | 10 | `Dbtr.Nm`, joined (**D10**) |
-| `party.name` `Chikondi Banda` | **03** | `Cdtr.Nm` |
+| ~~`party.name` `Chikondi Banda`~~ | ~~03~~ | `Cdtr.Nm` ← **payee MSISDN** — msg 03 is not Kafka-sourced (FSD §6.4.4, §11) |
 | `note` `test` | 10 | `RmtInf.Ustrd` |
 | `transactionType.scenario` + `initiatorType` | 10 | `Purp.Cd` = `MP2P` |
 | `sourceAmount` MWK 60 | 06 | `InstdAmt` |

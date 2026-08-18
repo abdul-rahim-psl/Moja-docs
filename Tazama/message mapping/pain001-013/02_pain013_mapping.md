@@ -1,8 +1,10 @@
 # pain.013.001.09 — field-by-field mapping
 
-**Trigger:** `PUT /quotes` (msg 11), enriched from cached `POST /quotes` (msg 10), `PUT /parties` (msg 03) and `PUT /fxQuotes` (msgs 06/07).
+**Trigger:** `PUT /quotes` (msg 11), enriched from cached `POST /quotes` (msg 10) and `PUT /fxQuotes` (msgs 06/07).
 Contract: `tms-service/src/schemas/pain.013.json` (ajv). Endpoint: `POST /v1/evaluate/iso20022/pain.013.001.09` — **registered only when `QUOTING=true`**.
 Validated output: [`samples/tazama_pain013.json`](samples/tazama_pain013.json) — **passes, nothing stripped**.
+
+> **Precedence.** Where this mapping and `CCH_FSD_MessageIngestion.md` V4.0 (Final) differ, **the FSD is the authority**. Two rows below were corrected against it: `GrpHdr.MsgId`/`CreDtTm` are PPA-generated rather than copied from the callback's `extensionList` (FSD §6.5.4, §6.4.1), and `Cdtr.Nm` degrades to the payee MSISDN because `PUT /parties` never reaches Kafka (FSD §6.4.4, §11).
 
 Legend as in [`01_pain001_mapping.md`](01_pain001_mapping.md).
 
@@ -28,12 +30,14 @@ Both messages carry the same party and account blocks. The differences that matt
 |---|---|---|---|---|---|---|
 | `TxTp` | — | — | — | Created | Constant | `"pain.013.001.09"` |
 | `TenantId` | **forbidden** | — | — | — | Must NOT be sent | *(absent)* |
-| `GrpHdr.MsgId` | ✔ | 11 | `ext[GrpHdr.MsgId]` | Copied | Scheme-supplied; generate only if absent | `"01K7EV9XM2F00J5V4PZQTKFE38"` |
-| `GrpHdr.CreDtTm` | ✔ | 11 | `ext[GrpHdr.CreDtTm]` | Copied | | `"2025-10-13T13:14:08.386Z"` |
+| `GrpHdr.MsgId` | ✔ | — | — | Created | New ULID — **always** PPA-generated (FSD §6.5.4); pinned at first assembly, reused verbatim on retry | `01K7EV9XM2F00J5V4PZQTKFE38` |
+| `GrpHdr.CreDtTm` | ✔ | — | — | Created | PPA construction timestamp, fixed at first assembly (FSD §6.5.4) | `"2025-10-13T13:14:08.386Z"` |
 | `GrpHdr.NbOfTxs` | ✔ | 11 | `ext[GrpHdr.NbOfTxs]` | Calculated | Parse `"1"` → `1` | `1` |
 | `GrpHdr.InitgPty.*` | ✔ | cache (10) | — | Inferred | Full party block, mirroring `Dbtr` | *(= Dbtr)* |
 
-> Unlike pain.001, the quote callback **does** supply `GrpHdr.MsgId` and `CreDtTm` in its `extensionList`, so both are copied rather than generated.
+> ⚠️ The quote callback **does** supply `GrpHdr.MsgId` and `CreDtTm` in its `extensionList`, and both are **deliberately discarded**. FSD §6.5.4 requires `MsgId` to be PPA-generated on every outbound message *with no exception*: a scheme-supplied value puts uniqueness outside PPA's control and repeats if the source re-sends, defeating the `UNIQUE(MsgId, TenantId)` constraint TMS enforces. FSD §6.4.1 names this as one of exactly two intentional deviations from the field-mapping reference. Traceability back to the originating Mojaloop event is carried by the envelope's `correlationId` (FSD §5.4) instead. See **D9** in [`../pacs 002-008/02_design-decisions.md`](../pacs%20002-008/02_design-decisions.md), which proposed the opposite rule and was superseded.
+>
+> The `ext[GrpHdr.CreDtTm]` value is still read — but for `ReqdExctnDt.DtTm` below, not for the `GrpHdr` field.
 
 ## `CdtrPmtActvtnReq.PmtInf`
 
@@ -58,7 +62,7 @@ Both messages carry the same party and account blocks. The differences that matt
 | `Amt.EqvtAmt.XchgRateInf` | — | — | — | — | ⚠️ **Element does not exist** — the rate is carried on pain.001 and pacs.008 only | *(omitted)* |
 | **`ChrgBr`** | ✔ | 11 | `ext[CdtTrfTxInf.ChrgBr]` | Copied | ⚠️ **Available here**, unlike on pain.001 | `"CRED"` |
 | `CdtrAgt…MmbId` | ✔ | 11 | `ext[…CdtrAgt.FinInstnId.Othr.Id]` | Copied | Path reshaped to `ClrSysMmbId.MmbId` | `"test-zmw-dfsp"` |
-| `Cdtr.*`, `CdtrAcct.*` | ✔ | 03 / cache (10) | — | Copied | Payee name from `PUT /parties`; identifiers from the quote | `"Chikondi Banda"` / `"16665551001"` |
+| `Cdtr.*`, `CdtrAcct.*` | ✔ | cache (10) | — | Inferred / Copied | ⚠️ `Nm` degrades to the payee MSISDN — `PUT /parties` never reaches Kafka; identifiers from the quote | `"16665551001"` |
 | `Purp.Cd` | ✔ | cache (10) | `body.transactionType` | Calculated | | `"MP2P"` |
 | `RgltryRptg.Dtls.Tp` / `.Cd` | ✔ | — | — | Defaulted | | `"BALANCE OF PAYMENTS"` / `"100"` |
 

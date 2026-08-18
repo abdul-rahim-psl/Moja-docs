@@ -10,7 +10,7 @@ Both outputs validate against the real ajv schemas: [`samples/tazama_pacs008.jso
 ## Timeline
 
 ```
-13:14:05.807  msg 03  PUT /parties      →  cache: payee name "Chikondi Banda"          [key: MSISDN]
+13:14:05.807  msg 03  PUT /parties      →  NOT CONSUMED — ALS never publishes to Kafka
 13:14:06.497  msg 06  POST /fxQuotes    →  cache: sourceAmount MWK 60
 13:14:07.147  msg 07  PUT /fxQuotes     →  cache: targetAmount ZMW 1   ⇒ XchgRate 60
 13:14:07.827  msg 10  POST /quotes      →  cache: payer DOB + complexName, note, txnType
@@ -19,12 +19,12 @@ Both outputs validate against the real ajv schemas: [`samples/tazama_pacs008.jso
 13:14:11.252  msg 17  PUT /transfers    →  ★ EMIT pacs.002   (transferState COMMITTED → ACSC)
 ```
 
-Cache lifetime ≈ **4.7 s** (msg 03 → msg 16). Well inside any sane TTL, but note msg 03 lands **before** any transaction id exists — see the MSISDN-keying caveat in [`01_message-relevance.md`](01_message-relevance.md).
+Cache lifetime ≈ **4.0 s** (msg 06 → msg 16). Well inside any sane TTL. Msg 03 is shown for completeness only — it is on the wire but not on Kafka, so it never enters the cache and `Cdtr.Nm` degrades to the payee MSISDN; see [`01_message-relevance.md`](01_message-relevance.md) and Gap 2 in [`07_open-gaps-wire-vs-kafka-and-discovery.md`](07_open-gaps-wire-vs-kafka-and-discovery.md).
 
 ## Where each pacs.008 value came from
 
 ```
-                                          ┌─ GrpHdr.MsgId          ← PPA-generated ULID (D9)
+                                          ┌─ GrpHdr.MsgId          ← PPA-generated ULID (FSD §6.5.4)
                                           ├─ NbOfTxs 1             ← msg 11 ext, "1" → 1
 msg 16  POST /transfers  ────────────────►│
   body.transferId         ────────────────┤  PmtId.InstrId

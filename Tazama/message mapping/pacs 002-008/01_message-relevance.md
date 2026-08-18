@@ -26,7 +26,7 @@ This costs us `homeTransactionId` (msg 01) and nothing else material: msg 01's p
 |---|---|---|---|---|
 | 01 | SDK `POST /transfers` | SDK | ✗ | *(not on the wire)* — payer identity, `homeTransactionId` |
 | 02 | `GET /parties/MSISDN/…` | FSPIOP | ✗ | Lookup only; no payload |
-| **03** | **`PUT /parties` callback** | FSPIOP | **✓** | **Payee name `"Chikondi Banda"` — appears nowhere else in the entire flow**; payee `fspId`, supported currencies |
+| **03** | **`PUT /parties` callback** | FSPIOP | **✗ not consumable** | Carries the payee name `"Chikondi Banda"` — which appears nowhere else in the flow — but **ALS is HTTPS end-to-end and never publishes to Kafka** (FSD §6.4.4, §11), so this message never reaches the MLA. `Cdtr.Nm` degrades to the payee MSISDN; see Gap 2 in [`07_open-gaps-wire-vs-kafka-and-discovery.md`](07_open-gaps-wire-vs-kafka-and-discovery.md) |
 | 04 | SDK 200 `WAITING_FOR_PARTY_ACCEPTANCE` | SDK | ✗ | State echo |
 | 05 | SDK `acceptParty` | SDK | ✗ | Authorization gate |
 | **06** | **`POST /fxQuotes`** | FSPIOP | **✓** | `conversionRequestId`, **`sourceAmount` MWK 60**, `determiningTransferId` |
@@ -103,6 +103,6 @@ Degraded messages must be **flagged in the audit log**, since they are structura
 | FX leg → transfer link | `determiningTransferId` (msgs 06/07/14) |
 | Party lookup → transaction | payee MSISDN `16665551001` ⚠️ |
 
-⚠️ **Msg 03 has no transaction identifier.** The `PUT /parties` callback is keyed only by party id — it precedes the quote, so no `transactionId` exists yet. Correlating it requires keying the party cache on **MSISDN**, not on the transaction, and accepting that concurrent transactions to the same payee share that entry. That is acceptable for a *name* lookup but must not be extended to transaction-scoped data.
+⚠️ **Msg 03 is not consumable by this pipeline, and its keying problem is moot.** The `PUT /parties` callback is keyed only by party id — it precedes the quote, so no `transactionId` exists yet — which would have required keying the party cache on **MSISDN** rather than on the transaction. The question does not arise: ALS is HTTPS end-to-end and never publishes to Kafka (FSD §6.4.4, §11), so there is no party-lookup event for the MLA to cache. FSD §6.4.4 removed party-lookup keying from the cache-key table for exactly this reason.
 
 This differs from every other correlation in FSD §6.4, which is transaction-keyed. Worth calling out in the correlation design.
