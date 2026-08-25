@@ -5,6 +5,55 @@ Based on: CCH-PL-FSD-MSGING-001 v4.0
 
 ---
 
+## Table of Contents
+
+- **[Epic 1 — MLA: Kafka Subscription & Audit Topic Ingestion](#epic-1)**
+  - [US-MLA-01 — Subscribe to the Mojaloop Audit Topic](#us-mla-01)
+  - [US-MLA-02 — Distinguish Event Types Within the Audit Topic Stream](#us-mla-02)
+  - [US-MLA-03 — Decode Base64-Encoded Transfer Payloads](#us-mla-03)
+- **[Epic 2 — MLA: Envelope Construction & JWS Validation](#epic-2)**
+  - [US-MLA-04 — Construct a Standard Event Envelope](#us-mla-04)
+  - [US-MLA-05 — Validate JWS Signatures on DFSP-Originated Events](#us-mla-05)
+- **[Epic 3 — MLA: Delivery to PPA & Offset Management](#epic-3)**
+  - [US-MLA-06 — Deliver Envelopes to PPA via Per-Action Endpoints](#us-mla-06)
+  - [US-MLA-07 — Retry and Circuit-Break on PPA Failures](#us-mla-07)
+- **[Epic 4 — Notification Filter / Dedup Component](#epic-4)**
+  - [US-DEDUP-01 — Filter and Deduplicate Central Ledger Final-State Notifications](#us-dedup-01)
+- **[Epic 5 — PII Protection Component](#epic-5)**
+  - [US-PII-01 — Tokenize Party Identity Fields Before MLA Consumption](#us-pii-01)
+- **[Epic 6 — PPA: Ingress API & Write-Ahead Persist](#epic-6)**
+  - [US-PPA-01 — Expose Per-Action Inbound Endpoints Over Mutual TLS](#us-ppa-01)
+  - [US-PPA-02 — Write-Ahead Persist Before Acknowledging MLA](#us-ppa-02)
+- **[Epic 7 — PPA: Processing Pipeline](#epic-7)**
+  - [US-PPA-03 — Validate the Incoming Envelope](#us-ppa-03)
+  - [US-PPA-04 — Deduplicate Central Ledger Notification Events](#us-ppa-04)
+  - [US-PPA-05 — Classify Each Event as Trigger or Enrichment](#us-ppa-05)
+  - [US-PPA-06 — Accumulate Enrichment into the Correlation Cache](#us-ppa-06)
+  - [US-PPA-07 — Discriminate Domestic vs. Cross-Border Transfers](#us-ppa-07)
+- **[Epic 8 — PPA: ISO 20022 Translation](#epic-8)**
+  - [US-PPA-08 — Translate Quote Request to pain.001.001.11](#us-ppa-08)
+  - [US-PPA-09 — Translate Quote Callback to pain.013.001.09](#us-ppa-09)
+  - [US-PPA-10 — Translate Transfer Prepare to pacs.008.001.10](#us-ppa-10)
+  - [US-PPA-11 — Translate Final-State Event to pacs.002.001.12](#us-ppa-11)
+- **[Epic 9 — PPA: Schema Validation, TMS Dispatch & Dedup](#epic-9)**
+  - [US-PPA-12 — Validate Assembled Message Against Pinned Local Schema Before Send](#us-ppa-12)
+  - [US-PPA-13 — Send Validated Messages to Tazama TMS](#us-ppa-13)
+  - [US-PPA-14 — Prevent Duplicate TMS Submissions with a Sent-Message Dedup Set](#us-ppa-14)
+- **[Epic 10 — PPA: Error Recovery, DLQ & Missing Correlations](#epic-10)**
+  - [US-PPA-15 — Dead-Letter Queue: Write, Alert, and Support Replay](#us-ppa-15)
+  - [US-PPA-16 — Park Correlation State Before ValKey TTL Expiry](#us-ppa-16)
+  - [US-PPA-17 — Handle Out-of-Order Arrival (Fulfil Before Prepare)](#us-ppa-17)
+- **[Epic 11 — Audit Logging, Security & Monitoring](#epic-11)**
+  - [US-AUD-01 — Write Audit Log Entries for Every Processed Event](#us-aud-01)
+  - [US-MON-01 — Monitor Consumer Lag, Circuit Breaker State, and Degraded Message Rate](#us-mon-01)
+  - [US-MON-02 — Expose Health Endpoints for Load Balancer and Orchestrator](#us-mon-02)
+- **[Epic 12 — Performance & Infrastructure](#epic-12)**
+  - [US-PERF-01 — Meet Latency Targets at Sustained and Peak TPS](#us-perf-01)
+  - [US-PERF-02 — Size and Configure ValKey for Correlation Workload](#us-perf-02)
+  - [US-SEC-01 — Establish mTLS Certificates for MLA↔PPA and PPA↔TMS](#us-sec-01)
+
+---
+
 ## How to Read These Stories
 
 Each story follows the structure: **Description → Acceptance Criteria → Assumptions**.
@@ -12,10 +61,12 @@ Stories are grouped by component/epic. Technical detail is included where the be
 
 ---
 
+<a id="epic-1"></a>
 ## Epic 1 — MLA: Kafka Subscription & Audit Topic Ingestion
 
 ---
 
+<a id="us-mla-01"></a>
 ### US-MLA-01 — Subscribe to the Mojaloop Audit Topic
 
 **Description**
@@ -36,6 +87,7 @@ The MLA must consume all payment events (FX quote, quote, FX transfer, transfer,
 
 ---
 
+<a id="us-mla-02"></a>
 ### US-MLA-02 — Distinguish Event Types Within the Audit Topic Stream
 
 **Description**
@@ -55,6 +107,7 @@ Because the audit topic carries all event types in a single unified stream, the 
 
 ---
 
+<a id="us-mla-03"></a>
 ### US-MLA-03 — Decode Base64-Encoded Transfer Payloads
 
 **Description**
@@ -73,10 +126,12 @@ Transfer and FX-transfer topic payloads arrive inside the audit topic as base64-
 
 ---
 
+<a id="epic-2"></a>
 ## Epic 2 — MLA: Envelope Construction & JWS Validation
 
 ---
 
+<a id="us-mla-04"></a>
 ### US-MLA-04 — Construct a Standard Event Envelope
 
 **Description**
@@ -96,6 +151,7 @@ For every successfully classified and decoded event, MLA wraps the message in a 
 
 ---
 
+<a id="us-mla-05"></a>
 ### US-MLA-05 — Validate JWS Signatures on DFSP-Originated Events
 
 **Description**
@@ -115,10 +171,12 @@ MLA must validate the `FSPIOP-Signature` header (RS256/384/512) on every DFSP-or
 
 ---
 
+<a id="epic-3"></a>
 ## Epic 3 — MLA: Delivery to PPA & Offset Management
 
 ---
 
+<a id="us-mla-06"></a>
 ### US-MLA-06 — Deliver Envelopes to PPA via Per-Action Endpoints
 
 **Description**
@@ -139,6 +197,7 @@ MLA POSTs each constructed envelope to the appropriate PPA endpoint over mutual 
 
 ---
 
+<a id="us-mla-07"></a>
 ### US-MLA-07 — Retry and Circuit-Break on PPA Failures
 
 **Description**
@@ -159,10 +218,12 @@ When PPA returns a 5xx or times out, MLA retries with exponential backoff and ji
 
 ---
 
+<a id="epic-4"></a>
 ## Epic 4 — Notification Filter / Dedup Component
 
 ---
 
+<a id="us-dedup-01"></a>
 ### US-DEDUP-01 — Filter and Deduplicate Central Ledger Final-State Notifications
 
 **Description**
@@ -184,10 +245,12 @@ The Notification Filter/Dedup component sits between the Mojaloop audit topic an
 
 ---
 
+<a id="epic-5"></a>
 ## Epic 5 — PII Protection Component
 
 ---
 
+<a id="us-pii-01"></a>
 ### US-PII-01 — Tokenize Party Identity Fields Before MLA Consumption
 
 **Description**
@@ -209,10 +272,12 @@ A dedicated PII protection component sits between the Mojaloop audit topic and M
 
 ---
 
+<a id="epic-6"></a>
 ## Epic 6 — PPA: Ingress API & Write-Ahead Persist
 
 ---
 
+<a id="us-ppa-01"></a>
 ### US-PPA-01 — Expose Per-Action Inbound Endpoints Over Mutual TLS
 
 **Description**
@@ -233,6 +298,7 @@ PPA exposes five POST endpoints, one per event type, plus health check endpoints
 
 ---
 
+<a id="us-ppa-02"></a>
 ### US-PPA-02 — Write-Ahead Persist Before Acknowledging MLA
 
 **Description**
@@ -253,10 +319,12 @@ Before returning HTTP 200 to MLA, PPA must verify that both ValKey and its own d
 
 ---
 
+<a id="epic-7"></a>
 ## Epic 7 — PPA: Processing Pipeline
 
 ---
 
+<a id="us-ppa-03"></a>
 ### US-PPA-03 — Validate the Incoming Envelope
 
 **Description**
@@ -274,6 +342,7 @@ After acknowledging MLA (step 2), PPA validates the envelope contents asynchrono
 
 ---
 
+<a id="us-ppa-04"></a>
 ### US-PPA-04 — Deduplicate Central Ledger Notification Events
 
 **Description**
@@ -292,6 +361,7 @@ For events received at `/TRANSFERS/NOTIFICATIONS`, PPA applies its own idempoten
 
 ---
 
+<a id="us-ppa-05"></a>
 ### US-PPA-05 — Classify Each Event as Trigger or Enrichment
 
 **Description**
@@ -315,6 +385,7 @@ Every validated event is classified as either a **trigger** (produces exactly on
 
 ---
 
+<a id="us-ppa-06"></a>
 ### US-PPA-06 — Accumulate Enrichment into the Correlation Cache
 
 **Description**
@@ -334,6 +405,7 @@ For enrichment events, PPA merges the event's data into the shared transaction-s
 
 ---
 
+<a id="us-ppa-07"></a>
 ### US-PPA-07 — Discriminate Domestic vs. Cross-Border Transfers
 
 **Description**
@@ -351,10 +423,12 @@ For TRANSFER and FXTRANSFER trigger events, PPA must determine whether the payme
 
 ---
 
+<a id="epic-8"></a>
 ## Epic 8 — PPA: ISO 20022 Translation
 
 ---
 
+<a id="us-ppa-08"></a>
 ### US-PPA-08 — Translate Quote Request to pain.001.001.11
 
 **Description**
@@ -375,6 +449,7 @@ When a Quote request (`POST /quotes`) arrives as a trigger, PPA assembles a `pai
 
 ---
 
+<a id="us-ppa-09"></a>
 ### US-PPA-09 — Translate Quote Callback to pain.013.001.09
 
 **Description**
@@ -392,6 +467,7 @@ When a Quote callback (`PUT /quotes`) arrives as a trigger, PPA assembles a `pai
 
 ---
 
+<a id="us-ppa-10"></a>
 ### US-PPA-10 — Translate Transfer Prepare to pacs.008.001.10
 
 **Description**
@@ -417,6 +493,7 @@ When a Transfer prepare (`POST /transfers`) arrives as a trigger, PPA assembles 
 
 ---
 
+<a id="us-ppa-11"></a>
 ### US-PPA-11 — Translate Final-State Event to pacs.002.001.12
 
 **Description**
@@ -436,10 +513,12 @@ When the fulfil callback (`PUT /transfers`) or Central Ledger notification arriv
 
 ---
 
+<a id="epic-9"></a>
 ## Epic 9 — PPA: Schema Validation, TMS Dispatch & Dedup
 
 ---
 
+<a id="us-ppa-12"></a>
 ### US-PPA-12 — Validate Assembled Message Against Pinned Local Schema Before Send
 
 **Description**
@@ -459,6 +538,7 @@ Before sending any message to TMS, PPA validates the assembled message against a
 
 ---
 
+<a id="us-ppa-13"></a>
 ### US-PPA-13 — Send Validated Messages to Tazama TMS
 
 **Description**
@@ -479,6 +559,7 @@ PPA dispatches each validated message to the correct version-pinned Tazama TMS e
 
 ---
 
+<a id="us-ppa-14"></a>
 ### US-PPA-14 — Prevent Duplicate TMS Submissions with a Sent-Message Dedup Set
 
 **Description**
@@ -498,10 +579,12 @@ To prevent inserting duplicate transaction history into Tazama's graph (e.g. fro
 
 ---
 
+<a id="epic-10"></a>
 ## Epic 10 — PPA: Error Recovery, DLQ & Missing Correlations
 
 ---
 
+<a id="us-ppa-15"></a>
 ### US-PPA-15 — Dead-Letter Queue: Write, Alert, and Support Replay
 
 **Description**
@@ -521,6 +604,7 @@ PPA's DLQ is the same store as its write-ahead record (one store, two write path
 
 ---
 
+<a id="us-ppa-16"></a>
 ### US-PPA-16 — Park Correlation State Before ValKey TTL Expiry
 
 **Description**
@@ -540,6 +624,7 @@ When a leg's ValKey correlation state is at risk of expiring before its expected
 
 ---
 
+<a id="us-ppa-17"></a>
 ### US-PPA-17 — Handle Out-of-Order Arrival (Fulfil Before Prepare)
 
 **Description**
@@ -558,10 +643,12 @@ Because the transfer prepare and fulfil are on different Kafka topics and proces
 
 ---
 
+<a id="epic-11"></a>
 ## Epic 11 — Audit Logging, Security & Monitoring
 
 ---
 
+<a id="us-aud-01"></a>
 ### US-AUD-01 — Write Audit Log Entries for Every Processed Event
 
 **Description**
@@ -582,6 +669,7 @@ Every event processed by PPA produces a full audit log entry covering what came 
 
 ---
 
+<a id="us-mon-01"></a>
 ### US-MON-01 — Monitor Consumer Lag, Circuit Breaker State, and Degraded Message Rate
 
 **Description**
@@ -602,6 +690,7 @@ The pipeline's health is invisible without operational telemetry. Four distinct 
 
 ---
 
+<a id="us-mon-02"></a>
 ### US-MON-02 — Expose Health Endpoints for Load Balancer and Orchestrator
 
 **Description**
@@ -619,10 +708,12 @@ PPA's liveness and readiness probes must be correctly scoped so a transient down
 
 ---
 
+<a id="epic-12"></a>
 ## Epic 12 — Performance & Infrastructure
 
 ---
 
+<a id="us-perf-01"></a>
 ### US-PERF-01 — Meet Latency Targets at Sustained and Peak TPS
 
 **Description**
@@ -641,6 +732,7 @@ The pipeline must deliver each Mojaloop event to TMS within the agreed latency b
 
 ---
 
+<a id="us-perf-02"></a>
 ### US-PERF-02 — Size and Configure ValKey for Correlation Workload
 
 **Description**
@@ -660,6 +752,7 @@ ValKey must be sized and configured to hold the full in-flight correlation state
 
 ---
 
+<a id="us-sec-01"></a>
 ### US-SEC-01 — Establish mTLS Certificates for MLA↔PPA and PPA↔TMS
 
 **Description**
