@@ -896,10 +896,17 @@ pack. The FSD's `pacs.008` mapping sources `Dbtr…BirthDt` from the quote
 request; on this topic that field **cannot be populated** and degrades
 permanently, not just on a cache miss.
 
-**C10. No error or abort captures.** All five transactions settle
-successfully. The `RJCT` path, error callbacks, and
-`putPartiesErrorByTypeAndID` are entirely unexercised — every error-handling
-branch remains built against the specification alone.
+**C10. No error or abort captures in this pack.** All five `DRPP_Kafka_E2E_Pack`
+transactions settle successfully. The `RJCT` path, error callbacks, and
+`putPartiesErrorByTypeAndID` are unexercised here — every error-handling
+branch remained built against the specification alone, on the strength of
+this pack. **A separate, wider capture (`raw_export_500.json`, 500 records
+across 12 partitions) has since surfaced real rejection data** — an
+FX-quote reject, a transfer-prepare reject, and a party-lookup reject, none
+matching the `errorInformation`/`TxSts: RJCT` shape the FSD assumed. See
+[`rejected-events.md`](rejected-events.md) for the findings and the
+implementation plan; nothing below has been updated to reflect it yet, and
+no phase of that plan is built.
 
 ### D. How this pack differs from the on-the-wire pack
 
@@ -1539,7 +1546,7 @@ cross-document issues the FSD does not track.
 | --- | --- | --- | --- |
 | — | **`start`/`egress` canonical-record table confirmed by capture, not yet confirmed as a stable Mojaloop-side contract** (C2). Zero exceptions across the whole pack, corroborated by signature presence — see `MLA-PPA-Technical-Design.md` §2.2a. Implementable with confidence now; the open part is whether Mojaloop guarantees this shape going forward. | Phase 1's `selectCanonicalRecord` — a future shape change would need re-verification, not a redesign | Mojaloop Partner (confirmation only) |
 | — | **`TxSts` vocabulary extension** (C8). FSD §6.5.3 has no row for `COMM`/`RESV`. ✅ Implemented in code (`ppa/src/services/iso20022.ts`) and verified live (`COMM`→`ACSC` accepted by TMS) — still needs the FSD document itself updated. | Phase 3's `pacs.002` — an untranslated value is silently accepted then fails every rule | Paysys (FSD update) |
-| — | **No error, abort, or rejection captures.** All five transactions settle `COMM`. The `RJCT` path and `putPartiesErrorByTypeAndID` are unexercised (C10). | Every error branch in Phase 1 and Phase 3 remains spec-only until then — not blocking the happy-path slice | Request from COMESA |
+| — | **No error, abort, or rejection captures in `DRPP_Kafka_E2E_Pack` — all five transactions settle `COMM`.** The `RJCT` path and `putPartiesErrorByTypeAndID` are unexercised there (C10). **A separate, wider capture (`raw_export_500.json`, 500 records / 12 partitions) has since surfaced real rejection data** — an FX-quote reject, a transfer-prepare reject, a party-lookup reject — none matching the shape this design assumed. See `rejected-events.md` for the findings and implementation plan; not yet built. | Every error branch in Phase 1 and Phase 3 remains spec-only until implemented — not blocking the happy-path slice | Request from COMESA (partially fulfilled — see `rejected-events.md`) |
 | — | **Date of birth unavailable** (C9). Absent from both message forms on this topic. | `Dbtr…BirthDt` on `pacs.008` degrades permanently — confirm Tazama accepts the sentinel indefinitely | Paysys + Tazama |
 | — | **Party-lookup premise is wrong in the FSD** (C1). ALS *does* reach this topic. | Whether to reinstate party-lookup enrichment the FSD removed | Paysys (FSD update) |
 | 8 | **Should MLA-side permanent failures advance the offset immediately?** ✅ Implemented as "advance" (the FSD's own default reading, §2.6) — genuinely open part is whether that's the *right* choice, not what the code currently does. | Phase 1's advance-vs-pause policy | CCH + Paysys |
