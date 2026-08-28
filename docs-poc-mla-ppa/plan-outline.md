@@ -702,14 +702,127 @@ regression test above). Test count is now **199** (33 MLA + 166 PPA, up
 from 184). `npm run lint`: 0 errors. `npm run build`: clean.
 
 **Tier 4 is closed. Every tier `continue.md` tracked — Tier 1, Tier 2, Tier
-3, and now Tier 4 — is done and live-verified.** What remains open,
-project-wide, is exactly §2's still-blocked item (error-path translation,
-blocked on COMESA) and the explicitly-excluded deployment-stage items
-(§3's "Explicitly not on this list" in `continue.md`: mTLS both hops, the
-Auth-lib→Keycloak token chain, Kubernetes manifests, and full PII
-tokenization) — none of which this local POC environment can build or
-verify against right now, the same reasoning that excluded them from every
-tier so far.
+3, and now Tier 4 — is done and live-verified.** At the time, what remained
+open project-wide was exactly §2's still-blocked item (error-path
+translation, blocked on COMESA providing rejected-transaction captures) and
+the explicitly-excluded deployment-stage items. The next several sessions
+closed the blocked item — not by COMESA providing data, but by a second,
+separate, wider capture surfacing real rejection data on its own. Full
+account below.
+
+**Since that run: a second, wider capture (`raw_export_500.json`, 500
+records across 12 partitions of `topic-event-audit` — the widest slice of
+this topic captured to date) surfaced real rejection data, closing the
+project's one standing blocked item.** Three shapes, none matching what the
+FSD assumed (`errorInformation`/a `TxSts` string) — all three carry
+`TxInfAndSts.StsRsnInf` (a reason code and description) instead: an
+FX-quote rejection (19 occurrences, always before `postQuotes` ever fires),
+a transfer-prepare rejection (2 occurrences, `prepareTransfer`'s egress
+half carrying the rejection in place of the harmless duplicate the design
+already discards), and a party-lookup rejection (50 occurrences, already
+out of scope). Full findings, the phased build plan, and the open design
+questions are in [`rejected-events.md`](rejected-events.md), written before
+any of the following was built — kept as the standing plan document, not
+folded into this file.
+
+**The transfer-prepare rejection is now built and live-verified end to
+end, across six phases (A–F), each phase live-verified before the next
+began** — this project's "prove it live" discipline applied to new work,
+not just past bugs. In order:
+
+- **Phase A (MLA):** `isCanonicalRecord` was silently discarding every real
+  rejection identically to `prepareTransfer`'s harmless duplicate egress -
+  a genuine defect, confirmed directly: both real rejections in the
+  capture would have vanished at the MLA under the pre-fix code. Fixed with
+  a shape-based detector (`TxInfAndSts.StsRsnInf` present, corroborated but
+  not asserted by the record's `httpUrl` suffix - the same caution already
+  applied to `transactionType`) that makes the rejection canonical and
+  classifies it as a terminal notification rather than a second
+  prepare, regardless of the table's default for this operation.
+  `putPartiesErrorByTypeAndID` added to the canonical table explicitly too
+  (out of scope, matching its non-error sibling, but now a deliberate
+  entry instead of an accidental fallthrough). Live-verified: both real
+  rejections now reach the PPA (previously silently dropped); the
+  then-unmodified PPA correctly and safely logged a translation failure
+  rather than crashing or losing them. MLA test count: 33 → 42.
+- **Phase B (Event Envelope contract):** an optional `error?: {code,
+  description}` field, added to both services' independent copies of the
+  envelope and to the PPA's ajv ingress schema - additive, never required.
+  Live-verified: pulled the real persisted write-ahead record for the
+  rejected transaction off disk and confirmed the exact structured value
+  survived the full trip (MLA build → HTTP POST → PPA's ajv validation →
+  disk). New ingress tests prove the addition is genuinely additive, not a
+  loosened contract (a malformed `error` object is still rejected). MLA:
+  42 → 43. PPA: 169 unaffected until Phase C.
+- **Phase C (PPA):** `translate()` now branches on `envelope.error` before
+  ever attempting the normal final-state parser, which would throw on this
+  shape (no `TxInfAndSts.TxSts` exists on it at all). A new
+  `toRejectedPacs002` resolves `TxSts: 'RJCT'` directly - deliberately
+  bypassing `toTxSts`'s source-vocabulary lookup table, which has no entry
+  for `'RJCT'` itself and would silently fall through to `'PDNG'`, a real
+  defect this avoids rather than a hypothetical one. The reason travels to
+  the audit log only, under `rejection: {code, description}` - Tazama's
+  schema has no field for it. Live-verified: `translation.failed` dropped
+  from 2 to 0 on the same real replay; **TMS's own raw HTTP response was
+  captured directly** (not just the PPA's claim) - `{"message":"Transaction
+  is valid", ..."TxSts":"RJCT"...}`, `200` - corroborated again on
+  `tazama-tms-1`'s own container logs for both real anchors' deterministic
+  `MsgId`s. The pre-settlement `pacs.008` for the same leg confirmed
+  unaffected. PPA: 169 → 176.
+- **Phase D (party-lookup rejection):** no code needed - already correctly
+  handled as a side effect of Phase A's table entry.
+- **Phase E (live-verification pass):** confirmed every item the plan
+  asked for, one by one: the sibling `pacs.008` fires normally and first;
+  TMS's raw response was captured directly (see Phase C); a distinct
+  `/metrics` counter (`rejection.sent`) was added so a sent rejection is no
+  longer indistinguishable from an ordinary successful `pacs.002` inside
+  `tms.accepted`/`translation.notDegraded`; and the anchor-chaining maps
+  (`quoteIdToAnchor`, `fxTransferIdToAnchor`) were re-confirmed correct at
+  this capture's full scale - 44 transactions across 12 partitions in one
+  process-lifetime cache, not the 3 the prior largest fixture
+  (`raw_topic_slice_partition2.json`) exercised. `raw_export_500.json`
+  checked into the repo as a permanent regression fixture
+  (`wide-export-500.test.ts`). MLA: 43 → 47. PPA: 175 → 176.
+- **Phase F (FX-quote rejection visibility):** per `rejected-events.md` §6
+  Q1's recommended default - every occurrence dies before `postQuotes`
+  ever fires, so nothing was ever submitted for a `pacs.002` to close out,
+  symmetric to the domestic-transfer discard - this stays uncounted as a
+  Tazama message but must not be silently indistinguishable from an
+  ordinary skipped duplicate either. **The MLA gained its first-ever
+  metrics surface** (`GET /metrics`, `metrics.service.ts` - every prior
+  "minimal metrics" item had been PPA-side only, because nothing the MLA
+  decided had ever needed counting before). Found and fixed a real, if
+  small, honesty gap along the way: `demo:replay` reimplements the
+  pipeline stage-by-stage rather than calling `handleMessage` directly, so
+  it had silently gone out of sync with the new branch and would have kept
+  reporting these records as an ordinary non-canonical skip - fixed by
+  exporting the detector and checking it in the tool too, same order as
+  `handleMessage`. Live-verified two ways: `demo:replay` now reports
+  exactly 19 FX-quote rejections distinctly, with identical dispatch
+  totals to every prior run (116/384/500 - no regression); and, since no
+  real Kafka broker exists in this environment, a targeted script called
+  the real compiled `handleMessage` directly with the real fixture record
+  and confirmed `ppaClient.postEnvelope` was never invoked while the real
+  counter genuinely incremented. MLA: 47 → 54.
+
+**What this does not close, stated plainly.** No fulfil-side rejection or
+FX-transfer-level rejection has ever been captured - every such branch
+remains built against the FSD's specification alone. Only three reason
+codes total have been observed across 71 error records in the wider
+capture. Whether an FX quote can fail *after* a `pain.001` has already been
+sent in production (rather than always failing first, the only ordering
+any capture has shown) is unconfirmed - see `rejected-events.md` §6 Q1,
+carried into this file's own open-questions section below. Test count is
+now **230** (54 MLA + 176 PPA, up from 199 before this body of work).
+`npm run lint`: 0 errors on both, throughout every phase.
+
+**What remains open, project-wide, after this work**: the explicitly-
+excluded deployment-stage items (§3's "Explicitly not on this list" in
+`continue.md`: mTLS both hops, the Auth-lib→Keycloak token chain,
+Kubernetes manifests, and full PII tokenization) and the residual gaps
+named immediately above - none of which this local POC environment can
+build or verify against right now, the same reasoning that excluded them
+from every tier so far.
 
 ### Immediate next steps, in order
 
@@ -727,10 +840,15 @@ tier so far.
    bug**: a fixed-name reachability-probe file that could collide under
    genuine concurrent requests to one replica, fixed with `randomUUID()`.
    Re-verified live after the fix on a clean run. No longer on this list.
-5. **Error-path translation** (`pacs.002` with `TxSts: RJCT`) — untested since
-   `DRPP_Kafka_E2E_Pack` contains no rejected transactions (§ *Capture
-   analysis* C10). Unchanged by this session; still genuinely blocked on
-   COMESA providing error-path captures, not just unstarted.
+5. ~~Error-path translation~~ (`pacs.002` with `TxSts: RJCT`) — **done and
+   live-verified, see above.** Not resolved by COMESA providing captures as
+   originally expected, but by a second, separate, wider capture
+   (`raw_export_500.json`) surfacing real rejection data on its own — full
+   account in [`rejected-events.md`](rejected-events.md) and this file's
+   own new entry above. Still genuinely open: no fulfil-side or
+   FX-transfer-level rejection has been captured, and reason-code
+   diversity remains minimal (§ *Capture analysis* C10, updated). No longer
+   on this list.
 
 ## Capture analysis — what the audit topic actually carries
 
@@ -747,6 +865,16 @@ sequential — offsets 76316–76331 are transaction 1 start-to-finish,
 "Interleaved" describes this slice holding multiple transactions in one raw
 partition stream, unlike the pre-filtered per-transaction folders — not that
 records literally alternate between transactions here.
+
+**A second, separate, wider capture — `raw_export_500.json`, 500 records
+across 12 partitions of `topic-event-audit`, checked into the repo at
+`mla/__tests__/fixtures/`** — is the widest slice of this topic captured to
+date, and the first to surface real rejection data: the five
+`DRPP_Kafka_E2E_Pack` folders and the partition-2 slice all settle `COMM`
+with zero exceptions. Full analysis, findings, and the phased build against
+it are in [`rejected-events.md`](rejected-events.md), kept as its own
+document rather than folded in here given its size; this section's own
+tables below (C10 especially) are updated to reflect what it resolved.
 
 ### A. Open items the captures close
 
@@ -896,17 +1024,26 @@ pack. The FSD's `pacs.008` mapping sources `Dbtr…BirthDt` from the quote
 request; on this topic that field **cannot be populated** and degrades
 permanently, not just on a cache miss.
 
-**C10. No error or abort captures in this pack.** All five `DRPP_Kafka_E2E_Pack`
-transactions settle successfully. The `RJCT` path, error callbacks, and
-`putPartiesErrorByTypeAndID` are unexercised here — every error-handling
-branch remained built against the specification alone, on the strength of
-this pack. **A separate, wider capture (`raw_export_500.json`, 500 records
-across 12 partitions) has since surfaced real rejection data** — an
-FX-quote reject, a transfer-prepare reject, and a party-lookup reject, none
-matching the `errorInformation`/`TxSts: RJCT` shape the FSD assumed. See
-[`rejected-events.md`](rejected-events.md) for the findings and the
-implementation plan; nothing below has been updated to reflect it yet, and
-no phase of that plan is built.
+**C10. No error or abort captures in this pack — substantially resolved by a
+second, wider one.** All five `DRPP_Kafka_E2E_Pack` transactions settle
+successfully; the `RJCT` path, error callbacks, and
+`putPartiesErrorByTypeAndID` remain unexercised **by this pack**, on the
+strength of which every error-handling branch had been built against the
+specification alone. `raw_export_500.json` (500 records across 12
+partitions) closed most of that gap: an FX-quote reject (19 occurrences), a
+transfer-prepare reject (2 occurrences), and a party-lookup reject (50
+occurrences) — none matching the `errorInformation`/`TxSts`-string shape
+the FSD assumed; all three carry `TxInfAndSts.StsRsnInf` instead. The
+transfer-prepare rejection is now built and live-verified end to end
+against a real TMS (`TxSts: RJCT`, corroborated on TMS's own container
+logs); the FX-quote and party-lookup rejections are deliberately not
+forwarded to the PPA (§6 Q1 of [`rejected-events.md`](rejected-events.md),
+counted at the MLA instead). **Still genuinely unresolved**: no fulfil-side
+rejection or FX-transfer-level rejection has ever been captured, and only
+three reason codes total have been observed across 71 error records — see
+`rejected-events.md` §3 for the honest bounds on what this closes. Full
+account: `rejected-events.md`, and this file's own new "Current status"
+entry above.
 
 ### D. How this pack differs from the on-the-wire pack
 
@@ -936,6 +1073,8 @@ reference for what a message *means*; the Kafka pack is the only valid
 reference for what the MLA will actually receive.** Fixtures must come from
 the Kafka pack — and specifically from the interleaved slice, not the
 pre-filtered folders.
+
+**`raw_export_500.json` sits on the Kafka-pack side of this table, not a third surface** — same topic, same record structure, same `start`/`egress` double-write — just a wider, later read (500 records across 12 partitions, versus the 41-record single-partition slice). It earns its own document rather than a row here because it's the first capture on either side to contain error/reject data at all — see `rejected-events.md` and § *Current status* above.
 
 ---
 
@@ -1546,7 +1685,7 @@ cross-document issues the FSD does not track.
 | --- | --- | --- | --- |
 | — | **`start`/`egress` canonical-record table confirmed by capture, not yet confirmed as a stable Mojaloop-side contract** (C2). Zero exceptions across the whole pack, corroborated by signature presence — see `MLA-PPA-Technical-Design.md` §2.2a. Implementable with confidence now; the open part is whether Mojaloop guarantees this shape going forward. | Phase 1's `selectCanonicalRecord` — a future shape change would need re-verification, not a redesign | Mojaloop Partner (confirmation only) |
 | — | **`TxSts` vocabulary extension** (C8). FSD §6.5.3 has no row for `COMM`/`RESV`. ✅ Implemented in code (`ppa/src/services/iso20022.ts`) and verified live (`COMM`→`ACSC` accepted by TMS) — still needs the FSD document itself updated. | Phase 3's `pacs.002` — an untranslated value is silently accepted then fails every rule | Paysys (FSD update) |
-| — | **No error, abort, or rejection captures in `DRPP_Kafka_E2E_Pack` — all five transactions settle `COMM`.** The `RJCT` path and `putPartiesErrorByTypeAndID` are unexercised there (C10). **A separate, wider capture (`raw_export_500.json`, 500 records / 12 partitions) has since surfaced real rejection data** — an FX-quote reject, a transfer-prepare reject, a party-lookup reject — none matching the shape this design assumed. See `rejected-events.md` for the findings and implementation plan; not yet built. | Every error branch in Phase 1 and Phase 3 remains spec-only until implemented — not blocking the happy-path slice | Request from COMESA (partially fulfilled — see `rejected-events.md`) |
+| — | **Substantially resolved, not fully (C10).** `DRPP_Kafka_E2E_Pack`'s five transactions settle `COMM` with no error/abort captured there; a second, wider capture (`raw_export_500.json`) surfaced real rejection data instead. The transfer-prepare rejection is now built and live-verified against a real TMS (`TxSts: RJCT`, see § *Current status* above and `rejected-events.md`); the FX-quote and party-lookup rejections are handled by design decision, not forwarded to Tazama. **Still open:** no fulfil-side or FX-transfer-level rejection has ever been captured; only three reason codes observed total. | The confirmed shape's error branch is built and verified; the two uncaptured shapes above remain spec-only | Request from COMESA (self-resolved for the confirmed shape; still open for the rest) |
 | — | **Date of birth unavailable** (C9). Absent from both message forms on this topic. | `Dbtr…BirthDt` on `pacs.008` degrades permanently — confirm Tazama accepts the sentinel indefinitely | Paysys + Tazama |
 | — | **Party-lookup premise is wrong in the FSD** (C1). ALS *does* reach this topic. | Whether to reinstate party-lookup enrichment the FSD removed | Paysys (FSD update) |
 | 8 | **Should MLA-side permanent failures advance the offset immediately?** ✅ Implemented as "advance" (the FSD's own default reading, §2.6) — genuinely open part is whether that's the *right* choice, not what the code currently does. | Phase 1's advance-vs-pause policy | CCH + Paysys |
@@ -1625,9 +1764,14 @@ Arising directly from the capture analysis:
    records — but that is still one capture window. Confirmation from Mojoloop
    would let us rely on it as a guarantee rather than a strong empirical
    pattern.
-2. **Can we get error-path captures?** A rejected transfer, a failed party
-   lookup, an FX quote rejection (C10). Every error branch is currently
-   built against the specification alone.
+2. ~~Can we get error-path captures?~~ **Partially answered, not by
+   COMESA but by a second, wider capture found on its own
+   (`raw_export_500.json`, C10).** A transfer-prepare rejection, an
+   FX-quote rejection, and a party-lookup rejection are all now confirmed
+   and, for the transfer-prepare case, built and live-verified. Still
+   genuinely needed: a rejected **transfer fulfil** (as opposed to
+   prepare), and a rejected **FX transfer** — neither has ever been
+   captured, and every branch for them remains spec-only.
 3. **Is the settlement-leg partition split expected behaviour or a symptom?**
    (C5.) It is described as intermittent — knowing whether it is by design
    changes whether we treat it as a permanent condition or a defect to track.
@@ -1636,3 +1780,14 @@ Arising directly from the capture analysis:
 5. **Is `topic-event-audit` the final topic name**, and what are the retention
    and partition count in the target environment? The FSD assumes 7 days; the
    captures do not evidence retention either way.
+6. **Can an FX quote fail *after* its payment's `pain.001` has already been
+   sent, or does it only ever fail before the primary quote (the only
+   ordering `raw_export_500.json` has shown)?** This changes the correct
+   behaviour for the FX-quote rejection entirely — if the primary quote can
+   already be in Tazama's graph, a `pacs.002`/`RJCT` is genuinely needed to
+   close it out, not just a discard-and-count (`rejected-events.md` §6 Q1).
+7. **Does `prepareFxTransfer`/`reserveFxTransfer` have its own `/error`
+   variant** that simply didn't appear in this 500-record window, the same
+   way `prepareTransfer`'s did? Worth asking for directly in the next data
+   request, given how directly widening the capture surfaced the shapes it
+   did this time (`rejected-events.md` §6 Q4).
