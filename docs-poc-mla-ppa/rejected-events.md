@@ -6,6 +6,44 @@
 
 **Why this document exists:** `MLA-PPA-Technical-Design.md` §6 and `plan-outline.md` § *Blocked work* both record the same standing gap — *"No error, abort, or rejection captured. All five transactions in `DRPP_Kafka_E2E_Pack` settle successfully... every error-handling row remains built against the specification alone."* This new export changes that. It contains real error-path records. This document states exactly what they show, exactly why the pipeline as built today silently drops every one of them, and a concrete plan to close the gap.
 
+**Summary of Phases A–F, in plain terms — all six are now built and live-verified:**
+
+**Phase A — Stop silently dropping the rejection (MLA).**
+
+*Problem:* A real transfer rejection reuses the same operation tag as a harmless duplicate record, so the MLA was throwing it away identically to normal noise — a real rejection was vanishing before it ever left the MLA.
+
+*Work:* Added a shape-based check (does the body carry a rejection reason?) so the MLA can tell the two apart, and classified the rejection as the payment's final event instead of a routine request.
+
+**Phase B — Give the rejection a proper carrier (Envelope contract).**
+
+*Problem:* Once detected, the rejection reason (code + description) had nowhere clean to travel from the MLA to the PPA.
+
+*Work:* Added an optional `error` field to the shared envelope format (both sides), so the reason is carried explicitly instead of making the PPA re-inspect the raw message.
+
+**Phase C — Turn it into a correct Tazama message (PPA).**
+
+*Problem:* Even if the rejection reached the PPA, it would crash the normal message-builder (which expects a status field this shape doesn't have), and the existing status-translation logic would have quietly mislabeled the rejection as "still pending."
+
+*Work:* Built a dedicated path that produces a proper `pacs.002` message marked "rejected," logs the reason in the audit trail, and skips the normal builder entirely for this case.
+
+**Phase D — Party-lookup rejections (no work needed).**
+
+*Problem:* A separate, smaller rejection type (a failed party lookup) also needed a decision.
+
+*Work:* None required — it was already correctly ignored as out-of-scope by Phase A's change. Confirmed, not built.
+
+**Phase E — Prove it all actually works (Live verification).**
+
+*Problem:* Everything above was only proven in tests, not against the real system.
+
+*Work:* Ran it against a live Tazama server and confirmed the rejection message is accepted and correctly marked, it doesn't interfere with anything sent earlier for that same payment, and the fix holds up even on a much bigger, more realistic batch of data.
+
+**Phase F — Make the third rejection type visible (FX-quote rejections).**
+
+*Problem:* A third rejection type (an FX quote failing very early) has no message to send at all — but it was disappearing with zero record that it ever happened.
+
+*Work:* Added a simple counter so this case is now visibly tracked instead of silently vanishing, even though no message is sent for it.
+
 **Read this alongside:** `MLA-PPA-Technical-Design.md` §2.2a (canonical-record selection), §3.3 (trigger/enrichment classification), §3.5 (message mapping, `toTxSts`), §3.7 (missing/out-of-order events), §6 (open items). Section numbers below refer to that document unless stated otherwise.
 
 - [1. Headline finding](#1-headline-finding)
