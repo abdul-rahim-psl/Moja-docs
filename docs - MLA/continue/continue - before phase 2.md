@@ -59,9 +59,9 @@ Read in this order:
 
 This is [`plan.md`](../plan.md) §5. Work through it in order.
 
-- [ ] **Kafka consumer with `autoCommit: false`** — the offset contract is never delegated to the client library. Explicit `advance` / `pause` / `resume`, extending `KafkaClient` (`src/clients/kafka.client.ts`), which today is connection-lifecycle only (Phase 0 scope, deliberately).
-- [ ] **Dedicated consumer group ID**, externally configured, with the partition-stealing rationale (R-18) documented at the config site — `KafkaConfig.groupId` already exists (Phase 0); this phase is where it first actually joins a group.
-- [ ] **Canonical-record selection per D1** — a table, plus the `prepareTransfer` payload shape-check (`TxInfAndSts.StsRsnInf` present, normal transfer fields absent) that distinguishes a real rejection from a harmless duplicate. The shape is the primary signal; any `/error` URL suffix is corroborating evidence only.
+- [x] **Kafka consumer with `autoCommit: false`** — the offset contract is never delegated to the client library. Explicit `advance` / `pause` / `resume`, extending `KafkaClient` (`src/clients/kafka.client.ts`), which today is connection-lifecycle only (Phase 0 scope, deliberately). **Done, live-verified [2026-09-02]** — `subscribe`/`run`/`advance`/`pause`/`resume` added; 54 Jest tests, 100% coverage; proven against the real Redpanda harness (resume-from-committed-offset across two processes under the same group, and pause/resume freezing then releasing consumption). Full detail: `plan.md` §5 and §16.
+- [x] **Dedicated consumer group ID**, externally configured, with the partition-stealing rationale (R-18) documented at the config site — `KafkaConfig.groupId` already exists (Phase 0); this phase is where it first actually joins a group. **Done** — the group join happened as part of the item above; the real group ID is still CCH's to issue (`plan.md` §13.2, unchanged).
+- [x] **Canonical-record selection per D1** — a table, plus the `prepareTransfer` payload shape-check (`TxInfAndSts.StsRsnInf` present, normal transfer fields absent) that distinguishes a real rejection from a harmless duplicate. The shape is the primary signal; any `/error` URL suffix is corroborating evidence only. **Done [2026-09-02]** — `src/services/canonical-record.service.ts`, ported deliberately from the POC's `logic.service.ts` rather than the (now-superseded) story text. 29 new Jest tests against real captures, 100% coverage. Full detail: `plan.md` §5 and §16.
 - [ ] **Event classification per D2.** Party-lookup operations recognised and explicitly skipped, with their own comment — never an accidental fallthrough.
 - [ ] **FX-quote rejection detection** (no `operation` tag + `StsRsnInf` present) — recognised, counted distinctly, not forwarded. Must not be indistinguishable from an ordinary skipped duplicate in the logs.
 - [ ] **Payload selection per D6.**
@@ -107,8 +107,8 @@ npm run feeder -- --file __tests__/fixtures/DRPP_Kafka_E2E_Pack/raw_topic_slice_
 
 **When this is genuinely done:**
 
-1. Add the corresponding entry to [`plan.md`](../plan.md) §16 — what was built, what was verified live versus assumed, what diverged, what is left open. This is also where US-MLA-01's canonical-selection rule and US-MLA-03's decode rule get their story text corrected per D1/D6.
-2. Write `docs - MLA/EPICS/EPIC-1-Ingestion/US-MLA-01/`, `.../US-MLA-02/`, `.../US-MLA-03/` — each its own `executive-summary.md` and `file-register.md`, per `CLAUDE.md`'s "Epic and story documentation" rule. Unlike Phase 0/1, this phase *does* implement stories, so it follows the normal per-story shape, not the epic-level exception.
+1. Add the corresponding entry to [`plan.md`](../plan.md) §16 — what was built, what was verified live versus assumed, what diverged, what is left open. **Correcting US-MLA-01's canonical-selection rule and US-MLA-03's decode rule against D1/D6 is not this project's task** — the story documents are the BA's, the outdated-vs-D1/D6 gap has already been communicated to them, and `plan.md` §3.1's decision table is the durable record engineering builds against regardless of when (or whether) the story text itself is edited upstream.
+2. Write `docs - MLA/EPICS/EPIC-1-kafka-subscription-audit-topic-ingestion/US-MLA-01/`, `.../US-MLA-02/`, `.../US-MLA-03/` — each its own `executive-summary.md` and `file-register.md`, per `CLAUDE.md`'s "Epic and story documentation" rule. Unlike Phase 0/1, this phase *does* implement stories, so it follows the normal per-story shape, not the epic-level exception.
 3. Leave it all in the working tree for the user to commit — `CLAUDE.md`'s "Commits" rule.
 4. Move to [`plan.md`](../plan.md) §6, Phase 3 — envelope construction and JWS validation (US-MLA-04/05).
 
