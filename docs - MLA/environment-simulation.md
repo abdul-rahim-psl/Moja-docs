@@ -78,6 +78,10 @@ Three components, all checked in — **tools, not scratch scripts.**
                                                     └───────────────────┘
 ```
 
+`capture-feeder` and `ppa-stub` sit on either side of the one component actually being tested — the real MLA, unmodified. `capture-feeder` replays a capture file onto `topic-event-audit` on a local Redpanda broker, preserving each record's partition and per-partition order exactly as captured; the MLA consumes from that topic precisely as it will consume from the real DRPP, with no code path aware that the broker is local rather than COMESA's. 
+
+Its output — one Event Envelope per canonical record — is POSTed to `ppa-stub`, a validating test double that checks each envelope against the shared schema, records it for golden-file comparison, and can be told to fail on command. Nothing about the MLA's own logic differs between this setup and production; only what it talks to is swapped.
+
 ### 3.1 `capture-feeder` — the topic simulator
 
 Reads a capture file and produces each record onto `topic-event-audit`. Each faithfulness rule below exists because breaking it destroys a property we need.
