@@ -2,7 +2,7 @@
 
 # Plan — CCH MLA (and its PII tokenization) <!-- omit in toc -->
 
-**What this document is.** The build plan for `cch-mla`, in phases, with an exit criterion per phase and an honest register of what is blocked. It is written to be *edited as work happens* — the POC's own [`plan-outline.md`](../../docs/docs-poc-mla-ppa/plan-outline.md) proved that a plan which records what broke, why, and what was actually proven live is worth more than one that only records intent. This file inherits that job.
+**What this document is.** The build plan for `cch-mla`, in phases, with an exit criterion per phase and an honest register of what is blocked. It is written to be *edited as work happens* — the POC's own [`plan-outline.md`](../docs-poc-mla-ppa/plan-outline.md) proved that a plan which records what broke, why, and what was actually proven live is worth more than one that only records intent. This file inherits that job.
 
 **What it is not.** It is not a restatement of the requirements ([`core-knowledge.md`](knowledge-base-stories/core-knowledge.md)), not the engineering policy ([`engineering-rules.md`](engineering-rules.md)), and not the POC comparison ([`cross-reference.md`](knowledge-base-stories/cross-reference.md)). It sequences the work those three describe.
 
@@ -33,7 +33,7 @@
 
 | Asset | State |
 | --- | --- |
-| Requirements — four user-story documents, broken out per story under `docs/EPICS/` | Complete; several findings still open (R-04 Critical, R-18, R-23, R-29, R-31) |
+| Requirements — four user-story documents, broken out per story under `docs - MLA/EPICS/` | Complete; several findings still open (R-04 Critical, R-18, R-23, R-29, R-31) |
 | Synthesized model — [`core-knowledge.md`](knowledge-base-stories/core-knowledge.md) | Complete |
 | Engineering policy — [`engineering-rules.md`](engineering-rules.md) | Complete and binding |
 | POC comparison — [`cross-reference.md`](knowledge-base-stories/cross-reference.md) | Complete; **seven forks still need a decision** |
@@ -407,7 +407,7 @@ Copy this block per story. Every field is required; `Verified` is the one nobody
 
 ### Phase 0 — Scaffolding                                       [2026-09-01]
 
-Not a story (`docs/EPICS/` has no folder for it), but recorded here under the
+Not a story (`docs - MLA/EPICS/` has no folder for it), but recorded here under the
 same discipline: scaffolding precedes US-MLA-01 and its exit criterion is live.
 
 **Built**       TypeScript + Fastify project at the repository root, on the

@@ -1,7 +1,7 @@
 # US-MLA-02 — Distinguish Event Types Within the Audit Topic Stream
 
 **Epic:** Epic 1 — MLA: Kafka Subscription & Audit Topic Ingestion
-**Source:** `docs/user stories/cch-mla-user-stories.md`
+**Source:** `docs - MLA/user stories/cch-mla-user-stories.md`
 
 ---
 

@@ -4,7 +4,7 @@
 
 **What this document is.** A session handoff, kept as the historical record of the point where design and planning were complete and Phase 0's scaffolding checklist ([`plan.md`](../plan.md) §3.3) was the next work.
 
-**This document is superseded.** Scaffolding's exit criterion was met and the first [`plan.md`](../plan.md) §16 progress-log entry landed on 2026-09-01 — see that entry, and [`docs/EPICS/EPIC-0-Scaffolding/`](../EPICS/EPIC-0-Scaffolding/), for what actually happened. Per `strategy.md` §4's precedence rule, **`plan.md` is the ground truth on status; this file is not.** Its "what's next" job is done. **No newer `continue -` doc has been written yet** — the next one (covering Phase 1, the harness) is owed at the start of the session that picks that up. Until it exists, read this document only to trace history, and go to [`plan.md`](../plan.md) §4 for what Phase 1 actually requires.
+**This document is superseded.** Scaffolding's exit criterion was met and the first [`plan.md`](../plan.md) §16 progress-log entry landed on 2026-09-01 — see that entry, and [`docs - MLA/EPICS/EPIC-0-Scaffolding/`](../EPICS/EPIC-0-Scaffolding/), for what actually happened. Per `strategy.md` §4's precedence rule, **`plan.md` is the ground truth on status; this file is not.** Its "what's next" job is done. **No newer `continue -` doc has been written yet** — the next one (covering Phase 1, the harness) is owed at the start of the session that picks that up. Until it exists, read this document only to trace history, and go to [`plan.md`](../plan.md) §4 for what Phase 1 actually requires.
 
 - [1. Sixty-second orientation](#1-sixty-second-orientation)
 - [2. What is already decided — do not re-litigate](#2-what-is-already-decided--do-not-re-litigate)
@@ -19,16 +19,16 @@
 
 ## 1. Sixty-second orientation
 
-This repository builds the **Mojaloop Adaptor (MLA)** and its PII tokenization step for CCH FRMS — production code, not a POC. Requirements, engineering policy, a full comparison against an earlier live-verified proof of concept, and a phased build plan are all written and internally consistent. **`docs/CLAUDE.md` at the repository root is the working contract for any session here — read it before this document if you haven't.**
+This repository builds the **Mojaloop Adaptor (MLA)** and its PII tokenization step for CCH FRMS — production code, not a POC. Requirements, engineering policy, a full comparison against an earlier live-verified proof of concept, and a phased build plan are all written and internally consistent. **`cch-mla/CLAUDE.md` at the repository root is the working contract for any session here — read it before this document if you haven't.**
 
 Read in this order:
 
-1. [`../../CLAUDE.md`](../../CLAUDE.md) — the working rules, "How a story gets built", the indexing rule.
+1. [`cch-mla/CLAUDE.md`](../../../cch-mla/CLAUDE.md) — the working rules, "How a story gets built", the indexing rule.
 2. [`../strategy.md`](../strategy.md) — the map. Do not read the whole knowledge base; follow its routing table.
 3. **This document** — where things stand right now, specifically.
 4. [`../plan.md`](../plan.md) §3.3 — the actual scaffolding checklist, which this document walks through but does not replace.
 
-**Current state:** zero lines of application code. `docs/` holds the complete knowledge base (strategy, core-knowledge, engineering-rules, cross-reference, environment-simulation, plan, the four source user-story documents, and `docs/EPICS/` with all nine MLA/PII stories broken out one folder per epic). Everything in `docs/` was cross-checked for internal alignment in the immediately preceding session; nine misalignments were found and fixed, and the coverage bar was explicitly settled at **above 95%** (`coverageThreshold: 96`).
+**Current state:** zero lines of application code. `docs - MLA/` holds the complete knowledge base (strategy, core-knowledge, engineering-rules, cross-reference, environment-simulation, plan, the four source user-story documents, and `docs - MLA/EPICS/` with all nine MLA/PII stories broken out one folder per epic). Everything in `docs - MLA/` was cross-checked for internal alignment in the immediately preceding session; nine misalignments were found and fixed, and the coverage bar was explicitly settled at **above 95%** (`coverageThreshold: 96`).
 
 ---
 
@@ -63,7 +63,7 @@ Two forks are **genuinely open** and need input from outside this codebase — [
 
 This is [`plan.md`](../plan.md) §3.3, walked through with the reasoning inline. Work through it in order; each item cites the rule it exists to satisfy.
 
-**Every item below is built and live-verified.** The checkmarks here are a mirror of [`plan.md`](../plan.md) §3.3, not a second source of truth — if the two ever disagree, `plan.md` is correct (`strategy.md` §4's precedence rule) and this file is stale and needs fixing, not the other way round. Full detail on what was built, what was tested, and what was verified live: [`plan.md`](../plan.md) §16's Phase 0 entry, and the epic-level writeup at [`docs/EPICS/EPIC-0-Scaffolding/`](../EPICS/EPIC-0-Scaffolding/).
+**Every item below is built and live-verified.** The checkmarks here are a mirror of [`plan.md`](../plan.md) §3.3, not a second source of truth — if the two ever disagree, `plan.md` is correct (`strategy.md` §4's precedence rule) and this file is stale and needs fixing, not the other way round. Full detail on what was built, what was tested, and what was verified live: [`plan.md`](../plan.md) §16's Phase 0 entry, and the epic-level writeup at [`docs - MLA/EPICS/EPIC-0-Scaffolding/`](../EPICS/EPIC-0-Scaffolding/).
 
 - [x] **TypeScript + Fastify project**, following Tazama's `tms-service` / `event-director` conventions — layout, npm script names, `tsconfig`, ESLint flat config, Prettier, SPDX headers, `.env.template`, `Dockerfile`. §5 below has the exact values to carry over from the POC rather than reinvent.
 - [x] **Typed configuration, validated at boot.** A missing required variable fails the process at startup, never at first use. `engineering-rules.md` §8: "Fail fast on invalid config."
@@ -94,7 +94,7 @@ This is [`plan.md`](../plan.md) §3.3, walked through with the reasoning inline.
 
 ## 5. Concrete values to carry over from the POC
 
-The POC ([`/home/abdul-rahim/mojaloop/poc-mla-ppa/mla/`](/home/abdul-rahim/mojaloop/poc-mla-ppa/mla/)) is a **structural precedent** ([`../../README.md`](../../README.md)), and its scaffolding-level choices carry forward as-is — this is tooling and convention, not business logic, so none of it is subject to the cross-reference.md divergence analysis. Read its files directly rather than retyping them from memory; the values below are what to expect there, not a substitute for reading them.
+The POC ([`/home/abdul-rahim/mojaloop/poc-mla-ppa/mla/`](/home/abdul-rahim/mojaloop/poc-mla-ppa/mla/)) is a **structural precedent** ([`cch-mla/README.md`](../../../cch-mla/README.md)), and its scaffolding-level choices carry forward as-is — this is tooling and convention, not business logic, so none of it is subject to the cross-reference.md divergence analysis. Read its files directly rather than retyping them from memory; the values below are what to expect there, not a substitute for reading them.
 
 | What | Where in the POC | Carries forward |
 | --- | --- | --- |
@@ -132,12 +132,12 @@ curl localhost:3001/health/ready    # 200 {"status":"UP","kafka":"DISABLED"}
 
 Two extra checks beyond the literal criterion, because the checklist above implies them: started with `KAFKA_ENABLED=true` against an unreachable broker, `/health/live` stayed 200 while `/health/ready` correctly went 503 `{"status":"DOWN","kafka":"DOWN"}`. Started with a required Kafka variable missing, and separately with `LOG_LEVEL=chatty`: both refused to start, exit 1, naming the offending variable.
 
-**D1–D7 were already recorded** (`plan.md` §3.1, restated in §2–§3 above) before this phase started. Full transcript, what diverged and why, and what's left open: [`plan.md`](../plan.md) §16's Phase 0 entry and [`docs/EPICS/EPIC-0-Scaffolding/`](../EPICS/EPIC-0-Scaffolding/).
+**D1–D7 were already recorded** (`plan.md` §3.1, restated in §2–§3 above) before this phase started. Full transcript, what diverged and why, and what's left open: [`plan.md`](../plan.md) §16's Phase 0 entry and [`docs - MLA/EPICS/EPIC-0-Scaffolding/`](../EPICS/EPIC-0-Scaffolding/).
 
 **What closed this out:**
 
 1. The first entry was added to [`plan.md`](../plan.md) §16 — what was built, what was verified live, what diverged, what's left open.
-2. `docs/EPICS/EPIC-0-Scaffolding/executive-summary.md` and `file-register.md` were written, per `CLAUDE.md`'s "Epic and story documentation" rule.
+2. `docs - MLA/EPICS/EPIC-0-Scaffolding/executive-summary.md` and `file-register.md` were written, per `CLAUDE.md`'s "Epic and story documentation" rule.
 3. Left in the working tree for the user to commit — `CLAUDE.md`'s "Commits" rule: Claude never runs `git commit`.
 4. Next: [`plan.md`](../plan.md) §4, Phase 1 — the `capture-feeder` / `ppa-stub` harness. **Do not skip ahead to pipeline code before the harness exists** — that inversion is deliberate (`plan.md` §15, sequencing point 1) and is what gives every subsequent phase a live exit criterion from its first line of code.
 
@@ -157,5 +157,5 @@ Not this session's job, but worth knowing so scaffolding decisions don't foreclo
 - **Do not resolve D3 or D5 yourself.** Both are flagged in `plan.md` §13.1 as needing input from outside this codebase (PPA's owners, COMESA/the Mojoloop Partner respectively). A session under time pressure picking one to "keep moving" is exactly the failure mode `plan.md` §3.1 exists to prevent.
 - **The POC's `.env.template` has at least one confirmed-stale default** (`KAFKA_AUDIT_TOPIC=mojaloop-audit`). Copying it verbatim without checking `core-knowledge.md` §2.1 reintroduces a known error.
 - **`coverageThreshold: 96`, not 95.** This was explicitly decided in the immediately preceding session (the user chose "above 95%" over "95% floor") and propagated through `engineering-rules.md`, `README.md`, `CLAUDE.md` and `plan.md`. Do not default to the more common 95 out of habit.
-- **`docs/EPICS/` is the spec to build against, not `core-knowledge.md`.** `core-knowledge.md` is explicitly capture-blind (see its own header warning) — it reproduces what the four story documents say even where the captures contradict them. For the actual per-story acceptance criteria, read the `story.md` under `docs/EPICS/`.
+- **`docs - MLA/EPICS/` is the spec to build against, not `core-knowledge.md`.** `core-knowledge.md` is explicitly capture-blind (see its own header warning) — it reproduces what the four story documents say even where the captures contradict them. For the actual per-story acceptance criteria, read the `story.md` under `docs - MLA/EPICS/`.
 - **Nothing here is a substitute for `strategy.md`.** This document orients one session at one moment. `strategy.md` is the durable index and outranks this document the instant they'd disagree.

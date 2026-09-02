@@ -1,7 +1,7 @@
 # US-PII-01 — Classify and Tokenize Party Identity Fields Within MLA
 
 **Epic:** PII Tokenization (implemented as part of MLA's own processing pipeline — not a separately deployed component)
-**Source:** `docs/user stories/cch-pii-user-stories.md`
+**Source:** `docs - MLA/user stories/cch-pii-user-stories.md`
 
 ---
 

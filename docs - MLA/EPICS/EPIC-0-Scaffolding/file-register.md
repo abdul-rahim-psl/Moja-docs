@@ -66,6 +66,6 @@ Every file Phase 0 added, and the reason it exists. The rationale behind the dec
 
 | File | Why it was changed / what it does |
 | --- | --- |
-| `docs/plan.md` | §3.3's checklist ticked and the phase marked complete; the CI platform decision recorded at the bullet it affects; and the first §16 progress-log entry added, stating what was built, what the tests cover, what was verified live, what diverged from the plan and the POC, and what is left open. |
-| `docs/continue/continue - before scaffolding.md` | The same CI-platform decision recorded on its matching checklist item, so the handoff document and the plan do not disagree. |
+| `docs - MLA/plan.md` | §3.3's checklist ticked and the phase marked complete; the CI platform decision recorded at the bullet it affects; and the first §16 progress-log entry added, stating what was built, what the tests cover, what was verified live, what diverged from the plan and the POC, and what is left open. |
+| `docs - MLA/continue/continue - before scaffolding.md` | The same CI-platform decision recorded on its matching checklist item, so the handoff document and the plan do not disagree. |
 | `CLAUDE.md` | A `Commits` section added: implementation is produced and left in the working tree; the user commits. |

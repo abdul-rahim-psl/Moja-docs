@@ -1,7 +1,7 @@
 # US-MLA-04 — Construct a Standard Event Envelope
 
 **Epic:** Epic 2 — MLA: Envelope Construction & JWS Validation
-**Source:** `docs/user stories/cch-mla-user-stories.md`
+**Source:** `docs - MLA/user stories/cch-mla-user-stories.md`
 
 ---
 

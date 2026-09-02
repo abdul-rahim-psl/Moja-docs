@@ -4,7 +4,7 @@
 
 **What this document is.** A session handoff. It marks the point where Phase 0's scaffolding is complete and **Phase 1's harness checklist** ([`plan.md`](../plan.md) §4) is the next work. Read this in full before touching anything; it is short by design.
 
-**When this is superseded.** The moment the harness's exit criterion is met and the corresponding `docs/plan.md` §16 progress-log entry lands, this document's "what's next" job is done. It stays as the record of where things stood; a later `continue -` doc (Phase 2's, most likely) takes over for what's next.
+**When this is superseded.** The moment the harness's exit criterion is met and the corresponding `docs - MLA/plan.md` §16 progress-log entry lands, this document's "what's next" job is done. It stays as the record of where things stood; a later `continue -` doc (Phase 2's, most likely) takes over for what's next.
 
 - [1. Sixty-second orientation](#1-sixty-second-orientation)
 - [2. What is already decided — do not re-litigate](#2-what-is-already-decided--do-not-re-litigate)
@@ -19,13 +19,13 @@
 
 ## 1. Sixty-second orientation
 
-Phase 0 closed live on 2026-09-01 — [`plan.md`](../plan.md) §16's first entry, and [`docs/EPICS/EPIC-0-Scaffolding/`](../EPICS/EPIC-0-Scaffolding/) for the full writeup. What exists now: a TypeScript + Fastify skeleton at the repository root, the four-layer structure (`interfaces/`, `services/`, `clients/`, composition root), typed and validated configuration, `/health/live` + `/health/ready`, structured logging, a Kafka *connection* client (connect/disconnect/`isConnected` only — no subscription, no consumption), 43 tests at 100% coverage against a mechanically-enforced 96% gate, and a GitLab CI pipeline (written, never yet run on a runner).
+Phase 0 closed live on 2026-09-01 — [`plan.md`](../plan.md) §16's first entry, and [`docs - MLA/EPICS/EPIC-0-Scaffolding/`](../EPICS/EPIC-0-Scaffolding/) for the full writeup. What exists now: a TypeScript + Fastify skeleton at the repository root, the four-layer structure (`interfaces/`, `services/`, `clients/`, composition root), typed and validated configuration, `/health/live` + `/health/ready`, structured logging, a Kafka *connection* client (connect/disconnect/`isConnected` only — no subscription, no consumption), 43 tests at 100% coverage against a mechanically-enforced 96% gate, and a GitLab CI pipeline (written, never yet run on a runner).
 
 **No pipeline logic exists.** Nothing reads a Kafka record, classifies an event, builds an envelope, or talks to a PPA. That is the point of this phase: before any of it is written, [`plan.md`](../plan.md) §15 sequencing point 1 requires the verification instrument to exist first, so every subsequent phase has a **live** exit criterion from its first line of code, rather than reconstructing a verification script per session from prose — which is exactly what slowed the POC down.
 
 Read in this order:
 
-1. [`../../CLAUDE.md`](../../CLAUDE.md) — if this is a new session, in particular the "Epic and story documentation" and "Commits" sections, both added since Phase 0.
+1. [`cch-mla/CLAUDE.md`](../../../cch-mla/CLAUDE.md) — if this is a new session, in particular the "Epic and story documentation" and "Commits" sections, both added since Phase 0.
 2. [`../strategy.md`](../strategy.md) — the map. Follow its routing table; do not read the whole knowledge base.
 3. [`../environment-simulation.md`](../environment-simulation.md) — **in full.** This is the harness's design authority: `capture-feeder`'s faithfulness rules and scenario flags, `ppa-stub`'s contract, golden-file regression, and §4's honest list of what none of this can prove. This document does not repeat that design; it only walks the checklist with the reasoning inline.
 4. **This document** — where things stand right now, specifically.
@@ -120,7 +120,7 @@ Then run the full scenario library once, unattended, and confirm the golden-file
 **When this is genuinely done:**
 
 1. Add the corresponding entry to [`plan.md`](../plan.md) §16, in the same format as the Phase 0 entry — what was built, what was verified live versus assumed (in particular: which of `environment-simulation.md` §4's stated limits still hold exactly as written, since this phase is what builds the thing those limits are about), what diverged, what is left open.
-2. Write `docs/EPICS/EPIC-1-Harness/executive-summary.md` and `file-register.md` (or wherever this phase's epic folder ends up living — it has the same "precedes a story, carries no `story.md`" shape as `EPIC-0-Scaffolding`), per `CLAUDE.md`'s "Epic and story documentation" rule.
+2. Write `docs - MLA/EPICS/EPIC-1-Harness/executive-summary.md` and `file-register.md` (or wherever this phase's epic folder ends up living — it has the same "precedes a story, carries no `story.md`" shape as `EPIC-0-Scaffolding`), per `CLAUDE.md`'s "Epic and story documentation" rule.
 3. Leave it all in the working tree for the user to commit — `CLAUDE.md`'s "Commits" rule.
 4. Move to [`plan.md`](../plan.md) §5, Phase 2 — ingestion (US-MLA-01/02/03). **Do not start classification or envelope logic before the harness is genuinely live** — that inversion is exactly what `plan.md` §15 sequencing point 1 exists to prevent.
 

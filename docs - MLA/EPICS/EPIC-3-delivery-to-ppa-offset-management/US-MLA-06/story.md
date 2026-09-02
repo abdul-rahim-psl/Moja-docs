@@ -1,7 +1,7 @@
 # US-MLA-06 — Deliver Envelopes to PPA via Per-Action Endpoints
 
 **Epic:** Epic 3 — MLA: Delivery to PPA & Offset Management
-**Source:** `docs/user stories/cch-mla-user-stories.md`
+**Source:** `docs - MLA/user stories/cch-mla-user-stories.md`
 
 ---
 

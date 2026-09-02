@@ -1,7 +1,7 @@
 # US-MLA-03 — Decode Base64-Encoded Transfer Payloads
 
 **Epic:** Epic 1 — MLA: Kafka Subscription & Audit Topic Ingestion
-**Source:** `docs/user stories/cch-mla-user-stories.md`
+**Source:** `docs - MLA/user stories/cch-mla-user-stories.md`
 
 ---
 

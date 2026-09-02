@@ -1,7 +1,7 @@
 # EPIC-0 — Scaffolding: Executive Summary
 
-**Phase:** 0 (`docs/plan.md` §3.3)
-**Status:** complete — exit criterion met live, recorded in `docs/plan.md` §16
+**Phase:** 0 (`docs - MLA/plan.md` §3.3)
+**Status:** complete — exit criterion met live, recorded in `docs - MLA/plan.md` §16
 **Date:** 2026-09-01
 
 ---
@@ -35,7 +35,7 @@ The four layers, with every dependency pointing inward and every client construc
 - **`clients/`** — the I/O adapters: the sole `pino` importer, a Kafka connection client, and the Fastify server exposing the two health endpoints.
 - **`index.ts`** — the composition root: reads configuration, builds the clients, injects them, starts, and shuts down on a signal.
 
-`docs/EPICS/EPIC-0-Scaffolding/file-register.md` lists every file and the reason it exists.
+`docs - MLA/EPICS/EPIC-0-Scaffolding/file-register.md` lists every file and the reason it exists.
 
 ## The reasoning behind the decisions that were not obvious
 
@@ -51,7 +51,7 @@ The four layers, with every dependency pointing inward and every client construc
 
 ## What was proven, and how
 
-Everything claimed here was run, not reasoned about. The full transcript is in `docs/plan.md` §16; in summary: a clean install, a zero-error build, a lint pass with zero errors *and* zero warnings, and 43 tests across 5 suites at 100% coverage in default parallel mode. The service was started with no configuration file and no broker and answered both probes; it was sent `SIGTERM`, logged its shutdown, exited 0 and released its port with no forced kill. It was started again against an unreachable broker and correctly reported live-but-not-ready. It was started twice more with a missing required variable and with a malformed one, and refused to start both times, naming the variable.
+Everything claimed here was run, not reasoned about. The full transcript is in `docs - MLA/plan.md` §16; in summary: a clean install, a zero-error build, a lint pass with zero errors *and* zero warnings, and 43 tests across 5 suites at 100% coverage in default parallel mode. The service was started with no configuration file and no broker and answered both probes; it was sent `SIGTERM`, logged its shutdown, exited 0 and released its port with no forced kill. It was started again against an unreachable broker and correctly reported live-but-not-ready. It was started twice more with a missing required variable and with a malformed one, and refused to start both times, naming the variable.
 
 ## The defect this phase found in its own gate
 
@@ -69,6 +69,6 @@ Two decisions remain open and were not resolved by this work, because neither is
 
 ## Where this leaves the project
 
-The next work is Phase 1 — `capture-feeder` and `ppa-stub` against a local Redpanda (`docs/plan.md` §4, designed in full in `docs/environment-simulation.md`). The first user story, `US-MLA-01`, follows that.
+The next work is Phase 1 — `capture-feeder` and `ppa-stub` against a local Redpanda (`docs - MLA/plan.md` §4, designed in full in `docs - MLA/environment-simulation.md`). The first user story, `US-MLA-01`, follows that.
 
 One item from this phase carries forward unverified: the GitLab CI pipeline is written but has never executed on a runner. Its first push is its first real test.

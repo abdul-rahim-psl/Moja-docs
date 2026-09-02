@@ -1,7 +1,7 @@
 # US-MLA-01 — Subscribe to the Mojaloop Audit Topic
 
 **Epic:** Epic 1 — MLA: Kafka Subscription & Audit Topic Ingestion
-**Source:** `docs/user stories/cch-mla-user-stories.md`
+**Source:** `docs - MLA/user stories/cch-mla-user-stories.md`
 
 ---
 

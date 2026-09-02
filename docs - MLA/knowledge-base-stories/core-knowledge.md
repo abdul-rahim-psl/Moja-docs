@@ -2,7 +2,7 @@
 
 # Core Knowledge — CCH FRMS Message Ingestion <!-- omit in toc -->
 
-**Scope of this document:** a consolidated, implementation-facing synthesis of the four user-story documents in `docs/user stories/` — `cch-mla-user-stories.md`, `cch-ppa-user-stories.md`, `cch-pii-user-stories.md`, and `cch-notification-dedup-user-stories.md`. It carries no material from any other source. Where the four documents cite an external source (the FSD, the IID, the `DRPP_Kafka_E2E_Pack` captures), that citation is reproduced as a citation, not treated as knowledge this document independently holds.
+**Scope of this document:** a consolidated, implementation-facing synthesis of the four user-story documents in `docs - MLA/user stories/` — `cch-mla-user-stories.md`, `cch-ppa-user-stories.md`, `cch-pii-user-stories.md`, and `cch-notification-dedup-user-stories.md`. It carries no material from any other source. Where the four documents cite an external source (the FSD, the IID, the `DRPP_Kafka_E2E_Pack` captures), that citation is reproduced as a citation, not treated as knowledge this document independently holds.
 
 **Owner / provenance:** CCH FRMS | Paysys Labs. Source stories `CCH_UserStories_MessageIngestion_v1.0.md`; review consolidated from `CCH_UserStories_MessageIngestion_ConsolidatedReview_v1.0.md`. Story documents dated 18 August 2026.
 
@@ -675,7 +675,7 @@ There is no separately-published event to deduplicate, so the component has no r
 
 Worth knowing before treating these four documents as complete:
 
-1. **`cch-crosscutting-user-stories.md` is referenced repeatedly but is not present in `docs/user stories/`.** It is cited as the home of **US-AUD-01** (audit-log PII masking), **US-MON-01** (monitoring/alerting, and the R-37 alerting-destination gap), **US-MON-02** (instance-local readiness scoping), and **US-PERF-01** (the ≤200 ms p95 ack-latency budget). Several acceptance criteria in the present documents depend on it. **Obtain it before treating this knowledge base as complete.**
+1. **`cch-crosscutting-user-stories.md` is referenced repeatedly but is not present in `docs - MLA/user stories/`.** It is cited as the home of **US-AUD-01** (audit-log PII masking), **US-MON-01** (monitoring/alerting, and the R-37 alerting-destination gap), **US-MON-02** (instance-local readiness scoping), and **US-PERF-01** (the ≤200 ms p95 ack-latency budget). Several acceptance criteria in the present documents depend on it. **Obtain it before treating this knowledge base as complete.**
 2. **Epic numbering has holes.** MLA covers Epics 1–3, dedup Epic 4, PPA Epics 6–10. **Epic 5 is unaccounted for** in the available documents — likely the crosscutting or PII epic.
 3. **US-PPA-14 no longer exists** — merged into US-PPA-04 (R-28). Do not look for it.
 4. **The classify-vs-validate-signature ordering is not settled** between US-PII-01's Method (classify at step 3, validate at step 4) and the MLA stories' framing. The **validate-then-tokenize** invariant *is* settled and is the one that matters. See §3.2.

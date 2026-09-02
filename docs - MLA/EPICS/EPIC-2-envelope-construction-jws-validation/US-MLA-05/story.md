@@ -1,7 +1,7 @@
 # US-MLA-05 — Validate JWS Signatures on DFSP-Originated Events
 
 **Epic:** Epic 2 — MLA: Envelope Construction & JWS Validation
-**Source:** `docs/user stories/cch-mla-user-stories.md`
+**Source:** `docs - MLA/user stories/cch-mla-user-stories.md`
 
 ---
 

@@ -1,7 +1,7 @@
 # US-MLA-07 — Retry and Circuit-Break on PPA Failures
 
 **Epic:** Epic 3 — MLA: Delivery to PPA & Offset Management
-**Source:** `docs/user stories/cch-mla-user-stories.md`
+**Source:** `docs - MLA/user stories/cch-mla-user-stories.md`
 
 ---
 

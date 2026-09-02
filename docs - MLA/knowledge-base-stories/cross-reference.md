@@ -6,7 +6,7 @@
 
 **What this document is not.** It is not a POC gap list. Infrastructure differences that follow inevitably from "POC → production" — mutual TLS, Keycloak, Kubernetes, HA stores, real metrics backends — are enumerated once in §8 and otherwise ignored. They are expected, uncontroversial, and not where the risk is.
 
-**Sources.** POC side: `poc-mla-ppa/` source, `poc-mla-ppa/README.md` and both service READMEs, and `../docs/docs-poc-mla-ppa/` — **outside this repository** — (`MLA-PPA-Technical-Design.md` §§1–7, `rejected-events.md`, `summarized steps - poc.md`). Story side: [core-knowledge.md](core-knowledge.md) and the four documents in [docs/user stories/](../user%20stories/).
+**Sources.** POC side: `poc-mla-ppa/` source, `poc-mla-ppa/README.md` and both service READMEs, and `../../docs-poc-mla-ppa/` — **outside this repository** — (`MLA-PPA-Technical-Design.md` §§1–7, `rejected-events.md`, `summarized steps - poc.md`). Story side: [core-knowledge.md](core-knowledge.md) and the four documents in [docs - MLA/user stories/](../user%20stories/).
 
 **Section-reference convention.** A bare `§N` in this document's own prose (`§7.3`, `§12`) is a section of this document. A `§N` given **inside a POC column or attributed to the POC** — `§2.2a`, `§2.3`, `§3.5` — is a section of `MLA-PPA-Technical-Design.md`. FSD and IID sections are named as such. Story references are by story id (`US-MLA-04`) or finding id (`R-28`), never by section number.
 
