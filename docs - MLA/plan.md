@@ -38,9 +38,10 @@
 | Engineering policy — [`engineering-rules.md`](engineering-rules.md) | Complete and binding |
 | POC comparison — [`cross-reference.md`](knowledge-base-stories/cross-reference.md) | Complete; **six of seven forks settled (§3.1) — only D3 still needs a decision** |
 | A live-verified predecessor — `poc-mla-ppa` and its documentation set | Complete, and the single most valuable input we have |
-| Real capture data — `DRPP_Kafka_E2E_Pack 2/` | In hand (see §1.1); decision made to commit it into `cch-mla` as Phase 1 fixtures (`continue/continue - before harness.md` §5) |
+| Real capture data — `DRPP_Kafka_E2E_Pack 2/` | In hand (see §1.1); committed into `cch-mla` at `__tests__/fixtures/` as Phase 1 fixtures, verbatim (`continue/continue - before harness.md` §5) |
 | **Phase 0 — scaffolding** | **Done**, [2026-09-01] — §16 |
-| **Phase 1 — the harness** | **Not started.** Next work — §4, and `continue/continue - before harness.md` |
+| **Phase 1 — the harness** | **Done**, [2026-09-02] — §16. `capture-feeder`, `ppa-stub`, golden-file regression, curated fixtures and the named scenario library all exist and are live-verified. |
+| **Phase 2 — ingestion path** | **Not started.** Next work — §5, and `continue/continue - before phase 2.md` |
 | **A running DRPP environment** | **Not available.** Promised by COMESA; no date. |
 
 The POC is the reason this project does not start from zero. It ran the whole MLA→PPA→TMS path against real captured data, a real ValKey and a real Tazama TMS, and it found real defects doing so. Where the POC and the current user stories disagree, that disagreement is *evidence versus specification* and has to be resolved deliberately — §12.
@@ -163,15 +164,15 @@ The `id`-scheme fork was recorded in `cross-reference.md` as a balanced trade-of
 
 Built **before** the pipeline, because every subsequent phase's exit criterion depends on it.
 
-- [ ] `docker-compose.dev.yml` — single-node Redpanda; `topic-event-audit` created with **12 partitions**.
-- [ ] `tools/capture-feeder/` — [`environment-simulation.md`](environment-simulation.md) §3.1, with explicit partition assignment and every scenario flag.
-- [ ] `tools/ppa-stub/` — [`environment-simulation.md`](environment-simulation.md) §3.2, with envelope schema validation, JSONL recording, the fault-injection control endpoint, and mTLS against a local CA.
-- [ ] `tools/` README documenting how to run each scenario, and stating plainly that **offsets are not reproduced, ordering is** ([`environment-simulation.md`](environment-simulation.md) §3.1).
-- [ ] Curated unit fixtures lifted **verbatim** from real captures — never hand-written — covering every classification case, the partition-split transaction, the transfer rejection, the FX-quote rejection, and the party-lookup records.
-- [ ] Golden-file regression harness ([`environment-simulation.md`](environment-simulation.md) §3.3), with goldens for: `01_MWK_to_ZMW_PRIMARY`, `raw_topic_slice_partition2.json`, and the full 500-record export.
-- [ ] A named scenario library, each mapping to acceptance criteria: happy path · partition split · transfer rejection · FX-quote rejection · duplicate record · dropped record · corrupt record · missing signature · PPA 503 · PPA 4xx · PPA timeout · PPA flaky · broker restart · MLA restart · two MLA instances.
+- [x] `docker-compose.dev.yml` — single-node Redpanda; `topic-event-audit` created with **12 partitions**.
+- [x] `tools/capture-feeder/` — [`environment-simulation.md`](environment-simulation.md) §3.1, with explicit partition assignment and every scenario flag.
+- [x] `tools/ppa-stub/` — [`environment-simulation.md`](environment-simulation.md) §3.2, with envelope schema validation, JSONL recording, the fault-injection control endpoint, and mTLS against a local CA.
+- [x] `tools/` README documenting how to run each scenario, and stating plainly that **offsets are not reproduced, ordering is** ([`environment-simulation.md`](environment-simulation.md) §3.1).
+- [x] Curated unit fixtures lifted **verbatim** from real captures — never hand-written — covering every classification case, the partition-split transaction, the transfer rejection, the FX-quote rejection, and the party-lookup records.
+- [x] Golden-file regression harness ([`environment-simulation.md`](environment-simulation.md) §3.3), with goldens for: `01_MWK_to_ZMW_PRIMARY`, `raw_topic_slice_partition2.json`, and the full 500-record export.
+- [x] A named scenario library, each mapping to acceptance criteria: happy path · partition split · transfer rejection · FX-quote rejection · duplicate record · dropped record · corrupt record · missing signature · PPA 503 · PPA 4xx · PPA timeout · PPA flaky · broker restart · MLA restart · two MLA instances.
 
-**Exit criterion.** `capture-feeder` produces `raw_export_500.json` onto the local topic with all 500 records landing on their original partition numbers in their original per-partition order, verified by reading the topic back and diffing against the source. `ppa-stub` accepts, validates and records a hand-crafted envelope, and returns each injectable fault on command.
+**Exit criterion — met live, [2026-09-02].** `capture-feeder` produced `raw_export_500.json` onto the local topic with all 500 records landing on their original partition numbers in their original per-partition order, verified by reading the topic back and diffing against the source (0 mismatches across all 12 partitions). `ppa-stub` accepted, validated and recorded a hand-crafted envelope (200, appended to JSONL), rejected a schema-invalid one (400), and returned every injectable fault on command. Full detail: §16.
 
 ---
 
@@ -499,6 +500,155 @@ same discipline: scaffolding precedes US-MLA-01 and its exit criterion is live.
                 `isolatedModules`) on every run — cosmetic, inherited with the
                 POC's `tsconfig.json`, left as-is rather than diverging from a
                 carried-forward file for a warning.
+
+### Phase 1 — The harness                                       [2026-09-02]
+
+Not a story (`docs - MLA/EPICS/` has no folder for one) — the harness
+precedes every story from US-MLA-01 onward, the same shape as Phase 0
+(`EPICS/EPIC-0-Scaffolding/`). Full design authority:
+[`environment-simulation.md`](environment-simulation.md); session detail:
+`continue/continue - before harness.md`.
+
+**Built**       `docker-compose.dev.yml` (single-node Redpanda,
+                `topic-event-audit` at 12 partitions, healthcheck-gated
+                topic-init). `tools/capture-feeder/` — faithful replay with
+                explicit per-message partition assignment, per-partition
+                order preserved, every scenario flag from §4's checklist
+                (`--speed burst|real|Nx`, `--only`, `--delay-partition`,
+                `--duplicate`, `--drop`, `--corrupt`, `--strip-signature`,
+                `--loop`). `tools/ppa-stub/` — two listeners: mTLS business
+                endpoints (`/QUOTES`, `/FXQUOTES`, `/TRANSFERS`,
+                `/FXTRANSFERS`) validating against a shared ajv schema and
+                recording accepted envelopes to JSONL, plus a plain-HTTP
+                control/health listener (`/control`, `/control/reset`,
+                `/health/live`, `/health/ready`) supporting fault modes
+                `ok|503|500|4xx|timeout|flaky` with `afterN`/`forMs`.
+                `src/interfaces/event-envelope.interface.ts` and
+                `event-envelope.schema.json` — the Event Envelope's
+                structural shape (core-knowledge.md §5), imported directly
+                by `ppa-stub` rather than duplicated (`continue - before
+                harness.md` §3; engineering-rules.md §2.2 does not apply
+                inside one repository). `tools/golden/` — produces a capture
+                onto a scratch topic, reads it back, and diffs per-partition
+                against the source; goldens recorded for
+                `01_MWK_to_ZMW_PRIMARY`, `raw_topic_slice_partition2`, and
+                `raw_export_500` (`tools/golden/goldens/*.golden.json`).
+                `tools/scenario-library/` — all fifteen named scenarios from
+                §4's checklist as data, with an executor for every one the
+                harness alone can run. `tools/curate-fixtures/extract.ts` —
+                regenerates `__tests__/fixtures/curated/` (23 classification
+                cases, 2 transfer rejections, all 19 FX-quote rejections, 5
+                party-lookup records, each with a provenance file). The full
+                capture pack committed verbatim to `__tests__/fixtures/`
+                (`continue - before harness.md` §5's decision). `tools/README.md`
+                documents every tool and flag.
+
+**Tests**       No `__tests__/*.test.ts` suite - this phase built
+                infrastructure the pipeline will be tested *against*
+                (Phase 2 onward), not pipeline code itself; `jest.config.ts`'s
+                `collectCoverageFrom` is `src/**/*.ts` only, so the 96%
+                gate is untouched (still 100%, 43 tests, confirmed after
+                this phase's changes). Every tool was instead proven by
+                actually running it - see **Verified** below, which is the
+                applicable standard for verification infrastructure
+                (engineering-rules.md §11: "verification tools are
+                checked-in code... nobody writes a throwaway script to
+                verify the same thing twice").
+
+**Verified**    `live — all of it, on this machine`, against a real
+                single-node Redpanda (`docker-compose.dev.yml`, confirmed at
+                12 partitions via `rpk topic describe`). `capture-feeder`
+                fed `raw_export_500.json` (500 records, 12 partitions) onto
+                `topic-event-audit`; reading the topic back and diffing
+                against the source (`tools/golden`'s canonicalizer,
+                per-partition, sha256 of each record's value) showed **0
+                mismatches across all 12 partitions** - partition
+                assignment, per-partition order, key, headers and timestamp
+                all exactly preserved. All three named goldens
+                (`01_MWK_to_ZMW_PRIMARY`, `raw_topic_slice_partition2`,
+                `raw_export_500`) recorded live and then re-verified clean
+                in a second, independent run (`npm run golden`). The
+                golden-diff mechanism was itself proven to fail correctly -
+                pointing a mismatched capture at an existing golden produced
+                a 500-mismatch report and a non-zero exit code.
+                `ppa-stub` exercised end to end: `/health/live` and
+                `/health/ready` both 200; `POST /control {"mode":"503"}`
+                then a real mTLS-authenticated `POST /TRANSFERS` returned
+                503; a hand-crafted schema-valid envelope returned 200 and
+                appeared in `output/received.jsonl`; a schema-invalid one
+                (missing `fspiop-destination`) returned 400 with the ajv
+                error detail; `4xx` with a custom `code`, and `afterN`
+                (first two calls clean, the third faulted) both behaved
+                exactly as configured. **mTLS is genuinely enforced, not
+                decorative** - a request with no client certificate failed
+                at the TLS layer itself (`tlsv13 alert certificate
+                required`), never reaching the route handler. The scenario
+                library was exercised directly: `duplicate-record` fed 42
+                items for a 41-record source (the duplicate present);
+                `corrupt-record` and `missing-signature` each tagged the
+                correct single record in their console output; `ppa-503`
+                correctly set the running stub's fault state over HTTP.
+                `npm run lint` (zero errors, 48 warnings - all
+                `no-magic-numbers`, acceptable per engineering-rules.md §5)
+                and `npx tsc --noEmit` (both `tsconfig.json` and
+                `tools/tsconfig.json`) both clean. `npm test` unaffected -
+                43 passing, 100% coverage, confirming this phase's changes
+                do not touch the Phase 0 surface.
+                **Not verified:** the `mla-restart` and `two-mla-instances`
+                scenarios need the real MLA consumer (Phase 2 onward) and
+                are documented as procedures, not run. `broker-restart`'s
+                feeder/producer-reconnect mechanics are runnable now; full
+                proof of MLA's own offset-resume-on-restart needs Phase 2's
+                consumer. `.gitlab-ci.yml` has still never run on a runner -
+                this phase adds nothing that changes that.
+
+**Diverged**    From `environment-simulation.md` §3.3's literal description
+                ("feed a capture → collect the stub's JSONL → diff against a
+                golden") - **the golden-file mechanism built and exercised
+                this phase diffs a Kafka topic read-back against the source
+                capture, not a `ppa-stub` JSONL against a golden.** Phase 1
+                has no envelope-construction logic (D3/D4/D7 exist as
+                decisions, not code), so there is nothing to POST to
+                `ppa-stub` from a real pipeline yet - building one to
+                manufacture something to diff would be exactly the
+                "pipeline logic that reads a real record's meaning" this
+                phase's checklist explicitly excludes. What was built proves
+                the property this phase's own exit criterion actually
+                names ("verified by reading the topic back and diffing
+                against the source") and generalises directly: from Phase 2
+                onward, `ppa-stub`'s own JSONL becomes the natural
+                extension of the same `tools/golden` machinery, once there
+                is a real envelope builder to produce it.
+                **This machine's `docker compose` (the snap CLI plugin)
+                fails silently** - every subcommand exits non-zero with no
+                output, traced via `journalctl -k` to an AppArmor `DENIED`
+                on the abstract Unix socket the plugin uses to talk back to
+                the CLI (`snap.docker.docker` `bind` `DENIED`). Worked
+                around with a standalone `docker-compose` v2 binary (talks
+                to the daemon directly, unaffected); `docker-compose.dev.yml`
+                itself is unchanged and portable - this is a local
+                machine quirk, recorded in `tools/README.md` §1, not a
+                project dependency change.
+                `tools/tsconfig.json` sets `noUncheckedIndexedAccess: true`,
+                which the root `tsconfig.json` does not - tools/ is a
+                separate project by design (`continue - before harness.md`
+                §4), and the stricter setting is what makes several
+                deliberate `undefined` guards in the CLI parsers and the
+                golden differ meaningful rather than lint-flagged as
+                unreachable.
+
+**Left open**   D3 remains open, unchanged - not this phase's to settle
+                (§13.1). Envelope construction, classification and
+                canonical selection remain unbuilt, exactly as this phase's
+                checklist required. The captures-in-repo decision recorded
+                last phase is now actually executed: `__tests__/fixtures/`
+                holds the full pack, ~9.5MB, committed verbatim.
+                `environment-simulation.md` §4's limits all still hold
+                exactly as written: no genuine DFSP signature can be
+                verified (no public keys), `ppa-stub`'s 200 asserts contract
+                validity only, not a durability guarantee; throughput and
+                rebalance realism are both still unproven claims for later
+                phases.
 
 ---
 
