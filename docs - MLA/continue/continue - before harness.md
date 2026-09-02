@@ -35,13 +35,14 @@ Read in this order:
 
 ## 2. What is already decided — do not re-litigate
 
-Unchanged since Phase 0. [`plan.md`](../plan.md) §3.1 records all seven; five are settled and none of them is this phase's to reopen:
+[`plan.md`](../plan.md) §3.1 records all seven; six are now settled and none of them is this phase's to reopen:
 
 | # | Decision | What we build |
 | --- | --- | --- |
 | **D1** | Canonical-record selection | The POC's per-operation table, plus a payload shape-check for `prepareTransfer`. |
 | **D2** | Classification signal | `operation` alone, corroborated by (not derived from) HTTP method/resource and signature presence. |
 | **D4** | `msgType` cardinality | Two values (`request`/`callback`), no `/TRANSFERS/NOTIFICATIONS` fifth route. |
+| **D5** | Final-state trigger | `commitTransfer` (`egress`), ISO `TxSts` vocabulary (`COMM`/`RESV`) authoritative — matches the POC. |
 | **D6** | Payload selection | The FSPIOP form (`content.transformedPayload` / `content.payload`), not mandatory base64 decoding. |
 | **D7** | Envelope `error` field | Present, populated only when a rejection shape is detected. |
 
@@ -51,9 +52,9 @@ Unchanged since Phase 0. [`plan.md`](../plan.md) §3.1 records all seven; five a
 
 ## 3. What is NOT yet decided — do not build the harness around a guess
 
-Unchanged since Phase 0. **D3** (the envelope `id` scheme — per-`eventType` vs. one leg-wide anchor) and **D5** (which record is the final-state trigger, `fulfilTransfer` vs. `commitTransfer`) are still open, still cross-team/COMESA decisions, and still not this team's to resolve unilaterally (`plan.md` §13.1).
+**D3** (the envelope `id` scheme — per-`eventType` vs. one leg-wide anchor) is still open, still a cross-team decision, and still not this team's to resolve unilaterally (`plan.md` §13.1). **D5** (which record is the final-state trigger) is settled — `commitTransfer` (`egress`), ISO `TxSts` vocabulary — and no longer belongs in this section; see §2 above.
 
-**Neither blocks the harness**, for the same reason neither blocked scaffolding: `capture-feeder` produces raw Kafka records exactly as captured, and `ppa-stub` validates structural envelope shape, not the semantics of what `id` means. **They will block Phase 2** the moment classification needs to decide what a record's `id` actually is.
+**D3 does not block the harness**, for the same reason it didn't block scaffolding: `capture-feeder` produces raw Kafka records exactly as captured, and `ppa-stub` validates structural envelope shape, not the semantics of what `id` means. **It will block Phase 2** the moment classification needs to decide what a record's `id` actually is.
 
 **One clarification worth stating plainly, because the phase's checklist could otherwise read as contradicting §3.1.** [`environment-simulation.md`](../environment-simulation.md) §3.2 requires `ppa-stub` to validate incoming envelopes against an ajv schema, and [`plan.md`](../plan.md) §6 (Phase 3) separately lists "envelope ajv schema, shared verbatim with `ppa-stub`" as a Phase 3 deliverable. These are not in conflict, but the sequencing needs to be explicit or a future session will wonder why Phase 3's item already looks satisfied:
 
@@ -79,7 +80,7 @@ This is [`plan.md`](../plan.md) §4, walked through with the reasoning inline. W
 
 **Explicitly not part of this checklist — do not start it yet:**
 
-- Any pipeline logic that reads a real record's *meaning* — canonical selection, classification, envelope construction. That is Phase 2 onward, and D3/D5 still gate the parts of it they touch.
+- Any pipeline logic that reads a real record's *meaning* — canonical selection, classification, envelope construction. That is Phase 2 onward, and D3 still gates the `id`-scheme parts of it (D5, the final-state trigger, is settled — `commitTransfer`, ISO vocabulary — and no longer gates anything here).
 - The MLA's own consumption logic (`autoCommit: false`, explicit advance/pause/resume). Phase 0 built connection-lifecycle only; subscribing and reading records is US-MLA-01, Phase 2.
 - PII tokenization, JWS verification, real mTLS against a real PPA. All later phases.
 
@@ -138,7 +139,7 @@ Not this phase's job, but worth knowing so harness decisions don't foreclose it:
 
 ## 8. Traps worth knowing before you start
 
-- **Do not resolve D3 or D5 to make the scenario library or golden files easier to name.** Name them after the raw data (`01_MWK_to_ZMW_PRIMARY`, `partition2-slice`, `export-500`), not after a classification scheme that doesn't exist yet.
+- **Do not resolve D3 to make the scenario library or golden files easier to name.** Name them after the raw data (`01_MWK_to_ZMW_PRIMARY`, `partition2-slice`, `export-500`), not after a classification scheme that doesn't exist yet. (D5 is separately settled — `commitTransfer`, ISO vocabulary — but that doesn't license naming anything after it either; the harness stays classification-agnostic regardless of which decisions have landed.)
 - **`ppa-stub` must never become a second implementation of PPA.** The moment it starts correlating across envelopes, accumulating ValKey-shaped state, or translating to ISO 20022, it has stopped being a test double and started being an unverified reimplementation of a different component in a different trust boundary. If a scenario seems to need that, the scenario is wrong, not the stub.
 - **The captures-in-repo decision (§5 above) is specific to this dev/test pack.** It says nothing about whether production capture data, once the COMESA environment exists (Phase 8), should ever be committed anywhere. Do not generalise this session's call beyond what it actually decided.
 - **`central-ledger`'s default port (`3001`) collides with this service's own default `PORT`.** Harmless while the `ml-core-test-harness` stack stays stopped; worth an explicit `PORT` override in `docker-compose.dev.yml` or `.env` if it's ever started alongside this project's own local run.

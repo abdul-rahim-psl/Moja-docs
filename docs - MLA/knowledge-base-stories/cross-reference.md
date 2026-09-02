@@ -66,7 +66,7 @@ This is the highest-value section. In each row the POC is not offering an opinio
 | **F9** | `operation` tag reliability | FSD Open Item #7 open; "whether this is a guaranteed platform contract or an artefact of this particular capture window is still open." (US-MLA-02) | **Resolved favourably** — no payload sniffing needed anywhere, for any stage, FX-vs-domestic transfer included. | 🔵 The story's caution about *CCH's own* environment remains right and should stay; the "may be an artefact" framing is now weaker than the evidence. |
 | **F10** | `TxSts` source vocabulary | One vocabulary: `COMMITTED` → `ACSC`, `ABORTED` → `RJCT`, `RESERVED` → `ACSP`. (US-PPA-11) | **Two.** The FSPIOP form (`transferState`) *and* the ISO form (`TxInfAndSts.TxSts`: `COMM`, `RESV`), sometimes on the same logical step's `start`/`egress` pair. | 🔴 An untranslated `COMM` falls through to Tazama's `PDNG` default. The story's translation table has no row for it — and `TxSts` is an unconstrained string, so nothing catches it. |
 | **F11** | The rejection shape | "Any error callback → `pacs.002` with `TxSts: RJCT`"; error code/description logged in audit only. (US-PPA-05, US-PPA-11) | Real rejections carry **`TxInfAndSts.StsRsnInf.{Rsn.Prtry, AddtlInf}` with no status field at all** — not the FSD's assumed `errorCode`/`errorDescription`, and not an `ABORTED`/`RJCT` status string. | 🔴 `RJCT` must be resolved **structurally from the shape's presence**, never by looking a value up in the translation table. The POC keeps `toRejectedPacs002` deliberately separate from `toPacs002` for exactly this reason — running `'RJCT'` back through the lookup silently yields `PDNG`. |
-| **F12** | The `pacs.002` trigger record | The **fulfil callback** (`PUT /transfers`, `fulfilTransfer`). (US-MLA-02, US-PPA-11, and the dedup document's evidence) | **`commitTransfer`** — an `egress`-only record from `ml-notification-handler` carrying `fspiop-source`/`-destination` and `TxSts: "COMM"`. The POC **skips `fulfilTransfer` entirely.** | 🟠 Both sides correctly conclude *one* trigger exists — but they pick **different records**. They agree these are two audit views of the same FSPIOP fulfil; they disagree on which view to act on. Must be settled explicitly. |
+| **F12** | The `pacs.002` trigger record | The **fulfil callback** (`PUT /transfers`, `fulfilTransfer`). (US-MLA-02, US-PPA-11, and the dedup document's evidence) | **`commitTransfer`** — an `egress`-only record from `ml-notification-handler` carrying `fspiop-source`/`-destination` and `TxSts: "COMM"`. The POC **skips `fulfilTransfer` entirely.** | 🟠 Both sides correctly conclude *one* trigger exists — but they pick **different records**. They agree these are two audit views of the same FSPIOP fulfil; they disagree on which view to act on. Must be settled explicitly. **Settled** (`plan.md` §3.1, D5): `commitTransfer`, matching the POC's reading — the story's `fulfilTransfer` position was not adopted. |
 | **F13** | Kafka message key | Not transaction-scoped; unsafe to reuse. (US-MLA-04) | Same — every observed trace id covered more than one transaction, and the settlement leg is sometimes re-emitted under a fresh one. | 🟢 Aligned, independently confirmed on both sides. |
 | **F14** | Out-of-order arrival | Real and likely; the story's stated cause ("prepare and fulfil sit on different Kafka topics") is flagged as stale (R-29, open). | **Confirmed by capture** — `04_ZMW_to_EGP_partition_split` shows the entire settlement leg landing on a **different partition under a fresh trace id**. The cause is partition assignment plus async-ack-then-process across replicas. | 🔵 The POC already holds the corrected rationale R-29 is waiting for. Lift it. |
 
@@ -97,6 +97,8 @@ This is the highest-value section. In each row the POC is not offering an opinio
 **Assessment.** The stories' rule is a simplification of a real observation, and it does not survive contact with the topic. The POC's per-operation table plus a payload shape-check for `prepareTransfer` is the correct model.
 
 **But note one genuine open question the POC does not settle:** the stories take `fulfilTransfer` (start) as the `pacs.002` trigger; the POC takes `commitTransfer` (egress). The dedup document's evidence — identical `GrpHdr.MsgId`, `TxSts`, `fspiop-source`, `fspiop-destination`, observed exactly once per transaction — says they are the same relayed callback, so either choice yields exactly one `pacs.002`. They are not interchangeable in code, though: `commitTransfer` carries the ISO `TxSts: "COMM"` vocabulary (F10) while `fulfilTransfer` carries the FSPIOP `transferState`. **Pick one, and make the `TxSts` translation table match it.**
+
+**Settled** (`plan.md` §3.1, D5): `commitTransfer`, ISO `TxSts` vocabulary (`COMM`/`RESV`) — the analysis above is the reasoning behind that choice, not superseded by it.
 
 ### 3.2 🔴 Classification signal
 
@@ -188,6 +190,8 @@ The stories eliminate `notification` and `POST /TRANSFERS/NOTIFICATIONS`; the PO
 - `translate` — `TRANSFER` + `notification` ⇒ `pacs.002`; `TRANSFER` + `request` ⇒ `pacs.008`.
 
 Under the stories' two-value model the replacement is clean — `TRANSFER` + `callback` ⇒ `pacs.002`, `TRANSFER` + `request` ⇒ `pacs.008` — **but only once F12 is settled**, because that mapping presumes the trigger record is the `PUT` fulfil, not the `PATCH`-era `commitTransfer`. Decide F12 first; the `msgType` collapse follows from it.
+
+**F12 is now settled as `commitTransfer`** (`plan.md` §3.1, D5). The caveat above still stands as the thing to confirm, not something it removes: `commitTransfer` is not literally a `PUT .../fulfil` call, so classification (`operation`, D2) must still be checked to yield `msgType: callback` for the TRANSFER row when the record is `commitTransfer`.
 
 The stories are right on the substance: with the notification-dedup component removed and no independently-published Central Ledger event on the topic, a third `msgType` and a fifth endpoint describe something that does not exist.
 
@@ -531,7 +535,7 @@ Three of these (7, 8, and the `reserveFxTransfer` drop in §3.1) were found **on
 | --- | --- |
 | `mla/src/clients/kafka.ts` (`autoCommit: false`, advance/pause/resume) | **Reuse.** The offset contract is exactly what US-MLA-01/06/07 require. |
 | `isCanonicalRecord` + `CANONICAL_ACTION_BY_OPERATION` | **Reuse, and rewrite the story to match.** §3.1 |
-| `classifyEventType` / `classifyMsgType` | **Reuse the mechanism, revise the tables** — drop `MsgType.Notification` once F12 is settled. |
+| `classifyEventType` / `classifyMsgType` | **Reuse the mechanism, revise the tables** — drop `MsgType.Notification` (F12 is settled — `commitTransfer`, `plan.md` §3.1, D5). |
 | `isTransferRejection` / `isFxQuoteRejection` / `extractRejectionError` | **Reuse.** No story reproduces this and both are needed. |
 | `resolveAnchorId` + the chaining maps | **Reuse only if the anchor model is kept**, and move the maps out of process. §4 |
 | `buildEnvelope` | **Revise** — `id` scheme (§4), `msgType` (§5.2), and the `error` field's fate (§5.3). |

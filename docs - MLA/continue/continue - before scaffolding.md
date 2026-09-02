@@ -34,13 +34,14 @@ Read in this order:
 
 ## 2. What is already decided — do not re-litigate
 
-Seven forks between the story documents and the earlier POC are recorded in [`../knowledge-base-stories/cross-reference.md`](../knowledge-base-stories/cross-reference.md) §1 and restated with a recommendation in [`../plan.md`](../plan.md) §3.1. **Five are settled** — build against these, do not reopen them:
+Seven forks between the story documents and the earlier POC are recorded in [`../knowledge-base-stories/cross-reference.md`](../knowledge-base-stories/cross-reference.md) §1 and restated with a recommendation in [`../plan.md`](../plan.md) §3.1. **Six are settled** — build against these, do not reopen them:
 
 | # | Decision | What we build |
 | --- | --- | --- |
 | **D1** | Canonical-record selection | The POC's **per-operation table**, plus a payload shape-check for `prepareTransfer` (distinguishes a real transfer rejection from its harmless duplicate `egress`). **Not** US-MLA-01's blanket "ingest only `start`" — that rule silently drops every transfer rejection and three `egress`-only operations. |
 | **D2** | Classification signal | **`operation` alone**, corroborated by (not derived from) HTTP method/resource and signature presence. |
 | **D4** | `msgType` cardinality | **Two values** (`request`/`callback`), **no** `/TRANSFERS/NOTIFICATIONS` fifth route. |
+| **D5** | Final-state trigger | **`commitTransfer`** (`egress`), ISO `TxSts` vocabulary (`COMM`/`RESV`) authoritative — matches the POC. |
 | **D6** | Payload selection | **Select the FSPIOP form** (`content.transformedPayload` / `content.payload`). Treat base64 `dataUri` decoding as available-on-demand, not mandatory — decoding it yields *Mojaloop's* ISO 20022, not the FSPIOP shapes the field tables map from. |
 | **D7** | Envelope `error` field | **Add it** — `error?: { code, description }`, populated only when a rejection shape is detected. Without it PPA has no defined way to recognise a rejection. |
 
@@ -50,12 +51,13 @@ None of these decisions block scaffolding — they matter from Phase 2 onward. T
 
 ## 3. What is NOT yet decided — do not scaffold around a guess
 
-Two forks are **genuinely open** and need input from outside this codebase — [`plan.md`](../plan.md) §13.1 tracks them as gating work now, not production:
+One fork is **genuinely open** and needs input from outside this codebase — [`plan.md`](../plan.md) §13.1 tracks it as gating work now, not production:
 
 - **D3 — the envelope `id` scheme.** Per-`eventType` (the stories' model, and the one new tag-availability evidence in `plan.md` §3.2 now favours — every canonical record carries its own stage-local id directly, so no chaining is needed) versus the POC's single leg-wide anchor. **This is a cross-team decision** — it changes what PPA's correlation keys look like, and PPA is a different component. Do not build `buildEnvelope` until this is settled.
-- **D5 — which record is the final-state (`pacs.002`) trigger.** `fulfilTransfer` (`start`, the stories) or `commitTransfer` (`egress`, the POC) — they carry **different status vocabularies** (FSPIOP `transferState` vs. ISO `TxSts: "COMM"`), so whichever is chosen determines what the translation table must cover. Needs COMESA/Mojoloop Partner input — [`plan.md`](../plan.md) §14, question 3.
 
-**Neither blocks scaffolding.** Both block Epic 1/2 story work (`US-MLA-02` needs D3 resolved to shape `id` extraction correctly; the eventual PPA-facing translation needs D5). If a session reaches story work with these still open, raise them — do not guess and proceed.
+**It does not block scaffolding.** It blocks Epic 1/2 story work — `US-MLA-02` needs it resolved to shape `id` extraction correctly. If a session reaches story work with it still open, raise it — do not guess and proceed.
+
+(D5 — which record is the final-state `pacs.002` trigger — is **settled**: `commitTransfer` [`egress`], ISO `TxSts` vocabulary. See §2 above and `plan.md` §3.1.)
 
 ---
 
@@ -86,7 +88,7 @@ This is [`plan.md`](../plan.md) §3.3, walked through with the reasoning inline.
 
 **Explicitly not part of this checklist — do not start it yet:**
 
-- Any pipeline logic (`isCanonicalRecord`, `classifyEventType`, `buildEnvelope`, …) — that's Phase 2 onward, and D3/D5 must be settled first for the parts they touch.
+- Any pipeline logic (`isCanonicalRecord`, `classifyEventType`, `buildEnvelope`, …) — that's Phase 2 onward, and D3 must be settled first for the parts it touches (D5 is already settled — `commitTransfer`, ISO vocabulary).
 - The `capture-feeder` / `ppa-stub` test harness — that's [`plan.md`](../plan.md) §4, Phase 1, and comes **immediately after** scaffolding, not as part of it. Full design: [`environment-simulation.md`](../environment-simulation.md).
 - PII tokenization, JWS verification, mTLS — all later phases.
 
@@ -107,7 +109,7 @@ The POC ([`/home/abdul-rahim/mojaloop/poc-mla-ppa/mla/`](/home/abdul-rahim/mojal
 | `src/logger.ts` | `mla/src/logger.ts` | As-is — the `LoggerService`-shaped `pino` wrapper. |
 | Dependencies | `mla/package.json` `dependencies` | `fastify`, `kafkajs`, `pino`, `ulid`, `dotenv`, `tslib`, `undici` — same set. Add nothing speculative; every new dependency should map to a concrete Phase 2+ need (a JWS library for Phase 3, a keyed-hash primitive for Phase 4). |
 
-**Do not carry forward:** the POC's `src/interfaces/event-envelope.ts` contents (the `id` scheme and `msgType` cardinality are exactly D3/D5, still open/settled-differently — see §2–§3), and `src/services/logic.service.ts` in full (that's the pipeline itself, Phase 2+, not scaffolding).
+**Do not carry forward:** the POC's `src/interfaces/event-envelope.ts` contents (the `id` scheme is D3, still open; the third `msgType` value the POC relies on is tied to D5, now settled to match the POC — see §2–§3), and `src/services/logic.service.ts` in full (that's the pipeline itself, Phase 2+, not scaffolding).
 
 ---
 
@@ -154,7 +156,7 @@ Not this session's job, but worth knowing so scaffolding decisions don't foreclo
 
 ## 8. Traps worth knowing before you start
 
-- **Do not resolve D3 or D5 yourself.** Both are flagged in `plan.md` §13.1 as needing input from outside this codebase (PPA's owners, COMESA/the Mojoloop Partner respectively). A session under time pressure picking one to "keep moving" is exactly the failure mode `plan.md` §3.1 exists to prevent.
+- **Do not resolve D3 yourself.** It's flagged in `plan.md` §13.1 as needing input from outside this codebase (PPA's owners). A session under time pressure picking an answer to "keep moving" is exactly the failure mode `plan.md` §3.1 exists to prevent. (D5 is already settled — `commitTransfer`, ISO vocabulary — so it no longer applies here.)
 - **The POC's `.env.template` has at least one confirmed-stale default** (`KAFKA_AUDIT_TOPIC=mojaloop-audit`). Copying it verbatim without checking `core-knowledge.md` §2.1 reintroduces a known error.
 - **`coverageThreshold: 96`, not 95.** This was explicitly decided in the immediately preceding session (the user chose "above 95%" over "95% floor") and propagated through `engineering-rules.md`, `README.md`, `CLAUDE.md` and `plan.md`. Do not default to the more common 95 out of habit.
 - **`docs - MLA/EPICS/` is the spec to build against, not `core-knowledge.md`.** `core-knowledge.md` is explicitly capture-blind (see its own header warning) — it reproduces what the four story documents say even where the captures contradict them. For the actual per-story acceptance criteria, read the `story.md` under `docs - MLA/EPICS/`.

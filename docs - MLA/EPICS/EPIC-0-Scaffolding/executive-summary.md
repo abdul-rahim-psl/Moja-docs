@@ -65,7 +65,7 @@ This is worth recording beyond its own fix. The gate was not broken by carelessn
 
 No pipeline logic of any kind — no canonical-record selection, no classification, no envelope construction. No test harness; that is Phase 1, and it is built before the pipeline on purpose. No PII tokenization, no JWS verification, no mTLS.
 
-Two decisions remain open and were not resolved by this work, because neither is this team's alone to settle: **D3**, the envelope `id` scheme, which changes PPA's correlation keys; and **D5**, which record is the final-state trigger, which determines the status vocabulary the downstream translation must cover. Neither blocks scaffolding. Both block the story work that follows.
+One decision remains open and was not resolved by this work, because it is not this team's alone to settle: **D3**, the envelope `id` scheme, which changes PPA's correlation keys. It does not block scaffolding; it blocks the story work that follows. (**D5**, which record is the final-state trigger, is settled — `commitTransfer` [`egress`], ISO `TxSts` vocabulary [`COMM`/`RESV`] — see `plan.md` §3.1. It was open at the time this phase closed.)
 
 ## Where this leaves the project
 
