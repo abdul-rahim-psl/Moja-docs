@@ -23,7 +23,7 @@
 
 One cross-border payment produces exactly **four** Tazama messages: `pain.001` (quote request), `pain.013` (quote callback), `pacs.008` (transfer prepare), `pacs.002` (final state or rejection). The FX legs produce no message of their own — they are cached and fold into those four.
 
-**Current state:** requirements and design knowledge only. No implementation exists in this repository yet. The four user-story documents have been through a consolidated review; several critical findings are resolved and a smaller set — including one Critical (**R-04**, the two "never synthesize" prohibitions) — remains open. See `core-knowledge.md` §13.
+**Current state:** Phase 0 (scaffolding) is built and live-verified in [`cch-mla`](/home/abdul-rahim/mojaloop/cch-mla) — the separate repository this knowledge base governs; nothing under `docs - MLA/` runs code. No pipeline logic exists yet — Phase 1 (the harness) is next, then Phase 2 (`US-MLA-01`, the first story). See `plan.md` §1 and §16 for what has actually been built, and `continue/` for the current session handoff. The four user-story documents have been through a consolidated review; several critical findings are resolved and a smaller set — including one Critical (**R-04**, the two "never synthesize" prohibitions) — remains open. See `core-knowledge.md` §13.
 
 ---
 

@@ -29,16 +29,18 @@
 
 ## 1. Where we are
 
-**No code exists.** What exists is a complete requirements and design base:
+**Phase 0 is built and live-verified.** A TypeScript + Fastify skeleton exists at [`cch-mla`](/home/abdul-rahim/mojaloop/cch-mla) — the four-layer structure, typed and validated configuration, `/health/live` + `/health/ready`, structured logging, a Kafka connection client, 43 tests at 100% coverage against a mechanically-enforced 96% gate, and a GitLab CI pipeline. Full detail: §16's Phase 0 entry and `EPICS/EPIC-0-Scaffolding/`. **No pipeline logic exists yet** — nothing reads a Kafka record, classifies an event, builds an envelope, or talks to a PPA; that starts at Phase 2, and Phase 1 (the harness, §4) is next:
 
 | Asset | State |
 | --- | --- |
 | Requirements — four user-story documents, broken out per story under `docs - MLA/EPICS/` | Complete; several findings still open (R-04 Critical, R-18, R-23, R-29, R-31) |
 | Synthesized model — [`core-knowledge.md`](knowledge-base-stories/core-knowledge.md) | Complete |
 | Engineering policy — [`engineering-rules.md`](engineering-rules.md) | Complete and binding |
-| POC comparison — [`cross-reference.md`](knowledge-base-stories/cross-reference.md) | Complete; **seven forks still need a decision** |
+| POC comparison — [`cross-reference.md`](knowledge-base-stories/cross-reference.md) | Complete; **five of seven forks settled (§3.1) — D3 and D5 still need a decision** |
 | A live-verified predecessor — `poc-mla-ppa` and its documentation set | Complete, and the single most valuable input we have |
-| Real capture data — `DRPP_Kafka_E2E_Pack 2/` | In hand (see §1.1) |
+| Real capture data — `DRPP_Kafka_E2E_Pack 2/` | In hand (see §1.1); decision made to commit it into `cch-mla` as Phase 1 fixtures (`continue/continue - before harness.md` §5) |
+| **Phase 0 — scaffolding** | **Done**, [2026-09-01] — §16 |
+| **Phase 1 — the harness** | **Not started.** Next work — §4, and `continue/continue - before harness.md` |
 | **A running DRPP environment** | **Not available.** Promised by COMESA; no date. |
 
 The POC is the reason this project does not start from zero. It ran the whole MLA→PPA→TMS path against real captured data, a real ValKey and a real Tazama TMS, and it found real defects doing so. Where the POC and the current user stories disagree, that disagreement is *evidence versus specification* and has to be resolved deliberately — §12.
@@ -343,15 +345,15 @@ The POC was live-verified. Where we do something different, the burden of proof 
 
 Ordered by how much they change what we build. The first four are the ones to put in the next data request.
 
-1. **Can we have the DFSP public keys, or a JWKS endpoint?** Without them, JWS verification cannot be proven against real traffic — only against fixtures we sign ourselves. This is the single highest-value unblock available.
-2. **Is the per-operation canonical-record shape a stable contract**, or an artefact of this capture window? Zero exceptions across **641 records** and two independent captures (141 in `DRPP_Kafka_E2E_Pack` — five 20-record transactions plus the 41-record partition-2 slice — and 500 in `raw_export_500.json`), corroborated by signature presence. But that is still two capture windows, not a Mojaloop guarantee.
-3. **Which record should be treated as the final-state trigger** — `fulfilTransfer` or `commitTransfer` — and is the ISO (`COMM`/`RESV`) or FSPIOP (`COMMITTED`/`RESERVED`) vocabulary authoritative? (D5.)
-4. **Can we get a rejected transfer *fulfil*, and a rejected FX transfer?** Neither has ever been captured. Every branch for them is specification-only. Widening the capture window is what surfaced the three rejection shapes we do have.
-5. **Can an FX quote fail *after* its payment's `pain.001` has been sent**, or only before the primary quote — the only ordering observed? This changes the correct behaviour entirely: if the primary quote can already be in Tazama's graph, a discard-and-count is wrong.
-6. **Is `topic-event-audit` the final topic name**, and what are the retention and partition count in the target environment? The FSD assumes 7 days; no capture evidences retention either way.
-7. **Is the settlement-leg partition split expected behaviour or a symptom?** It determines whether out-of-order arrival is a permanent design condition or a defect someone will fix.
-8. **Is `dateOfBirth` genuinely unavailable on this topic**, or absent only from these test parties? Zero occurrences across every capture; downstream `pacs.008` mapping depends on it.
-9. **Is `binId` / `processedAsBatch` (present on 59 of 500 records) relevant to us?** Neither the FSD, the stories, nor the POC models batch processing on this topic. Probably out of scope — worth one question rather than an assumption.
+1. **Can we have the DFSP public keys, or a JWKS endpoint?** Without them, JWS verification cannot be proven against real traffic — only against fixtures we sign ourselves. This is the single highest-value unblock available. **Gates Phase 3** (§13.1).
+2. **Is the per-operation canonical-record shape a stable contract**, or an artefact of this capture window? Zero exceptions across **641 records** and two independent captures (141 in `DRPP_Kafka_E2E_Pack` — five 20-record transactions plus the 41-record partition-2 slice — and 500 in `raw_export_500.json`), corroborated by signature presence. But that is still two capture windows, not a Mojaloop guarantee. **Built against in Phase 2; re-verified against live traffic in Phase 8** (§11).
+3. **Which record should be treated as the final-state trigger** — `fulfilTransfer` or `commitTransfer` — and is the ISO (`COMM`/`RESV`) or FSPIOP (`COMMITTED`/`RESERVED`) vocabulary authoritative? (D5.) **Gates Phase 2 classification and Phase 3 envelope construction** (§13.1).
+4. **Can we get a rejected transfer *fulfil*, and a rejected FX transfer?** Neither has ever been captured. Every branch for them is specification-only. Widening the capture window is what surfaced the three rejection shapes we do have. **Affects Phase 2–3 test coverage** — the untested branches sit in classification and envelope construction.
+5. **Can an FX quote fail *after* its payment's `pain.001` has been sent**, or only before the primary quote — the only ordering observed? This changes the correct behaviour entirely: if the primary quote can already be in Tazama's graph, a discard-and-count is wrong. **Bears on Phase 2's FX-quote rejection handling**; the resulting correlation behaviour is PPA-side.
+6. **Is `topic-event-audit` the final topic name**, and what are the retention and partition count in the target environment? The FSD assumes 7 days; no capture evidences retention either way. **Phase 8** (§11 — the local Phase 1 topic name/partition count are derived directly from capture evidence, not from this answer).
+7. **Is the settlement-leg partition split expected behaviour or a symptom?** It determines whether out-of-order arrival is a permanent design condition or a defect someone will fix. **Bears on Phase 2's out-of-order handling** (the harness itself, Phase 1, only needs to replay the split faithfully, not explain it).
+8. **Is `dateOfBirth` genuinely unavailable on this topic**, or absent only from these test parties? Zero occurrences across every capture; downstream `pacs.008` mapping depends on it. **PPA-side (`pacs.008` translation) — not a numbered cch-mla phase.**
+9. **Is `binId` / `processedAsBatch` (present on 59 of 500 records) relevant to us?** Neither the FSD, the stories, nor the POC models batch processing on this topic. Probably out of scope — worth one question rather than an assumption. **If relevant at all, Phase 2** (ingestion/classification scope).
 
 ---
 
