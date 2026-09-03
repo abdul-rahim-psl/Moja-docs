@@ -1,0 +1,10 @@
+# US-MLA-04 — File Register
+
+Shared integration files that assemble this story with US-MLA-05 (`envelope-pipeline.service.ts`, `ingestion-consumer.service.ts`'s further extension, `src/index.ts`'s wiring) are listed once, at the epic level — `EPICS/EPIC-2-envelope-construction-jws-validation/file-register.md` — rather than repeated here.
+
+| File | Why it was added / what it does |
+| --- | --- |
+| `src/services/envelope-builder.service.ts` | `deriveMsgType` (POST → `request`, PUT/PATCH → `callback`, from `tags.httpMethod`), `extractId` (D3 — per-`eventType`, with the `putFxQuotesByID` httpPath fallback this story's own investigation found), and `buildEnvelope` (assembly plus the completeness check, D7's `error` field sourced from `TxInfAndSts.StsRsnInf`). The one service this story owns outright. |
+| `src/services/envelope-schema-validator.service.ts` | Wraps ajv over `event-envelope.schema.json`, the same file `tools/ppa-stub/validator.ts` compiles — a defensive backstop proving the schema and `buildEnvelope`'s own completeness check never drift apart. |
+| `src/interfaces/audit-record.interface.ts` | Widened: `content.headers` to `Record<string, string \| undefined>`, and `metadata.trace.tags` gained explicit named optional fields (`httpMethod`, `httpPath`, `quoteId`, `conversionRequestId`, `transferId`, `commitRequestId`) alongside the pre-existing `operation?`. Both were silently typed as always-present before this story, which made a genuinely missing `fspiop-source`/`fspiop-destination` untypeable as a real check. |
+| `__tests__/envelope-builder.service.test.ts` | 28 tests: `deriveMsgType` for every real POST/PUT/PATCH case plus the missing-header case; `extractId` for all four event types' direct tags, the `putFxQuotesByID` httpPath fallback proven directly against the real fixture, and two synthetic edge cases (no tag and no fallback; an httpPath with an empty trailing segment); `buildEnvelope` for all four event types, both `msgType` values, each of the four missing-field rejections, and the `error` field populated from the real `transfer-rejections.json` fixture versus left undefined on an ordinary transfer. |

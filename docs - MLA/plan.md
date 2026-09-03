@@ -29,20 +29,21 @@
 
 ## 1. Where we are
 
-**Phases 0 through 2 are built and live-verified.** A TypeScript + Fastify skeleton exists at [`cch-mla`](/home/abdul-rahim/mojaloop/cch-mla) — the four-layer structure, typed and validated configuration, `/health/live` + `/health/ready`, structured logging, and a real ingestion pipeline: a Kafka consumer with explicit offset control, canonical-record selection, event classification, FX-quote-rejection detection, payload selection and the unreadable-record path, wired into one handler and live-verified against a real broker, including a genuine mid-feed kill/restart and a checked-in decision-level golden file. 140 tests at 100%/100%/100%/98.76%+ coverage against a mechanically-enforced 96% gate, and a GitLab CI pipeline. Full detail: §16's Phase 0/1/2 entries, `EPICS/EPIC-0-Scaffolding/`, `EPICS/PHASE-1-Harness/` and `EPICS/EPIC-1-kafka-subscription-audit-topic-ingestion/`. **Phase 3 (envelope construction and JWS validation, §6) is next** — nothing yet builds an envelope or talks to a PPA:
+**Phases 0 through 3 are built and live-verified.** A TypeScript + Fastify skeleton exists at [`cch-mla`](/home/abdul-rahim/mojaloop/cch-mla) — the four-layer structure, typed and validated configuration, `/health/live` + `/health/ready`, structured logging, a real ingestion pipeline, and now real envelope construction plus real JWS verification: every record either becomes a schema-valid `EventEnvelope` that a live `ppa-stub` accepts over mTLS, or is rejected for a named, correctly-classified reason — including a genuinely re-signed record verifying, a tampered one failing, a stripped signature failing distinctly, and a key-source outage failing distinctly from an invalid signature, all proven against a real broker and a real `ppa-stub`, not a mock. 202 tests at 100%/96.36%/100%/100% coverage against a mechanically-enforced 96% gate, and a GitLab CI pipeline. Full detail: §16's Phase 0–3 entries, `EPICS/EPIC-0-Scaffolding/`, `EPICS/PHASE-1-Harness/`, `EPICS/EPIC-1-kafka-subscription-audit-topic-ingestion/` and `EPICS/EPIC-2-envelope-construction-jws-validation/`. **Phase 4 (PII tokenization, §7) is next** — nothing yet tokenizes PII, and no PPA delivery client exists (Phase 5):
 
 | Asset | State |
 | --- | --- |
 | Requirements — four user-story documents, broken out per story under `docs - MLA/EPICS/` | Complete; several findings still open (R-04 Critical, R-18, R-23, R-29, R-31) |
 | Synthesized model — [`core-knowledge.md`](knowledge-base-stories/core-knowledge.md) | Complete |
 | Engineering policy — [`engineering-rules.md`](engineering-rules.md) | Complete and binding |
-| POC comparison — [`cross-reference.md`](knowledge-base-stories/cross-reference.md) | Complete; **six of seven forks settled (§3.1) — only D3 still needs a decision** |
+| POC comparison — [`cross-reference.md`](knowledge-base-stories/cross-reference.md) | Complete; **all seven forks settled (§3.1)** — D3 (the last of them) resolved with PPA's owners as Option A, the per-`eventType` scheme |
 | A live-verified predecessor — `poc-mla-ppa` and its documentation set | Complete, and the single most valuable input we have |
 | Real capture data — `DRPP_Kafka_E2E_Pack 2/` | In hand (see §1.1); committed into `cch-mla` at `__tests__/fixtures/` as Phase 1 fixtures, verbatim (`continue/continue - before harness.md` §5) |
 | **Phase 0 — scaffolding** | **Done**, [2026-09-01] — §16 |
 | **Phase 1 — the harness** | **Done**, [2026-09-02] — §16. `capture-feeder`, `ppa-stub`, golden-file regression, curated fixtures and the named scenario library all exist and are live-verified. |
 | **Phase 2 — ingestion path** | **Done**, [2026-09-02/03] — §16 (US-MLA-01/02/03), §5. Kafka consumer, canonical selection, classification, FX-quote-rejection detection, payload selection and the unreadable-record path are all built, wired into one live handler, and verified against a real broker — including a decision-level golden file and a genuine mid-feed kill/restart. |
-| **Phase 3 — envelope construction and JWS validation** | **Not started.** Next work — §6 |
+| **Phase 3 — envelope construction and JWS validation** | **Done**, [2026-09-03] — §16 (US-MLA-04/05), §6. Envelope construction, ajv schema enforcement, and real RS256/384/512 JWS verification (file-backed, hot-reloadable key store) are all built, wired into one live handler, and verified against a real broker and a real `ppa-stub` — including a genuinely re-signed record, a tampered one, a stripped signature, and a simulated key-source outage, each producing a distinct, correctly-classified outcome. D3 (the envelope `id` scheme) resolved with PPA's owners as Option A during this phase. |
+| **Phase 4 — PII tokenization** | **Not started.** Next work — §7 |
 | **A running DRPP environment** | **Not available.** Promised by COMESA; no date. |
 
 The POC is the reason this project does not start from zero. It ran the whole MLA→PPA→TMS path against real captured data, a real ValKey and a real Tazama TMS, and it found real defects doing so. Where the POC and the current user stories disagree, that disagreement is *evidence versus specification* and has to be resolved deliberately — §12.
@@ -102,7 +103,7 @@ Verified directly against the files, not taken from the documentation:
 | --- | --- | --- | --- | --- | --- |
 | **D1** | **Canonical-record rule** — blanket "ingest only `start`" versus the POC's per-operation table. | **US-MLA-01** — Subscribe to the Mojaloop Audit Topic. Its own acceptance criteria state the `start`-only rule verbatim; this decision rewrites that criterion. | **US-MLA-02** (Distinguish Event Types) — canonical selection runs immediately before classification, in the same pass. | **Adopt the POC's table**, plus a payload shape-check for `prepareTransfer`. Then get US-MLA-01 corrected. | The story's rule drops `commitTransfer`, `reserveFxTransfer`, `notifyFxTransfer` (all `egress`-only) **and every transfer rejection** (`prepareTransfer`/`egress`). This is the first thing built in Phase 2 and everything downstream depends on it. |
 | **D2** | **Classification signal** — HTTP method + resource, or `operation`. | **US-MLA-02** — Distinguish Event Types Within the Audit Topic Stream. Its own Assumptions section is the one that proposes method+resource as primary. | **US-MLA-01** (feeds D1's canonical-selection table); **US-MLA-04** (the classification signal is also what `msgType` is derived from). | **`operation`**, corroborated by (not derived from) method/resource and signature presence. | Method+resource cannot separate `fulfilFxTransfer` (start-only) from `reserveFxTransfer` (egress-only) — both are `PUT /fxTransfers/{id}` — which is precisely the discrimination D1's table needs. |
-| **D3** | **Envelope `id` scheme** — per-`eventType` (stories) or one leg-wide anchor (POC). | **US-MLA-04** — Construct a Standard Event Envelope. Its `id` acceptance criterion is the one this decision confirms or overturns. | **US-PPA-04** and **US-PPA-06** (in `cch-ppa-user-stories.md`) — PPA's per-stage idempotency and correlation-cache keys are built directly on whichever scheme wins here. | **Per-`eventType`, per US-MLA-04** — see §3.2, which is new evidence, not a restatement. | Determines whether the MLA needs cross-record chaining state at all. Also a **cross-team decision**: it moves work onto PPA, so PPA's owners must agree. |
+| **D3** | **Envelope `id` scheme** — per-`eventType` (stories) or one leg-wide anchor (POC). | **US-MLA-04** — Construct a Standard Event Envelope. Its `id` acceptance criterion is the one this decision confirms or overturns. | **US-PPA-04** and **US-PPA-06** (in `cch-ppa-user-stories.md`) — PPA's per-stage idempotency and correlation-cache keys are built directly on whichever scheme wins here. | **Settled: per-`eventType`, per US-MLA-04** (Option A) — see §3.2 for the evidence. Agreed directly with PPA's owners; PPA accepts the cross-stage join this moves onto it. | Determines whether the MLA needs cross-record chaining state at all — resolved with no chaining state needed. |
 | **D4** | **`msgType` cardinality and the fifth route.** | **US-MLA-04** (the `msgType` field itself) and **US-MLA-06** — Deliver Envelopes to PPA via Per-Action Endpoints (the `/TRANSFERS/NOTIFICATIONS` route lives in its Routing Table). | **US-MLA-02** (classification is what `msgType` is derived from); PPA's ingestion routes (`cch-ppa-user-stories.md`, US-PPA-01) mirror whichever route set MLA settles on. | **Two values, no `/TRANSFERS/NOTIFICATIONS`**, per the stories. | With the notification-dedup component removed and no independently-published Central Ledger event on the topic, a third value describes something that does not exist. It was load-bearing control flow in the POC — D5, settled below, is the replacement discriminator. |
 | **D5** | **Which record is the final-state trigger** — `fulfilTransfer` (`start`, stories) or `commitTransfer` (`egress`, POC). | **US-MLA-02** — its own Classification Table is the one that names `fulfilTransfer`/`commitTransfer` as the TRANSFER row this decision picks between. | **US-MLA-04** (which HTTP-method signal derives `msgType` for this leg); **US-PPA-11** (in `cch-ppa-user-stories.md`) — the `pacs.002` translation and its `TxSts` table are built on whichever record and vocabulary wins here. | **Settled: `commitTransfer` (`egress`), ISO `TxSts` vocabulary (`COMM`/`RESV`) authoritative** — matches the POC. Then get US-MLA-02 corrected to name `commitTransfer`, not `fulfilTransfer`, as the TRANSFER row's terminal record. | They carry **different status vocabularies** — `fulfilTransfer` the FSPIOP `transferState`, `commitTransfer` the ISO `TxSts: "COMM"`/`"RESV"`. With `commitTransfer` as the trigger, the `TxSts` translation table is built against the ISO vocabulary, not FSPIOP's; an untranslated value would otherwise be silently accepted downstream (F10). |
 | **D6** | **Payload selection** — mandatory base64 decode or select the FSPIOP form (POC). | **US-MLA-03** — Decode Base64-Encoded Transfer Payloads. Its own acceptance criteria state the mandatory-decode rule this decision rewrites. | **US-PPA-08/09/10/11** (in `cch-ppa-user-stories.md`) — every ISO field-mapping table sources from the FSPIOP form; decoding `dataUri` instead would break all four at once. | **Select the FSPIOP form**; treat decoding as available-on-demand. | Decoding `content.dataUri` yields *Mojaloop's* ISO 20022 (`IntrBkSttlmAmt.ActiveCurrencyAndAmount`, `FinInstnId.Othr.Id`) — not the FSPIOP shapes every downstream field table maps from. Following US-MLA-03 and the PPA field tables literally is internally inconsistent. Note `dataUri` is present on only 46 of 500 records. |
@@ -147,7 +148,7 @@ The `id`-scheme fork was recorded in `cross-reference.md` as a balanced trade-of
 1. **The stories' per-type scheme needs no chaining anywhere.** Every canonical record carries its own stage-local identifier directly in tags. The POC's two bounded in-process chaining maps (`quoteIdToAnchor`, `fxTransferIdToAnchor`) exist *only* because the POC promoted the anchor to `id` — and the anchor is precisely the field missing from `putQuotesByID`, `fulfilFxTransfer` and `reserveFxTransfer`. **The POC's deviation created the problem it then had to solve.** Removing it removes per-instance state that would otherwise have to be moved into a shared store before MLA could scale horizontally.
 2. **`conversionRequestId` is a `start`-only tag.** Safe under both D1 candidates, since FX-quote canonical records are `start` either way — but it means an FX-quote `egress` record can never satisfy US-MLA-04's completeness check. Worth a test, not a redesign.
 
-**The honest cost:** the per-type scheme moves the cross-stage join to PPA, which must link a `quoteId`-keyed entry to its `transactionId`-keyed one. That link is available — the `postQuotes` body carries both — but it is work PPA now owns. **D3 cannot be decided unilaterally by this team.**
+**The honest cost:** the per-type scheme moves the cross-stage join to PPA, which must link a `quoteId`-keyed entry to its `transactionId`-keyed one. That link is available — the `postQuotes` body carries both — but it is work PPA now owns. **D3 was not this team's to decide unilaterally, and has since been settled directly with PPA's owners: Option A (per-`eventType`), as recommended above. PPA accepts the cross-stage join.**
 
 ### 3.3 Scaffolding ✅
 
@@ -207,17 +208,21 @@ US-MLA-01, US-MLA-02, US-MLA-03. Delivers: a record consumed from a real broker,
 
 US-MLA-04, US-MLA-05.
 
-- [ ] Envelope builder per **D3**, **D4** and **D7**. `correlationId` freshly generated per event, **never** the Kafka message key.
-- [ ] Completeness check: missing `msgType`, `eventType`, `id`, `fspiop-source` or `fspiop-destination` ⇒ log, advance, do not forward.
-- [ ] Envelope ajv schema, shared verbatim with `ppa-stub` so the contract is enforced from both ends.
-- [ ] **Real cryptographic JWS verification** — RS256/384/512, against the sending DFSP's registered public key, on every canonical record, no exemptions.
-- [ ] Configurable key store; adding a DFSP key must not require a restart.
-- [ ] A **key-source outage must be distinguishable from a genuine signature failure.** Otherwise an outage manifests as "every event has an invalid signature" — the failure mode US-MLA-05 explicitly calls out.
-- [ ] Missing / invalid signature ⇒ security log, alert, advance the offset. Not retried.
+- [x] Envelope builder per **D3** (settled — Option A, per-`eventType`), **D4** and **D7**. `correlationId` freshly generated per event, **never** the Kafka message key. *(`src/services/envelope-builder.service.ts` — built, unit-tested, live-verified.)*
+- [x] Completeness check: missing `msgType`, `eventType`, `id`, `fspiop-source` or `fspiop-destination` ⇒ log, advance, do not forward. *(Same file — a distinctly-named `incomplete-envelope` outcome. Built, unit-tested, live-verified.)*
+- [x] Envelope ajv schema, shared verbatim with `ppa-stub` so the contract is enforced from both ends. *(`src/services/envelope-schema-validator.service.ts`, called from the pipeline after `buildEnvelope`. Built, unit-tested; live-verified as the defensive backstop it is — never observed to actually reject anything, by design, since `buildEnvelope`'s own check already enforces everything the schema requires.)*
+- [x] **Real cryptographic JWS verification** — RS256/384/512, against the sending DFSP's registered public key, on every canonical record, no exemptions. *(`src/services/jws-verification.service.ts`, Node's built-in `crypto.verify`. Built, unit-tested, live-verified against locally re-signed fixtures. Genuine COMESA/DFSP signature verification stays blocked — §13.1/§14 Q1 — exactly as flagged below.)*
+- [x] Configurable key store; adding a DFSP key must not require a restart. *(`src/clients/public-key-store.client.ts`, a file-backed store hot-reloaded via `fs.watch`. Built, unit-tested, live-verified — a key generated mid-session via `npm run keys:generate` was picked up by a running MLA process with no restart.)*
+- [x] A **key-source outage must be distinguishable from a genuine signature failure.** Otherwise an outage manifests as "every event has an invalid signature" — the failure mode US-MLA-05 explicitly calls out. *(A distinct `key-source-unavailable` outcome/skip reason, logged without the `SECURITY` marker `invalid-signature` gets. Built, unit-tested, live-verified: pointing `JWS_PUBLIC_KEY_DIR` at a nonexistent directory made even a genuinely-valid re-signed record fail as `key-source-unavailable`, never as `invalid-signature`.)*
+- [x] Missing / invalid signature ⇒ security log, advance the offset. Not retried. *(`SECURITY`-marked error log, offset advances unconditionally per Phase 2's existing behaviour. Live-verified for both missing and invalid. No real alert channel exists yet — Phase 6 — so "alert raised" is met by this `SECURITY`-marked log, not a wired alert; accepted as this phase's interim state rather than left blocking.)*
 
-**On the missing keys** ([`environment-simulation.md`](environment-simulation.md) §4, and §13 below): build against locally re-signed fixtures — take real capture bodies, sign with a generated keypair, register that key, verify. This proves the mechanism honestly. **Verification against a genuine COMESA signature stays open, and the phase's status must say so rather than implying full coverage.**
+**D3 resolved.** Per-`eventType` (Option A) is the final scheme, agreed directly with PPA's owners — not a provisional default any more. `envelope-builder.service.ts`'s own comments have been updated accordingly.
 
-**Exit criterion — live.** Every record in the partition-2 slice produces a schema-valid envelope accepted by `ppa-stub`, or is rejected for a stated reason. A locally re-signed record verifies; the same record with a tampered body fails and raises the security alert; a stripped signature fails distinctly from an unreachable key source.
+**New evidence found while building the id-extraction step, correcting §3.2 above:** that table counts `conversionRequestId` present on "exactly the start count" for `putFxQuotesByID` and reads that as present on the canonical (`start`) record. Checked directly against every `putFxQuotesByID` pair in `raw_export_500.json` (14 of 14): the tag is present on the **`egress`** half, not the canonical `start` half D1 selects — the opposite of what the count alone implies. The canonical `start` record still carries the value, as the trailing segment of `tags.httpPath` (`/fxQuotes/{id}`) — confirmed to equal the sibling `egress` record's `conversionRequestId` for all 14 pairs, zero exceptions. `envelope-builder.service.ts`'s `extractId` implements this fallback; see its own doc comment.
+
+**On the missing keys** ([`environment-simulation.md`](environment-simulation.md) §4, and §13 below): built and verified against locally re-signed fixtures — real capture bodies, signed with a keypair generated by `tools/dfsp-keys` (`npm run keys:generate`), registered live via `FilePublicKeyStoreClient`, verified with `verifyJws`. This proves the mechanism honestly. **Verification against a genuine COMESA signature stays open** — no real DFSP key is available — and every one of the 15 canonical signed records in the partition-2 slice was correctly rejected as `invalid-signature` in the baseline live run for exactly that reason.
+
+**Exit criterion — live. Met.** Every one of the 41 records in the partition-2 slice, fed unmodified through a real MLA instance against a real broker, produced either a schema-valid envelope or a named skip reason (23 `egress`, 3 `party-lookup`, 15 `SECURITY: invalid FSPIOP-Signature` — zero unhandled). Separately: a `--resign`-ed record produced `Forwarded FXQUOTE`, and that exact envelope was POSTed over real mTLS to a live `ppa-stub` and accepted (`200`, recorded in `received.jsonl`); the same record with `--tamper-body` added failed as `invalid-signature`; `--strip-signature` failed as the distinctly-worded `missing-signature`; and pointing `JWS_PUBLIC_KEY_DIR` at a nonexistent directory produced `key-source-unavailable` for every signed record, including the one that would otherwise have verified. Full narrative belongs in §16's US-MLA-04/05 entries (pending).
 
 ---
 
@@ -309,7 +314,7 @@ The POC was live-verified. Where we do something different, the burden of proof 
 | --- | --- | --- | --- | --- |
 | **V1** | Canonical selection | Per-operation table + `prepareTransfer` shape-check | **Same** (D1) — the story is corrected, not followed | No divergence. Carry the POC's table forward intact, including the rejection shape-check. Re-prove only that our implementation matches, via the golden file. |
 | **V2** | Classification | `operation` alone | **Same** (D2) | No divergence. |
-| **V3** | Envelope `id` | Leg-wide anchor + two chaining maps | **Per-`eventType`** (D3) | Divergence, and it *removes* code. Chaining disappears entirely (§3.2). **Must re-prove:** every canonical record yields a non-empty `id` across the full 500-record export — the POC's chaining bugs were exactly this class. **Must confirm with PPA's owners** that they accept the join. |
+| **V3** | Envelope `id` | Leg-wide anchor + two chaining maps | **Per-`eventType`** (D3, settled — Option A) | Divergence, and it *removes* code. Chaining disappears entirely (§3.2). **Confirmed with PPA's owners** that they accept the cross-stage join this moves onto them. Live-verified in Phase 3 (§16): every forwarded record in the partition-2 slice produced a non-empty `id`, including the one confirmed exception (`putFxQuotesByID`'s `httpPath` fallback) — the POC's chaining bugs were exactly this class of failure, and this scheme carries no chaining state to have that bug in. |
 | **V4** | `msgType` | 3 values + `/TRANSFERS/NOTIFICATIONS` | **2 values, 4 routes** (D4) | Divergence. The POC used `msgType === notification` as load-bearing control flow. **Must re-prove:** the final-state record still routes correctly and is still distinguishable from a prepare, now that D5 (below) supplies the replacement discriminator. |
 | **V5** | Final-state trigger | `commitTransfer` (`egress`-only) | **Same** (D5, settled) | No divergence. `commitTransfer`, ISO `TxSts` vocabulary (`COMM`/`RESV`), adopted as the trigger and status source. **Must re-prove:** the translation table covers `COMM`/`RESV` correctly, and `commitTransfer` is reliably distinguishable from `prepareTransfer`'s rejection shape (F11) so `RJCT` is never derived from a lookup. Get US-MLA-02 corrected — it still names `fulfilTransfer` as the trigger. |
 | **V6** | Payload | FSPIOP form; decode unused | **Same** (D6) | No divergence, but the *story* diverges. Get US-MLA-03 corrected rather than quietly ignoring it. |
@@ -332,7 +337,6 @@ The POC was live-verified. Where we do something different, the burden of proof 
 
 | Item | Gates | Owner |
 | --- | --- | --- |
-| **D3 — the `id` scheme is a cross-team decision.** MLA cannot unilaterally choose a scheme that changes PPA's correlation keys. | Phase 3, and PPA's own Phase 2 equivalent | Paysys — MLA + PPA together |
 | **DFSP public keys / JWKS endpoint unavailable.** We hold 286 real signatures and cannot verify one. | Phase 3's genuine-signature verification. The *mechanism* is unblocked via re-signed fixtures. | CCH / Mojaloop Partner |
 | **PII fail-mode undecided** — block the event, or pass it through unprotected? | Phase 4 cannot be called complete | CCH |
 | **`cch-crosscutting-user-stories.md` is referenced throughout but absent** — US-AUD-01, US-MON-01 (and R-37's alerting destinations), US-MON-02, US-PERF-01 (the 200 ms budget). | Phase 6 in full; the latency budget in Phase 7 | Story author |
@@ -874,6 +878,209 @@ Full checklist detail: `plan.md` §5, items 6–7. Epic documentation:
                 completion exposed - the golden-file comparison and a
                 genuine mid-feed restart proof - are both closed; see §5's
                 exit-criterion section above.
+
+### US-MLA-04 — Construct a Standard Event Envelope           [2026-09-03]
+
+Full checklist detail and the live-verification narrative: `plan.md` §6
+(Phase 3), items 1-3. Epic documentation:
+`EPICS/EPIC-2-envelope-construction-jws-validation/US-MLA-04/`.
+
+**Built**       `src/services/envelope-builder.service.ts` -
+                `deriveMsgType` (POST -> `request`, PUT/PATCH -> `callback`,
+                read from `tags.httpMethod`, never re-derived from
+                `operation`), `extractId` (**D3**, settled this story as
+                Option A - per-`eventType`, straight off
+                `quoteId`/`conversionRequestId`/`transferId`/
+                `commitRequestId` - with a confirmed fallback for the one
+                exception found while building it: `putFxQuotesByID`'s
+                canonical `start` record carries no `conversionRequestId`
+                tag at all, only its discarded `egress` twin does; the value
+                is recovered from the trailing segment of `tags.httpPath`,
+                verified against all 14 real pairs in `raw_export_500.json`,
+                zero exceptions - this corrects `plan.md` §3.2's own table,
+                which counted the tag present without checking which half
+                carried it), and `buildEnvelope` (assembly plus the
+                completeness check, **D7**'s `error` field populated from
+                `TxInfAndSts.StsRsnInf.Rsn.Prtry`/`.AddtlInf` on the one
+                rejection shape that ever reaches this story -
+                `isTransferRejection`, reused from `canonical-record.service.ts`
+                rather than reimplemented). `src/services/envelope-schema-
+                validator.service.ts` wires the ajv schema
+                (`event-envelope.schema.json`) verbatim shared with
+                `ppa-stub`, as a defensive backstop after `buildEnvelope`'s
+                own check. `src/services/envelope-pipeline.service.ts`
+                composes Phase 2's `processRecord` with this story's
+                `buildEnvelope` (and US-MLA-05's `verifyJws`, ordered
+                before it per core-knowledge.md §3.2) into one
+                `buildEnvelopeFromKafkaValue`, extending Phase 2's
+                five-reason `SkipReason` with `incomplete-envelope` and
+                `invalid-envelope-schema`. `src/interfaces/audit-record.interface.ts`'s
+                `tags` type gained explicit named optional fields
+                (`httpMethod`, `httpPath`, `quoteId`, `conversionRequestId`,
+                `transferId`, `commitRequestId`) and `content.headers`
+                widened to `Record<string, string | undefined>` - both
+                were silently typed as always-present before this story,
+                which would have let a real "missing fspiop-source" case
+                pass TypeScript's own check unnoticed.
+
+**Tests**       36 tests: 28 in `envelope-builder.service.test.ts` (every
+                event type's `msgType`/`id` extraction including the
+                `putFxQuotesByID` fallback and its own synthetic
+                missing-tag/empty-segment edge cases, both `msgType`
+                values, all four missing-field rejections, the `error`
+                field populated from the real `transfer-rejections.json`
+                fixture versus left undefined on an ordinary transfer), 8
+                in `envelope-pipeline.service.test.ts` shared with
+                US-MLA-05 (composition and ordering: a Phase 2 skip
+                short-circuits before JWS or envelope construction run; an
+                incomplete envelope from a genuinely stripped real record,
+                not a mocked outcome; the schema-validation backstop forced
+                via a spy since `buildEnvelope`'s own check makes it
+                otherwise unreachable). 100% statements/functions/lines,
+                97.05%/100% branches respectively on the two files' own
+                numbers; the full suite clears the 96% gate on every metric
+                (100/96.36/100/100 aggregate).
+
+**Verified**    `live` - the full Phase 3 exit criterion (`plan.md` §6),
+                against a real Redpanda broker and a real `ppa-stub`, not a
+                mock. All 41 records of `raw_topic_slice_partition2.json`,
+                fed unmodified through a real MLA instance
+                (`KAFKA_ENABLED=true`), produced a defined outcome with
+                zero unhandled exceptions: 23 `egress` skips, 3
+                `party-lookup` skips, 15 `SECURITY: invalid FSPIOP-Signature`
+                rejections (expected - no real DFSP key is held; see
+                US-MLA-05). Separately, a genuinely re-signed record
+                (`tools/dfsp-keys` + `capture-feeder --resign`) produced
+                `Forwarded FXQUOTE`, and the exact envelope built by the
+                real `buildEnvelopeFromKafkaValue` pipeline was POSTed over
+                real mTLS to a live `ppa-stub` and accepted - HTTP `200`,
+                `{"status":"accepted"}`, confirmed byte-for-byte in
+                `received.jsonl`. This is the first story whose output PPA
+                can actually receive.
+
+**Diverged**    **D3** - resolved during this story as **Option A**
+                (per-`eventType`, matching US-MLA-04's own text), agreed
+                directly with PPA's owners; PPA accepts the cross-stage
+                join this moves onto it (§3.1, §3.2 - no longer
+                provisional). §12 V3 updated accordingly. The
+                `putFxQuotesByID` httpPath-fallback finding above is new
+                evidence beyond §3.2's own table, not a divergence from a
+                decision, but is recorded here since it changes what
+                "read straight off the event" means for that one operation.
+
+**Left open**   Envelope versioning (R-23) - still unaddressed, per
+                US-MLA-04's own Assumptions and core-knowledge.md §5.
+                Delivery to PPA is not this story's job (Phase 5) - the
+                mTLS POST proven live above is a one-shot verification call
+                made for this story's own exit criterion, not the retry/
+                circuit-breaker/offset-gated delivery client US-MLA-06/07
+                will build.
+
+### US-MLA-05 — Validate JWS Signatures on DFSP-Originated Events [2026-09-03]
+
+Full checklist detail and the live-verification narrative: `plan.md` §6
+(Phase 3), items 4-7. Epic documentation:
+`EPICS/EPIC-2-envelope-construction-jws-validation/US-MLA-05/`.
+
+**Built**       `src/interfaces/jws.interface.ts` - the real wire shape
+                (`FspiopSignatureHeader`: `{signature, protectedHeader}`,
+                both base64url, confirmed against all 286 signed records in
+                `raw_export_500.json` - not a three-part compact JWS
+                string) and the three-outcome `PublicKeyStore` port
+                (`found`/`not-found`/`unavailable` - the third is what
+                makes a key-source outage distinguishable from a genuine
+                signature failure). `src/clients/public-key-store.client.ts`
+                - `FilePublicKeyStoreClient`, a file-backed store hot-
+                reloaded via `fs.watch` so a new `<dfspId>.pem` is live
+                with no restart; a broken store reports `unavailable` for
+                every DFSP rather than clearing its last-known-good keys
+                silently. `src/services/jws-verification.service.ts` -
+                `verifyJws`, real RS256/384/512 verification via Node's
+                built-in `crypto.verify` (no JOSE/JWS library added - none
+                existed, none was needed). Verifies against
+                `JSON.stringify(selectPayload(record))` - the same `body`
+                the envelope carries, not `content.payload` (confirmed a
+                different, Mojaloop-internal ISO shape for quote-family
+                records) - reasoned and empirically checked in the module's
+                own comment (see **Left open** below for what that check did
+                and did not prove). `tools/dfsp-keys/generate-keys.ts` (+
+                `npm run keys:generate`) and `tools/capture-feeder/resign.ts`
+                (+ `--resign`/`--tamper-body`) are the local-keypair
+                mechanism `plan.md` §6 names as the only honest way to
+                exercise this story without real DFSP keys.
+
+**Tests**       29 tests own to this story: 15 in
+                `jws-verification.service.test.ts` (genuinely generated
+                RSA keypairs and real `crypto.sign`/`crypto.verify` - all
+                three algorithms, tampered body, wrong key, missing/
+                malformed/shape-invalid header, key-outage vs. not-found
+                vs. unsupported-alg, a malformed key making `crypto.verify`
+                throw), 6 in `public-key-store.client.test.ts` (against a
+                real temporary directory, not a mocked filesystem,
+                including the actual `fs.watch` hot-reload), plus 5 new
+                cases added to `ingestion-consumer.service.test.ts`
+                (`SECURITY`-marked logs for missing/invalid signature, a
+                plain non-`SECURITY` log for a key-source outage, and the
+                two envelope-construction cases shared with US-MLA-04)
+                and the signature-specific half of the 8 tests in
+                `envelope-pipeline.service.test.ts` (missing-signature and
+                key-outage short-circuiting before envelope construction
+                runs). 100% statements/functions/lines on every new file;
+                96.87-100% branches per file, 96.36% branches aggregate
+                across the whole suite - clears the 96% gate.
+
+**Verified**    `live` - real cryptographic verification against a real,
+                generated RSA keypair, not a fake or a mock. In addition to
+                US-MLA-04's live run: (1) a locally re-signed record
+                verified (`Forwarded FXQUOTE`); (2) the same record with
+                `--tamper-body` added failed as `SECURITY: invalid
+                FSPIOP-Signature - signature does not match body/key`
+                (confirmed unambiguously via an isolated one-off script
+                before the aggregate live-run log, since the live log's
+                15 real signed records sharing the same registered test
+                key produce the identical failure text for the mundane
+                reason of key mismatch, not tampering - both are correctly
+                the same failure class, but that means the live log alone
+                cannot isolate which one line was the deliberate tamper);
+                (3) `--strip-signature` failed as the distinctly-worded
+                `SECURITY: missing FSPIOP-Signature`, never conflated with
+                "invalid"; (4) restarting MLA with `JWS_PUBLIC_KEY_DIR`
+                pointed at a nonexistent directory made every one of the
+                15 canonical signed records - including a resigned one
+                that would otherwise have verified - fail as
+                `Public-key store unavailable` (no `SECURITY` marker),
+                never as "invalid signature."
+
+**Diverged**    None from the story text on substance. Confirms cross-
+                reference.md §12 V7 (pure addition - the POC only ever
+                checked header *presence*, never performed real
+                cryptographic verification; no POC code existed to port).
+
+**Left open**   **Genuine verification against a real COMESA/DFSP
+                signature stays blocked** (`plan.md` §13.1/§14 Q1) - this
+                story proves the mechanism correct against fixtures this
+                codebase signs itself, never against a real DFSP signature.
+                The byte-exactness question this handoff's own §8 named as
+                the first trap is checked, not fully closed: `JSON.stringify
+                (selectPayload(record))` was confirmed to round-trip
+                byte-identically for the one sampled record checked
+                directly (`value.rawPayload` decoded to a string identical
+                to `JSON.stringify(value.payload)`), which shows the audit
+                pipeline itself only ever held a parsed-then-restringified
+                body - but this does **not** prove a genuine DFSP's
+                original request bytes would restringify identically
+                (key order, whitespace, number formatting could all differ
+                in ways this codebase cannot detect without the original
+                bytes). This is exactly why item (1) above stays blocked
+                pending COMESA. Where this story's security alert actually
+                routes to is undecided (US-MON-01, R-37) - met here by a
+                `SECURITY`-marked structured log, the honest interim
+                equivalent, not a wired alert (Phase 6). DFSP public key
+                storage/rotation policy (FSD §10.1) and how MLA keeps its
+                key set current in production (pushed/synced store vs. a
+                live lookup service) remain CCH/Mojoloop Partner questions,
+                unaffected by this story choosing the file-backed
+                implementation for the harness.
 
 ---
 
