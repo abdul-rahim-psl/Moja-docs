@@ -1,0 +1,12 @@
+# US-MLA-01 — File Register
+
+Files this story added or changed. Shared integration files (`ingestion.service.ts`, `ingestion-consumer.service.ts`, `src/index.ts`'s wiring) that assemble all three of this epic's stories together are listed once, at the epic level — `EPICS/EPIC-1-kafka-subscription-audit-topic-ingestion/file-register.md` — rather than repeated here.
+
+| File | Why it was added / what it does |
+| --- | --- |
+| `src/interfaces/kafka.interface.ts` | Extended with `ConsumedMessage`, `MessageHandler`, and `KafkaConnection.subscribe/run/advance/pause/resume` — the port this story's client implements. Documents call-order requirements at the interface itself (e.g. "`onMessage` must never let an exception escape"). |
+| `src/clients/kafka.client.ts` | Implements the extended port: `subscribe()` joins the topic under the dedicated group; `run(onMessage)` sets `autoCommit: false` unconditionally and translates each kafkajs message into a `ConsumedMessage`, including legacy no-headers and array-header edge cases; `advance(partition, offset)` does the "commit is one past the consumed offset" arithmetic in `BigInt`; `pause`/`resume` wrap the consumer's own partition controls. |
+| `src/interfaces/audit-record.interface.ts` | `RecordAction = 'start' \| 'egress'`; the `AuditRecordBody` shape every later stage reads. `operation` is deliberately optional — the FX-quote-rejection shape carries none, diverging from the POC's assumption that it is always present. |
+| `src/services/canonical-record.service.ts` | `CANONICAL_ACTION_BY_OPERATION` (ported from the POC's `logic.service.ts`) and `isCanonicalRecord` — **D1**'s per-operation table plus the `prepareTransfer` payload shape-check (`isTransferRejection`). `isFxQuoteRejection`, also in this file, belongs to US-MLA-02 (D2/D5's story) — see that story's own file register. |
+| `__tests__/kafka.client.test.ts` | 54 tests, 100% coverage — every method's failure/edge path, `pause`/`resume`, the `BigInt` commit arithmetic, legacy and array-header decoding. |
+| `__tests__/canonical-record.service.test.ts` | Contributes 29 of its tests to this story (the `isCanonicalRecord`/`isTransferRejection`/table-row coverage; `isFxQuoteRejection`'s own tests belong to US-MLA-02) — every table row, the party-lookup and no-`operation`-tag edge cases, and one synthetic both-shapes-at-once case labelled as testing the predicate's own logic, not a real capture. |

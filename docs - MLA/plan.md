@@ -29,7 +29,7 @@
 
 ## 1. Where we are
 
-**Phase 0 is built and live-verified.** A TypeScript + Fastify skeleton exists at [`cch-mla`](/home/abdul-rahim/mojaloop/cch-mla) — the four-layer structure, typed and validated configuration, `/health/live` + `/health/ready`, structured logging, a Kafka connection client, 43 tests at 100% coverage against a mechanically-enforced 96% gate, and a GitLab CI pipeline. Full detail: §16's Phase 0 entry and `EPICS/EPIC-0-Scaffolding/`. **No pipeline logic exists yet** — nothing reads a Kafka record, classifies an event, builds an envelope, or talks to a PPA; that starts at Phase 2, and Phase 1 (the harness, §4) is next:
+**Phases 0 through 2 are built and live-verified.** A TypeScript + Fastify skeleton exists at [`cch-mla`](/home/abdul-rahim/mojaloop/cch-mla) — the four-layer structure, typed and validated configuration, `/health/live` + `/health/ready`, structured logging, and a real ingestion pipeline: a Kafka consumer with explicit offset control, canonical-record selection, event classification, FX-quote-rejection detection, payload selection and the unreadable-record path, wired into one handler and live-verified against a real broker, including a genuine mid-feed kill/restart and a checked-in decision-level golden file. 140 tests at 100%/100%/100%/98.76%+ coverage against a mechanically-enforced 96% gate, and a GitLab CI pipeline. Full detail: §16's Phase 0/1/2 entries, `EPICS/EPIC-0-Scaffolding/`, `EPICS/PHASE-1-Harness/` and `EPICS/EPIC-1-kafka-subscription-audit-topic-ingestion/`. **Phase 3 (envelope construction and JWS validation, §6) is next** — nothing yet builds an envelope or talks to a PPA:
 
 | Asset | State |
 | --- | --- |
@@ -41,7 +41,8 @@
 | Real capture data — `DRPP_Kafka_E2E_Pack 2/` | In hand (see §1.1); committed into `cch-mla` at `__tests__/fixtures/` as Phase 1 fixtures, verbatim (`continue/continue - before harness.md` §5) |
 | **Phase 0 — scaffolding** | **Done**, [2026-09-01] — §16 |
 | **Phase 1 — the harness** | **Done**, [2026-09-02] — §16. `capture-feeder`, `ppa-stub`, golden-file regression, curated fixtures and the named scenario library all exist and are live-verified. |
-| **Phase 2 — ingestion path** | **Not started.** Next work — §5, and `continue/continue - before phase 2.md` |
+| **Phase 2 — ingestion path** | **Done**, [2026-09-02/03] — §16 (US-MLA-01/02/03), §5. Kafka consumer, canonical selection, classification, FX-quote-rejection detection, payload selection and the unreadable-record path are all built, wired into one live handler, and verified against a real broker — including a decision-level golden file and a genuine mid-feed kill/restart. |
+| **Phase 3 — envelope construction and JWS validation** | **Not started.** Next work — §6 |
 | **A running DRPP environment** | **Not available.** Promised by COMESA; no date. |
 
 The POC is the reason this project does not start from zero. It ran the whole MLA→PPA→TMS path against real captured data, a real ValKey and a real Tazama TMS, and it found real defects doing so. Where the POC and the current user stories disagree, that disagreement is *evidence versus specification* and has to be resolved deliberately — §12.
@@ -194,11 +195,11 @@ US-MLA-01, US-MLA-02, US-MLA-03. Delivers: a record consumed from a real broker,
 
 **Live-verified against the real harness**, not just mocks: started the real built service (`node build/index.js`) against the local Redpanda with a fresh consumer group, fed `raw_topic_slice_partition2.json` (41 records) — **every one of the 41 was accounted for**: 23 `egress`, 3 `party-lookup`, 15 forwarded (5 FXQUOTE, 4 FXTRANSFER, 4 TRANSFER, 2 QUOTE), zero errors, zero unhandled exceptions. `kill -SIGKILL`'d the process, restarted it under the identical consumer group: **zero reprocessing** of the 41 already-advanced records (confirmed — no ingestion log lines emitted before new data arrived), then fed a fresh corridor (20 records) and confirmed the restarted instance consumed and correctly categorized every one of those too. This is the same resume-from-committed-offset guarantee step 1 proved at the `KafkaClient` layer, now re-proven through the real per-record handler that sits on top of it.
 
-**Not done: the golden-file half of the exit criterion below.** No new golden target exists yet for the classified/selected output — `tools/golden`'s existing goldens diff the raw topic (Phase 1), not this phase's decisions. `continue - before phase 2.md` §8 already noted this is optional to add now or in Phase 3, not a gap in what exists; it remains genuinely not built, stated here plainly rather than implied as covered by the live run above.
+**Golden-file comparison — done, live-verified [2026-09-03].** `tools/golden/run-ingestion-golden.ts` (+ `npm run golden:ingestion` / `golden:ingestion:record`) is the decision-level companion to Phase 1's topic-fidelity golden: it feeds a capture straight through `processRecord` (no broker — the function is pure, and Kafka mechanics are proven separately, immediately below) and diffs the per-record outcome (`forwarded`+`eventType`+a body digest, or `skipped`+`reason`) against a checked-in baseline, per partition, position by position — the same failure class Phase 1's golden targets (a record silently stops being forwarded and nothing errors), applied to this phase's own logic rather than the topic's. Recorded against `raw_topic_slice_partition2.json` (`tools/golden/goldens/ingestion_raw_topic_slice_partition2.golden.json`, 41 decisions, 1 partition); a second, independent run diffed clean (`PASS`). The recorded tally — 23 `egress`, 3 `party-lookup`, 5 FXQUOTE, 4 FXTRANSFER, 4 TRANSFER, 2 QUOTE forwarded — matches the live per-record handler run below **exactly**, number for number, which is itself independent cross-confirmation that the golden target is trustworthy, not just self-consistent.
 
-**Also found, not addressed:** ~38 orphaned `node build/index.js` processes were discovered already running on the verification machine, none started by this session's work. Left untouched — flagged to the user rather than killed, since a mass process cleanup wasn't asked for and wasn't caused by this phase's work.
+**Restart mid-feed — done, live-verified [2026-09-03], superseding the "restart after the feed completed" run above.** The run above killed the MLA only after `capture-feeder` had already finished producing — a valid resume proof, but not literally what the exit criterion's wording asks for. Re-run properly: `capture-feeder` fed the full 500-record `raw_export_500.json` onto a scratch topic with `--delay-partition 5=20000ms` (holding partition 5's 42 records back 20s), so the feeder was still genuinely mid-feed — confirmed by its own log not yet showing "Fed 500 record(s)" — when the MLA was `kill -9`'d 8 seconds in. At that instant the MLA had already consumed and advanced all 458 records already produced across the other 11 partitions; partition 5 had not been sent at all yet. Restarted under the identical consumer group: the new process picked up **exactly and only** partition 5 (offsets 0–41, all 42, contiguous, no gaps) — the one partition that had nothing committed for it — and nothing else, because everything else was already committed. Combined tally across both runs: 500 of 500 accounted for (19 FX-quote-rejected, 273 `egress`, 92 `party-lookup`, 49 FXQUOTE, 22 FXTRANSFER, 26 TRANSFER, 19 QUOTE forwarded), **zero** duplicate `partition+offset` pairs across the two runs' logs, **zero** unreadable/unclassifiable. This is strictly stronger evidence than the original run: it proves both halves of the guarantee separately and unambiguously — records advanced before the kill are never reprocessed, and records that did not even exist on the topic yet at kill time are picked up correctly once they arrive after restart.
 
-**Exit criterion — live, substantially met; golden-file comparison outstanding.** With Redpanda running, `capture-feeder` feeds `raw_topic_slice_partition2.json`; the MLA consumes from the real topic and, for every record, either forwards it or skips it with a *distinct, correct reason* — **proven above.** Restarting the MLA mid-feed resumes from the committed offset with no loss and no duplication — **proven above.** The golden file matches — **not built, see above.**
+**Exit criterion — live, fully met.** With Redpanda running, `capture-feeder` feeds `raw_topic_slice_partition2.json`; the MLA consumes from the real topic and, for every record, either forwards it or skips it with a *distinct, correct reason* — **proven above.** Restarting the MLA mid-feed resumes from the committed offset with no loss and no duplication — **proven above, against a genuine in-progress feed.** The golden file matches — **proven above**, and now checked in for regression.
 
 ---
 
@@ -659,6 +660,220 @@ precedes every story from US-MLA-01 onward, the same shape as Phase 0
                 validity only, not a durability guarantee; throughput and
                 rebalance realism are both still unproven claims for later
                 phases.
+
+### US-MLA-01 — Subscribe to the Mojaloop Audit Topic         [2026-09-02/03]
+
+Full checklist detail and the live-verification narrative: `plan.md` §5
+(Phase 2), items 1–3. Epic documentation:
+`EPICS/EPIC-1-kafka-subscription-audit-topic-ingestion/US-MLA-01/`.
+
+**Built**       Kafka consumer extended to a real subscriber:
+                `src/interfaces/kafka.interface.ts` (`ConsumedMessage`,
+                `MessageHandler`, `KafkaConnection.subscribe/run/advance/
+                pause/resume`) and `src/clients/kafka.client.ts`
+                (implementation - `run` always calls `consumer.run({
+                autoCommit: false, ... })`; `advance` does the Kafka
+                "commit is one past the consumed offset" arithmetic in
+                `BigInt`). The dedicated, externally-configured,
+                R-18-commented `groupId` has existed since Phase 0; this
+                story is what makes the group actually join the topic.
+                Canonical-record selection per **D1**:
+                `src/services/canonical-record.service.ts` +
+                `src/interfaces/audit-record.interface.ts` -
+                `CANONICAL_ACTION_BY_OPERATION` and `isCanonicalRecord`,
+                ported deliberately from the POC's live-verified
+                `logic.service.ts` (§12 V1's rule), plus the
+                `prepareTransfer` payload shape-check
+                (`isTransferRejection`: `TxInfAndSts.StsRsnInf` present and
+                the hallmark field `ilpPacket` absent - the shape is the
+                only signal read; the `/error` URL is corroboration, never
+                a code path).
+
+**Tests**       83 tests across the two files (54 for `kafka.client.ts`,
+                29 for `canonical-record.service.ts`), 100% coverage.
+                Categories: every `KafkaClient` method's failure/edge path
+                (legacy no-headers messages, array-header edge cases,
+                pause/resume, BigInt offset arithmetic); every row of
+                `CANONICAL_ACTION_BY_OPERATION`, the party-lookup and
+                no-`operation`-tag edge cases, and one synthetic
+                both-shapes-at-once case clearly labelled as testing the
+                predicate's own AND-logic, not a real capture.
+
+**Verified**    `live` - two distinct proofs, both against a real
+                Redpanda, not a mock. (1) The `KafkaClient` primitive
+                alone: a fresh consumer group consumed all 41 records of
+                `raw_topic_slice_partition2.json`, advanced only the
+                first; a second process under the same group, on rejoin,
+                did not redeliver the advanced record and redelivered
+                every un-advanced one; `pause`/`resume` froze consumption
+                at exactly 3 records and resumed to completion on command.
+                (2) The full offset-resume guarantee re-proven through the
+                real per-record handler, including a genuine mid-feed
+                `SIGKILL` while `capture-feeder` was still actively
+                producing - full detail and numbers in §5's exit-criterion
+                section above. Canonical selection verified against real
+                captures (`classification-cases.json`,
+                `transfer-rejections.json`, corridor
+                `01_MWK_to_ZMW_PRIMARY`) - a pure function, so no broker
+                interaction applies to it directly (engineering-rules.md
+                §10.3).
+
+**Diverged**    **D1** - the POC's per-operation table plus the
+                `prepareTransfer` shape-check, not the story's blanket
+                "ingest only `start`" rule (§12 V1). The story's own
+                Acceptance Criteria state the superseded rule verbatim;
+                per §3.1's note, correcting `story.md` is the BA's action
+                - already communicated to them - not an engineering task,
+                and this table is what was built against.
+
+**Left open**   The real, CCH-issued consumer group ID (Todo 1; §13.2,
+                unchanged - gates production, not this story). Confirming
+                the audit-topic feed mechanism with the Mojaloop Partner
+                (Todo 5, Open Item #7) - unchanged, Phase 8 (§11). The
+                broker-reconnect/backoff path (Method step 5) relies on
+                kafkajs's own built-in logic and is proven live for a
+                clean process kill/restart; a genuine mid-stream broker
+                *outage* (as opposed to an MLA restart) is the still-only
+                procedure-documented `broker-restart` scenario
+                (`tools/scenario-library/`, Phase 1 §16) - its MLA-side
+                half remains unexercised.
+
+### US-MLA-02 — Distinguish Event Types Within the Audit Topic Stream
+                                                               [2026-09-02/03]
+
+Full checklist detail: `plan.md` §5, items 4–5. Epic documentation:
+`EPICS/EPIC-1-kafka-subscription-audit-topic-ingestion/US-MLA-02/`.
+
+**Built**       `src/services/event-classification.service.ts` -
+                `EVENT_TYPE_BY_OPERATION` (operation alone, per **D2**,
+                against the story's own method+resource-fallback
+                proposal), `PARTY_LOOKUP_OPERATIONS`, and a three-way
+                `ClassificationResult` (`classified` / `party-lookup` /
+                `unclassifiable`) so party lookup can never collapse into
+                the same bare skip a genuine classification gap would
+                produce. Resolves the classification table's
+                `commitTransfer` double-row ambiguity (cross-reference.md
+                §3.2) per **D5**: the FXTRANSFER-side commit leg's real
+                `operation` tag is `notifyFxTransfer`, never
+                `commitTransfer`, and `notifyFxTransfer` is non-canonical
+                (D1) so it never reaches this function regardless -
+                verified directly, not just argued. FX-quote-rejection
+                detection (`isFxQuoteRejection`,
+                `canonical-record.service.ts`) - no `operation` tag plus
+                `StsRsnInf` present, reusing `isTransferRejection`'s
+                shape-check with the no-tag discriminator; the module
+                comment documents that a caller **must** check this before
+                canonical selection, since the record would otherwise
+                silently read as an ordinary non-canonical skip.
+
+**Tests**       24 new tests (19 for classification, 5 for
+                `isFxQuoteRejection`), 100% coverage. Every table row
+                (including FXTRANSFER's three-leg lifecycle), all three
+                party-lookup operations, the no-`operation`-tag edge case,
+                a rejected `prepareTransfer` (still classifies TRANSFER -
+                rejection affects `msgType`/`error` in Phase 3, not
+                `eventType`), all 19 curated FX-quote-rejection records,
+                and the negative case (a transfer rejection must not
+                double-count as an FX-quote rejection).
+
+**Verified**    `live`, through the full per-record handler (§5's
+                exit-criterion section) as well as against real captures
+                directly (engineering-rules.md §10.3 - pure functions, no
+                broker interaction of their own). Across the two live
+                runs: every classified record landed in the correct
+                bucket with zero misclassifications (15 forwarded across
+                4 event types in the 41-record run; 121 forwarded across 4
+                event types plus 19 FX-quote-rejections correctly counted
+                distinctly in the full 500-record run), zero
+                `unclassifiable` hits in any real capture to date.
+
+**Diverged**    **D2** - `operation` alone as the classification signal,
+                not the story's own method+resource-fallback proposal (§12
+                V2 - matches the POC, no divergence from it). **D5** -
+                `commitTransfer`/`egress` is the TRANSFER trigger, not
+                `fulfilTransfer`/`start` as the story states, with the ISO
+                `TxSts` vocabulary (`COMM`/`RESV`) authoritative (§12 V5 -
+                matches the POC). Both are story corrections owed to the
+                BA (§3.1's note), not engineering changes made here.
+
+**Left open**   Whether `operation`/`Content-Type`/`FSPIOP-HTTP-Method`
+                survive identically in CCH's production feed - Open Item
+                #7, Phase 8 (§11, §14 Q6). Whether the per-operation
+                canonical shape classification depends on is a stable
+                contract beyond this capture window, or an artefact of it
+                - §14 Q2, re-verified in Phase 8. A rejected transfer
+                *fulfil* and a rejected FX transfer have never been
+                captured - every classification branch for them is
+                specification-only (§14 Q3).
+
+### US-MLA-03 — Decode Base64-Encoded Transfer Payloads       [2026-09-02/03]
+
+Full checklist detail: `plan.md` §5, items 6–7. Epic documentation:
+`EPICS/EPIC-1-kafka-subscription-audit-topic-ingestion/US-MLA-03/`.
+
+**Built**       `src/services/payload-selection.service.ts` -
+                `selectPayload` returns `content.transformedPayload ??
+                content.payload`, per **D6**, ported deliberately from the
+                POC's `buildEnvelope` - one fallback expression, correct
+                for every event type without branching on `eventType`.
+                `src/services/audit-record-parser.service.ts` -
+                `parseAuditRecord`, the boundary parse
+                (engineering-rules.md §5): raw Kafka value → typed
+                `AuditRecordBody` or a named `unreadable` outcome with a
+                reason (empty value, malformed JSON, or a structurally
+                invalid record - missing/malformed
+                `metadata.event.action`/`metadata.trace.tags`), ported
+                from the POC's `parseAuditMessage` and extended with the
+                structural shape check the POC only ran informally.
+
+**Tests**       16 new tests (8 for payload selection, 8 for the parser),
+                100% statements/lines/functions, 99.27%+ / 95.45%+ branches
+                respectively (both above the 96% global gate). Payload
+                selection: quote-family selecting `transformedPayload`,
+                transfer-family selecting `payload` directly, the
+                party-lookup no-body case, and the fixed hallmark-field
+                bug (`prepareFxTransfer` does not carry `ilpPacket`, only
+                TRANSFER does - caught by a failing test, not inspection).
+                Parser: null value, malformed JSON (including the exact
+                shape `capture-feeder --corrupt` produces), non-object
+                JSON, missing `content`/`metadata`, invalid action, missing
+                `tags`, and a real-capture round-trip success case.
+
+**Verified**    `live`, through the full per-record handler (§5's
+                exit-criterion section): every one of the 500 records fed
+                across the two live runs produced a defined outcome with
+                no unhandled exception; every forwarded record carried a
+                correctly-selected, non-empty body (the defensive "no
+                body" path was never hit in any real capture, matching
+                §1.1's observation that every canonical record carries
+                one). The parser's own success/failure paths are verified
+                against real captures and deliberately malformed inputs -
+                a pure boundary-parse function, so no broker interaction
+                applies to it directly (engineering-rules.md §10.3).
+
+**Diverged**    **D6** - select the FSPIOP form
+                (`transformedPayload`/`payload`); decoding
+                `content.dataUri` is treated as available-on-demand, not
+                built, since nothing in this pipeline names a concrete
+                need for it yet (building it now would be the speculative
+                abstraction engineering-rules.md §4 rules out). This
+                supersedes the story's Acceptance Criteria and Method
+                wholesale (§12 V6 - matches the POC, no divergence from
+                it; "the *story* diverges. Get US-MLA-03 corrected rather
+                than quietly ignoring it"). `selectPayload` returns
+                `undefined`, not `{}` as the POC did, when neither field is
+                present - a deliberate divergence from the POC itself, so
+                an empty body is distinguishable rather than silently
+                forwarded. The story's "malformed base64" test case (Todo
+                2) does not apply under D6 - there is no decode step left
+                to fail; "malformed JSON" / "structurally invalid record"
+                is the equivalent failure mode, and `audit-record-parser
+                .service.ts` covers it directly.
+
+**Left open**   Nothing story-specific. The phase-level gaps this story's
+                completion exposed - the golden-file comparison and a
+                genuine mid-feed restart proof - are both closed; see §5's
+                exit-criterion section above.
 
 ---
 
