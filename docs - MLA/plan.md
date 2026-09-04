@@ -29,7 +29,7 @@
 
 ## 1. Where we are
 
-**Phases 0 through 3 are built and live-verified; Phase 4's mechanism is too, though the phase itself is not formally closed.** A TypeScript + Fastify skeleton exists at [`cch-mla`](/home/abdul-rahim/mojaloop/cch-mla) — the four-layer structure, typed and validated configuration, `/health/live` + `/health/ready`, structured logging, a real ingestion pipeline, real envelope construction, real JWS verification, and now real PII tokenization: every record either becomes a schema-valid, tokenized `EventEnvelope` that a live `ppa-stub` accepts over mTLS, or is rejected/skipped for a named, correctly-classified reason — including a genuinely re-signed record verifying and forwarding with prefixed tokens in every listed field, a tampered one failing, a stripped signature failing distinctly, a key-source outage failing distinctly from an invalid signature, and a missing PII secret failing distinctly again, all proven against a real broker and a real `ppa-stub`, not a mock. 243 tests at 100%/97.69%/100%/100% coverage against a mechanically-enforced 96% gate, and a GitLab CI pipeline. Full detail: §16's Phase 0–4 entries, `EPICS/EPIC-0-Scaffolding/`, `EPICS/PHASE-1-Harness/`, `EPICS/EPIC-1-kafka-subscription-audit-topic-ingestion/`, `EPICS/EPIC-2-envelope-construction-jws-validation/` and `EPICS/EPIC-PII-tokenization/`. **Phase 4 stays open on one CCH decision (§7.1 #1, §13.1) — the fail-mode wiring — not on any remaining engineering; Phase 5 (delivery, offsets, resilience, §8) is next and does not depend on that answer.** See `continue/continue - before phase 5.md`:
+**Phases 0 through 3 are built and live-verified; Phase 4's mechanism is too, though the phase itself is not formally closed.** A TypeScript + Fastify skeleton exists at [`cch-mla`](/home/abdul-rahim/mojaloop/cch-mla) — the four-layer structure, typed and validated configuration, `/health/live` + `/health/ready`, structured logging, a real ingestion pipeline, real envelope construction, real JWS verification, and now real PII tokenization: every record either becomes a schema-valid, tokenized `EventEnvelope` that a live `ppa-stub` accepts over mTLS, or is rejected/skipped for a named, correctly-classified reason — including a genuinely re-signed record verifying and forwarding with prefixed tokens in every listed field, a tampered one failing, a stripped signature failing distinctly, a key-source outage failing distinctly from an invalid signature, and a missing PII secret failing distinctly again, all proven against a real broker and a real `ppa-stub`, not a mock. 262 tests at 100%/97.91%/100%/100% coverage against a mechanically-enforced 96% gate, and a GitLab CI pipeline. Full detail: §16's Phase 0–4 entries, `EPICS/EPIC-0-Scaffolding/`, `EPICS/PHASE-1-Harness/`, `EPICS/EPIC-1-kafka-subscription-audit-topic-ingestion/`, `EPICS/EPIC-2-envelope-construction-jws-validation/` and `EPICS/EPIC-PII-tokenization/`. **Gate item #1 (`continue/continue - before phase 5.md` §2) is done** — a PII secret failure is now transient (retry, park, breaker), live-verified against the real harness §16's new US-PII-01 entry. **Phase 4 stays open on gate item #2 (§7.1 #2, §13.1) — secret rotation — not on any remaining engineering for item #1. Phase 5 (delivery, offsets, resilience, §8) does not depend on either gate item and, by user decision [2026-09-04], is now the active work, prioritized ahead of gate item #2.** See `continue/continue - before phase 5.md`:
 
 | Asset | State |
 | --- | --- |
@@ -43,7 +43,7 @@
 | **Phase 1 — the harness** | **Done**, [2026-09-02] — §16. `capture-feeder`, `ppa-stub`, golden-file regression, curated fixtures and the named scenario library all exist and are live-verified. |
 | **Phase 2 — ingestion path** | **Done**, [2026-09-02/03] — §16 (US-MLA-01/02/03), §5. Kafka consumer, canonical selection, classification, FX-quote-rejection detection, payload selection and the unreadable-record path are all built, wired into one live handler, and verified against a real broker — including a decision-level golden file and a genuine mid-feed kill/restart. |
 | **Phase 3 — envelope construction and JWS validation** | **Done**, [2026-09-03] — §16 (US-MLA-04/05), §6. Envelope construction, ajv schema enforcement, and real RS256/384/512 JWS verification (file-backed, hot-reloadable key store) are all built, wired into one live handler, and verified against a real broker and a real `ppa-stub` — including a genuinely re-signed record, a tampered one, a stripped signature, and a simulated key-source outage, each producing a distinct, correctly-classified outcome. D3 (the envelope `id` scheme) resolved with PPA's owners as Option A during this phase. |
-| **Phase 4 — PII tokenization** | **Mechanism built, tested, and live-verified, [2026-09-04]** — §16 (US-PII-01/02), §7. **Not formally closed** — the fail-mode decision (§7.1 #1, §13.1) is CCH's, not engineering's, and is still open; everything else is done. |
+| **Phase 4 — PII tokenization** | **Mechanism built, tested, and live-verified, [2026-09-04]; gate item #1 (fail-mode) also built, tested, and live-verified, [2026-09-04]** — §16 (US-PII-01/02, plus US-PII-01's follow-up entry), §7. **Not formally closed** — gate item #2 (secret rotation, §7.1 #2, §13.1) is CCH's trigger question to answer, and engineering's mechanism to then build; everything else is done. |
 | **A running DRPP environment** | **Not available.** Promised by COMESA; no date. |
 
 The POC is the reason this project does not start from zero. It ran the whole MLA→PPA→TMS path against real captured data, a real ValKey and a real Tazama TMS, and it found real defects doing so. Where the POC and the current user stories disagree, that disagreement is *evidence versus specification* and has to be resolved deliberately — §12.
@@ -238,11 +238,13 @@ US-PII-01, US-PII-02. **This has no POC precedent** — the POC's `pii-mask.serv
 - [x] **The ordering test.** A test that fails if tokenization is moved ahead of signature validation. This is a hard requirement, not a convention: the DFSP signed the event as sent, so validating against a tokenized payload fails every time. *Built as a two-sided proof in `envelope-pipeline.service.test.ts`: a genuinely-signed real record both verifies *and* ends up tokenized (proves the real bytes reached `verifyJws` before tokenization ran), and a bad signature never even reaches the secret store (a store that throws if consulted proves it). Live-verified the same property against the real broker: a `--resign`-ed real record produced `Forwarded QUOTE` through the genuine Kafka-driven pipeline.*
 - [~] Tokenization-failure metric and alert, distinct from any other failure counter. *Built only as the interim structured-log line (`ingestion-consumer.service.ts`'s `pii-secret-unavailable` case) — the same "log now, Phase 6 wires the real metric/alert channel" posture Phase 3 already established for its own `SECURITY` logs, not a gap specific to this story. No dedicated failure-rate metric exists yet.*
 
-**Exit criterion — live. Met**, against the fail-closed default (`plan.md` §7.1 #1). A real capture record (`postQuotes`, re-signed) flowed through the full pipeline via a genuinely running MLA instance against the real harness broker (`Forwarded QUOTE`, live log); a dedicated checked-in tool (`tools/verify-tokenization/run.ts`, `npm run verify:tokenization`) independently proved, over real mTLS against a real `ppa-stub`: prefixed tokens in every listed QUOTE field, the identical token across two independent runs, the amount reaching `ppa-stub` in clear, and a TRANSFER record's body reaching `ppa-stub` with zero fields altered. Reordering the pipeline's two calls breaks the ordering test. **Full narrative belongs in a `plan.md` §16 entry and `EPICS/EPIC-PII-tokenization/` documents, not written yet** — see the note below.
+**Exit criterion — live. Met**, against the fail-closed default (`plan.md` §7.1 #1). A real capture record (`postQuotes`, re-signed) flowed through the full pipeline via a genuinely running MLA instance against the real harness broker (`Forwarded QUOTE`, live log); a dedicated checked-in tool (`tools/verify-tokenization/run.ts`, `npm run verify:tokenization`) independently proved, over real mTLS against a real `ppa-stub`: prefixed tokens in every listed QUOTE field, the identical token across two independent runs, the amount reaching `ppa-stub` in clear, and a TRANSFER record's body reaching `ppa-stub` with zero fields altered. Reordering the pipeline's two calls breaks the ordering test. Full narrative: §16's US-PII-01/US-PII-02 entries and `EPICS/EPIC-PII-tokenization/`.
 
-**Open before go-live:** the fail-mode decision (block or pass through), the rotation strategy, what "protected" must legally mean, and named ownership of the secret. All four are CCH decisions — §13.
+**Update [2026-09-04, gate item #1]:** the fail-mode wiring described above (skip once, log, advance) is what this exit criterion was met against - COMESA has since answered (§7.1 #1, verbatim) and the wiring now built matches that answer instead: a `pii-secret-unavailable` outcome is transient (retry, park, feed a breaker, offset withheld), not permanent. Built, tested, and live-verified - §16's own new US-PII-01 entry (dated the same day, appended after the original per §16's append-only rule) carries the full narrative; nothing above is edited to match it in place, per the documentation register's "no revision history in prose" rule read together with §16's own append-only rule for *this specific section*, which is a progress log by design.
 
-**Status as of the mechanism's build: not formally closed, per §7.2.** Everything above is built, tested above the coverage gate, and live-verified against the fail-closed default. What is *not* yet true: the fail-mode wiring is provisional (not CCH-confirmed), so this cannot yet be recorded as a closed `plan.md` §16 entry or written up as `EPICS/EPIC-PII-tokenization/` executive-summary/file-register documents — both wait for CCH's answer, per `CLAUDE.md`'s "External decisions" rule and this section's own §7.2.
+**Open before go-live:** the rotation strategy (gate item #2, still open), what "protected" must legally mean, and named ownership of the secret. All three are CCH decisions — §13.
+
+**Status as of the mechanism's build: not formally closed, per §7.2.** Everything above is built, tested above the coverage gate, and live-verified. Gate item #1 (fail-mode) is now also built, tested, and live-verified, and no longer gates anything. What is *not* yet true: gate item #2 (secret rotation) has an answered headline direction (versioned keys) but an unresolved trigger mechanism (§7.1 #2's own note) and is not yet built - `EPICS/EPIC-PII-tokenization/` executive-summary/file-register documents are written and current as of gate item #1, but the story itself stays not-formally-closed until item #2 also lands, per `CLAUDE.md`'s "External decisions" rule and this section's own §7.2.
 
 ### 7.1 The four open decisions — recommendations
 
@@ -250,12 +252,12 @@ Raised with the COMESA/CCH team via the BA team, in parallel with building the m
 
 | # | Decision | Who | Blocks starting Phase 4? | Recommendation | **COMESA's answer** |
 |---|---|---|---|---|---|
-| 1 | **Fail-mode** — block the event or pass it through unprotected if tokenization fails | CCH | No — but §13.1 lists it as gating *calling Phase 4 complete*. | **Build fail-closed (block) as the default, take it to CCH as the recommendation, not an open blank.** Treat a per-event tokenization failure as a permanent failure in the same four-way classification MLA already uses — log as a security event, alert, advance the offset without forwarding to PPA. This is exactly the posture Phase 3 already took for JWS failures ("advance the offset without retrying"), so it's not a new category, just a consistent extension. Pass-through-unprotected means raw MSISDNs/names leave the Mojoloop boundary into a regulated cross-border pipeline *before* Legal has even settled whether that's lawful (#3 below is still open) — that's an asymmetric risk: fail-closed costs a paused event you can replay from the 7-day-retention topic; fail-open costs a PII disclosure you cannot un-send. Make it a config flag either way, so CCH's eventual answer is a flip, not a rebuild. | **Received [2026-09-04]: "If tokenization fails, fail the transaction and retry."** Confirms fail-*closed* (agrees the event must never forward unprotected) but names **transient, not permanent** — engineering-rules.md §6.1's *other* category, the one PPA 5xx/timeout already uses (retry, offset not advancing, feeds the breaker), not the one this phase actually built (`pii-secret-unavailable` is currently classified **permanent** — skip, log, no retry). **This is a real code change, not a wiring flip**: the current implementation does not yet match this answer. Retry count/backoff and post-exhaustion behaviour for *this specific* retry were not specified — recommend mirroring the existing MLA→PPA shape (3×, 1s/2s/4s, park+breaker at N) for consistency rather than inventing a second, distinct retry policy, but this should be confirmed with COMESA, not assumed. **Not implemented in this session** — recorded here for the next Phase 4 code touch; `plan.md` §16's US-PII-01 entry stays as originally written (append-only) until the code changes to match, at which point a new entry documents the change. |
+| 1 | **Fail-mode** — block the event or pass it through unprotected if tokenization fails | CCH | No — but §13.1 lists it as gating *calling Phase 4 complete*. | **Build fail-closed (block) as the default, take it to CCH as the recommendation, not an open blank.** Treat a per-event tokenization failure as a permanent failure in the same four-way classification MLA already uses — log as a security event, alert, advance the offset without forwarding to PPA. This is exactly the posture Phase 3 already took for JWS failures ("advance the offset without retrying"), so it's not a new category, just a consistent extension. Pass-through-unprotected means raw MSISDNs/names leave the Mojoloop boundary into a regulated cross-border pipeline *before* Legal has even settled whether that's lawful (#3 below is still open) — that's an asymmetric risk: fail-closed costs a paused event you can replay from the 7-day-retention topic; fail-open costs a PII disclosure you cannot un-send. Make it a config flag either way, so CCH's eventual answer is a flip, not a rebuild. | **Received [2026-09-04]: "If tokenization fails, fail the transaction and retry."** Confirms fail-*closed* (agrees the event must never forward unprotected) but names **transient, not permanent** — engineering-rules.md §6.1's *other* category, the one PPA 5xx/timeout already uses (retry, offset not advancing, feeds the breaker), not the one this phase actually built (`pii-secret-unavailable` is currently classified **permanent** — skip, log, no retry). **This is a real code change, not a wiring flip**: the current implementation does not yet match this answer. Retry count/backoff and post-exhaustion behaviour for *this specific* retry were not specified — recommend mirroring the existing MLA→PPA shape (3×, 1s/2s/4s, park+breaker at N) for consistency rather than inventing a second, distinct retry policy, but this should be confirmed with COMESA, not assumed. **Implemented [2026-09-04]** — mirroring the recommended MLA→PPA shape exactly (3 retries, 1s/2s/4s backoff, breaker N=5, all independently configurable), built, tested, and live-verified against the real harness. `plan.md` §16's original US-PII-01 entry stays exactly as written (append-only); a new, later entry (same section, dated the same day) documents this change in full. |
 | 2 | **Secret rotation strategy** — version old+new tokens, or drain in-flight correlation before rotating | CCH | No — only one active secret is needed to build the tokenizer itself. | **Recommend versioned keys, not drain-first, and say so when raising it.** Drain-first assumes a clean point where nothing is mid-correlation — but the system already has parking-before-TTL-expiry and out-of-order arrival by design, so a guaranteed-clean drain point may never actually exist, and "wait for full drain" on an always-on switch component is an availability risk for no good reason. Versioning is the standard shape for keyed-hash rotation (same idea as a JWT `kid`): keep the current key plus however many prior keys are still inside the max correlation/parking TTL, tag each token's existing recognizable prefix with a key-version marker, always tokenize new values with the current key, and accept a match against any still-active version. Retire a key once it's older than the longest correlation window it could still be needed for. No downtime, no silent correlation misses. | **Received [2026-09-04]: "We don't want to be holding the system up while it drains, so we should version. But we should also code for success: try the existing key, then have a failure route which looks for and applies new keys."** Confirms our own recommendation on the headline question — versioned, not drain-first — directly. The second sentence adds a mechanism shape we had not built (nor needed to, since rotation was explicitly out of scope for this phase): the hot path keeps using the currently-loaded active key unchanged (matches `FilePiiSecretClient`'s existing design exactly — no change needed there), and a **separate, reactive path** checks for and picks up a newer key once one becomes available, rather than either this codebase's current fully-static load ("restart to rotate") or the JWS key store's proactive `fs.watch`. **Genuinely ambiguous, worth confirming rather than assuming:** MLA's tokenizer has no natural "verification failure" signal the way a correlation/matching system would (it only ever writes tokens, never checks one against a key) — so what concretely triggers "the failure route" here (a periodic re-check, an explicit reload signal, something else) is not yet clear from the answer as given, and should be asked back precisely rather than guessed at. **Not implemented in this session** — no rotation mechanism exists yet (`plan.md` §16's US-PII-02 entry, "Left open"), and this answer is what the eventual build will follow once the trigger question above is resolved. |
 | 3 | **What "protected" must mean legally** — reversible-by-lookup vs. reversible-only-with-the-secret | CCH Legal | No — mechanism is built and live-verified against a locally-generated secret regardless of the answer. | **Flag a conceptual gap in the question before Legal answers it, don't just relay it as-is.** US-PII-02 already commits to *keyed hashing*, and a keyed hash is one-way by construction — it can verify a candidate value matches, but the secret does not let you invert a token back to the original value. So "reversible-only-with-the-secret" isn't actually an available option for what's already been designed; the real choice is "non-reversible" (what a hash gives you today) vs. "a genuinely reversible mechanism" (which means a separate secure token→value lookup store, or swapping the primitive to reversible encryption — a materially different build, not a flag on this one). Build to the committed design — non-reversible, verify-only — and don't speculatively build a lookup store (same "don't build it speculatively" principle already applied to the ILP decoder). Take the question to Legal framed precisely: *if an authorized investigation needs to look up an original MSISDN from a token, that capability does not exist in the current design and would be new, separate infrastructure* — so Legal isn't unknowingly signing off on a lookup capability that was never actually built. | Still open. |
 | 4 | **Named ownership of the production secret** — who holds it, who rotates it, on what schedule | CCH | No — same as #3; §13.2 files it under "gates production, not the work ahead." | **No technical basis to name a team, but recommend the pattern: whoever already owns Phase 3's MLA-side credential material (the mTLS client certs, the DFSP public-key mounting) should own this too, rather than standing up a separate ownership track for one more secret.** It's the same operational shape — mounted at startup, rotated on a schedule, never fetched per event, gates readiness on load failure — so splitting ownership across two teams for materially the same kind of artifact just adds a coordination seam with no corresponding benefit. Raise this as a recommendation to confirm, not a blank to fill. | Still open. |
 
-One pattern across all four: #1 and #2 have real engineering defaults to build against today, revised only if CCH's answer differs; #3 and #4 are genuinely theirs to decide, but in both cases the sharpest move is handing them a more precise question than the one currently on paper, not just forwarding it unchanged. **#1 and #2 have now answered — and both confirm the recommended direction while adding detail the recommendation did not anticipate. Neither answer has been implemented yet; both are recorded here as the next Phase 4 code work, not done in this session.**
+One pattern across all four: #1 and #2 have real engineering defaults to build against today, revised only if CCH's answer differs; #3 and #4 are genuinely theirs to decide, but in both cases the sharpest move is handing them a more precise question than the one currently on paper, not just forwarding it unchanged. **#1 and #2 have now answered — and both confirm the recommended direction while adding detail the recommendation did not anticipate. #1 is now implemented, tested, and live-verified [2026-09-04, gate item #1 — §16's new US-PII-01 entry]. #2 remains unimplemented — its trigger mechanism is still genuinely ambiguous (see the table row above) and needs confirming with COMESA before building, not guessing.**
 
 ### 7.2 Does this block finishing Phase 4?
 
@@ -273,6 +275,8 @@ There are really three different bars here, and each question sits at a differen
 **Practically:** Phase 4 can reach roughly built-and-verified-in-full — mechanism built, tested, live-verified against the fail-closed default — without hearing back from anyone. What cannot happen honestly is stamping it *complete* and moving to Phase 5 while that one wiring decision is still open; instead it gets recorded as "built and verified against the recommended default, wiring decision pending CCH." Not a hard stop on the work — a hard stop on saying it's finished.
 
 **Update [2026-09-04]: CCH has now answered — §7.1 #1 — "fail the transaction and retry."** This changes the *nature* of what's still open, not the closure status: the wiring decision itself is no longer a blank, but the code does not yet implement it (the built default is a permanent skip; the answer calls for a transient retry, engineering-rules.md §6.1's other category). Phase 4 remains not formally closed — not because CCH hasn't spoken, but because the codebase hasn't caught up to what they said yet. This is a smaller gap than before (an answered question with a pending code change, not an open question), but it is still a gap, and this document says so rather than treating "CCH answered" as equivalent to "the phase is done."
+
+**Update [2026-09-04, same day, gate item #1 done]: the codebase has now caught up.** `pii-secret-unavailable` is transient (retry, park, feed a breaker) per COMESA's answer, built, tested above the coverage gate, and live-verified against the real harness — §16's new US-PII-01 entry has the full narrative. Phase 4 is *still* not formally closed: gate item #2 (secret rotation, §7.1 #2) remains genuinely open — COMESA answered the headline question (versioned keys) but the answer's own mechanism ("a failure route which looks for and applies new keys") names a trigger that does not map cleanly onto a tokenizer that only ever writes tokens and never checks one, and that ambiguity needs asking back, not guessing at. One CCH decision away from formal closure, same as before this update — just a different one.
 
 ---
 
@@ -381,7 +385,8 @@ The POC was live-verified. Where we do something different, the burden of proof 
 | Item | Gates | Owner |
 | --- | --- | --- |
 | **DFSP public keys / JWKS endpoint unavailable.** We hold 286 real signatures and cannot verify one. | Phase 3's genuine-signature verification. The *mechanism* is unblocked via re-signed fixtures. | CCH / Mojaloop Partner |
-| **PII fail-mode — answered [2026-09-04], not yet implemented.** COMESA: "fail the transaction and retry" (transient, not the permanent-skip default built) — §7.1 #1. | Phase 4 cannot be called complete until the code matches the answer | Engineering (code change owed) |
+| ~~PII fail-mode — answered [2026-09-04], not yet implemented.~~ **Resolved [2026-09-04] — gate item #1.** COMESA's answer ("fail the transaction and retry") is now implemented, tested, and live-verified — §16's new US-PII-01 entry, §7.1 #1's table cell. Kept here, struck through, rather than deleted, so this table's own history stays legible. | ~~Phase 4 cannot be called complete until the code matches the answer~~ — no longer gates anything | — |
+| **PII secret rotation — headline answered [2026-09-04], trigger mechanism unresolved — gate item #2.** COMESA confirmed versioned keys over drain-first, but "a failure route which looks for and applies new keys" names a trigger that does not map cleanly onto a tokenizer that only ever writes tokens, never checks one — §7.1 #2's table cell has the precise ambiguity. **User decision [2026-09-04, `continue - before phase 5.md` §2]: no technical dependency on Phase 5's own build — confirmed, then Phase 5 was prioritized ahead of this item rather than sequenced after it (superseding an earlier same-day decision that had tied the two together).** | Phase 4's formal closure only — no longer gates starting Phase 5 | CCH (the trigger question) then Engineering (the build) |
 | **`cch-crosscutting-user-stories.md` is referenced throughout but absent** — US-AUD-01, US-MON-01 (and R-37's alerting destinations), US-MON-02, US-PERF-01 (the 200 ms budget). | Phase 6 in full; the latency budget in Phase 7 | Story author |
 | **R-04 (Critical) has no acceptance criteria** — the "never synthesize" prohibitions. MLA-side equivalent: never fabricate an envelope for an event that did not arrive. | Phase 2/3 acceptance criteria | Story author — liftable from the POC's behaviour |
 
@@ -394,7 +399,7 @@ The POC was live-verified. Where we do something different, the burden of proof 
 | Dedicated consumer group ID not issued (R-18) | Real deployment. **The one MLA misconfiguration capable of affecting live payments** — a reused DRPP-internal group name can steal partition assignments from a live payment-path handler. | CCH |
 | Offset-advance-on-permanent-failure policy unconfirmed (FSD Open Item #8) | Whether Phase 5's 4xx and signature-failure rows advance or pause. Implemented as "advance"; the open part is whether that is *right*. | CCH + Paysys |
 | Zambia Data Protection Act applicability (FSD Open Item #6) | Retention and what "protected" must mean legally | CCH Legal |
-| PII secret ownership and rotation strategy unassigned | Production operation of Phase 4 | CCH |
+| PII secret ownership unassigned (rotation's own trigger mechanism moved to §13.1 — it now gates more than production) | Production operation of Phase 4 | CCH |
 | Event Envelope versioning unspecified (R-23) | A future breaking change to the contract | Story author + IID owner |
 
 ---
@@ -1333,6 +1338,155 @@ Full checklist detail and the live-verification narrative: `plan.md` §7
                 ownership of the production secret** (recommended to follow
                 whoever already owns the JWS certificate material, not yet
                 confirmed).
+
+### US-PII-01 — Fail-mode reclassified to transient, per COMESA (gate item #1) [2026-09-04]
+
+A new, later entry per this section's own append-only rule - the US-PII-01
+entry above stays exactly as written; this records what changed since. Full
+context: `plan.md` §7.1 #1 (COMESA's answer, verbatim) and
+`continue/continue - before phase 5.md` §2 (the gate this closes half of).
+Epic documentation: `EPICS/EPIC-PII-tokenization/US-PII-01/` (updated
+alongside this entry, not superseded by it).
+
+> **STATUS: gate item #1 done; US-PII-01 itself still not formally closed.**
+> COMESA answered [2026-09-04]: "if tokenization fails, fail the transaction
+> and retry" - transient, not the permanent skip the story originally built
+> against. That is now implemented, tested, and live-verified. **US-PII-02's
+> own open item (secret rotation, gate item #2) is untouched by this entry**
+> - nothing below changes `FilePiiSecretClient`'s hot-path behaviour or adds
+> a reload mechanism. Phase 4 remains not formally closed until item #2 also
+> lands, per `continue - before phase 5.md` §2's own framing.
+
+**Built**       `pii-secret-unavailable` moved from `engineering-rules.md`
+                §6.1's *permanent* row to its *transient* row, mirroring the
+                MLA→PPA shape `plan.md` §8.1 #2 recommends, per COMESA's own
+                "for consistency" instruction - built ahead of Phase 5's own
+                delivery client, which does not exist yet. The pure
+                classification in `envelope-pipeline.service.ts` is
+                **unchanged** - it still returns `pii-secret-unavailable`
+                exactly as before; only the caller's handling of that
+                outcome changed. New: `src/services/retry-backoff.service.ts`
+                (`computeBackoffMs` - full-jitter exponential backoff, a
+                value drawn uniformly under a 1×/2×/4× ceiling per attempt,
+                an injectable `random` for deterministic tests) and
+                `src/services/pii-circuit-breaker.service.ts`
+                (`PiiCircuitBreaker` - a single, **process-wide** consecutive-
+                failure counter, deliberately not per-partition: the PII
+                secret is one in-process resource every partition's
+                tokenization reads identically, unlike PPA's genuinely
+                per-call HTTP dependency, so a shared counter reflects what
+                is actually failing rather than having several partitions
+                independently re-derive the same fact). `ingestion-consumer.
+                service.ts` rebuilt around this: a blocking, in-`eachMessage`
+                retry burst (initial attempt + `PII_MAX_RETRIES` further
+                attempts, default 3, exponential-plus-jitter backoff under
+                1s/2s/4s ceilings) that, on exhaustion, hands off to a
+                **detached** `parkAndReprobe` - `kafka.pause()`s the
+                partition and returns from `eachMessage` *without awaiting*
+                a background `setTimeout`-driven reprobe loop, deliberately,
+                so kafkajs's own heartbeat is never starved by an outage of
+                unknown length (blocking `eachMessage` itself indefinitely
+                risks the broker timing the consumer out of the group). The
+                reprobe loop never relies on Kafka redelivering the parked
+                message - kafkajs's own fetch position moves past a message
+                the moment `eachMessage` returns, commit or not - so it holds
+                the message's own data in closure and calls `kafka.advance`
+                itself once tokenization succeeds, then `kafka.resume`s the
+                partition. Four new config fields on `PiiConfig`
+                (`PII_MAX_RETRIES`/`PII_RETRY_BASE_MS`/
+                `PII_CIRCUIT_BREAKER_THRESHOLD`/`PII_REPROBE_INTERVAL_MS`),
+                defaulted to mirror `PpaConfig`'s own values (3, 1000, 5,
+                10000) but configured independently (N6) - a different
+                failure domain, may need different tuning once COMESA gives
+                real values for either. One breaker instance built once at
+                the composition root (`index.ts`) and injected, same
+                discipline as `keyStore`/`secretStore`.
+
+**Tests**       28 new tests across three files:
+                `retry-backoff.service.test.ts` (7 - the ceiling arithmetic
+                per attempt, linear scaling with an injected `random`, and
+                the specific engineering-rules.md §7 standard - "write a
+                test that actually samples multiple retry delays and
+                confirms they differ" - 20 real `Math.random()` samples
+                asserted non-uniform, not merely "a delay occurred");
+                `pii-circuit-breaker.service.test.ts` (7 - trips exactly at
+                threshold, `justTripped` fires exactly once per run,
+                `recordSuccess` resets and reports `justRecovered` only when
+                it had actually tripped); `ingestion-consumer.service.test.ts`
+                (7 new PII-specific cases added to the existing 11, all
+                updated for the new deps-object signature - recovers
+                mid-burst with no parking; parks and pauses on exhaustion
+                without tripping below threshold; trips exactly once at
+                threshold and never re-logs the trip on further failures; a
+                parked event recovers on a later reprobe, advances its own
+                offset, resumes the partition, resets the breaker; a failed
+                offset-advance on a recovered reprobe is retried on the next
+                tick rather than resuming early; an unhandled exception
+                inside one reprobe tick is caught, logged, and does not stop
+                the loop). Every PII-retry test pins `Math.random` to 0 so
+                the burst's own jittered delay never lands ambiguously close
+                to the (independently asserted) reprobe boundary - genuine
+                jitter is `retry-backoff.service.test.ts`'s own, separate
+                claim. Full suite: 262 tests, 100%/97.91%/100%/100%
+                aggregate, above the 96% gate; every new file at
+                100%/100%/100%/100% on its own.
+
+**Verified**    `live` - against the real harness broker
+                (`cch-mla-redpanda`), with the PII secret file genuinely
+                removed and a real, running MLA instance
+                (`KAFKA_ENABLED=true`). A `postQuotes` record re-signed with
+                local test keys (`capture-feeder --resign`) was fed onto
+                partition 2; the running instance logged the retry burst
+                completing silently, then `PII secret store still
+                unavailable after retrying at partition 2 offset 433 -
+                parking event, pausing partition 2 until it recovers`,
+                immediately followed by `Circuit breaker tripped: 1
+                consecutive PII secret failures...` (threshold set to 1 for
+                this run) and kafkajs's own `Pausing fetching from 1
+                topics` confirmation - the partition then produced zero
+                further activity for the remainder of the run, proving the
+                pause genuinely stopped consumption rather than merely
+                skipping the one event. **The reprobe-recovers-without-a-
+                restart path is unit-verified only, stated precisely, not
+                claimed live**: `FilePiiSecretClient` resolves its
+                `PiiSecretLookupResult` once, at construction, and caches it
+                for the process's life (`pii-secret.client.ts`'s own class
+                comment) - a real reload mechanism is gate item #2's scope,
+                not this one's, so no live implementation can make a
+                reprobe against the *current* secret client ever succeed
+                without a restart. What *is* live-verified instead, and is
+                the recovery path that actually exists today: restoring the
+                secret file and restarting the process redelivered the
+                exact same parked record - `Forwarded QUOTE
+                (id=01KZRP0MH81MYFTW7PH0S9SYF2) at partition 2 offset 433`
+                was the very first line logged after reconnecting, proving
+                the parked offset was genuinely never committed and nothing
+                was lost or duplicated across the restart.
+
+**Diverged**    Nothing from COMESA's answer on the headline question (fail-
+                closed, transient, retry). One thing the answer did not
+                specify, decided here per the recommendation already on
+                record in `plan.md` §7.1 #1: retry count/backoff/breaker
+                threshold mirror the MLA→PPA shape's own recommended
+                defaults (3, 1s/2s/4s, N=5) rather than inventing a second,
+                distinct policy - confirmed with COMESA as a recommendation,
+                not assumed silently.
+
+**Left open**   **Gate item #2 (secret rotation, `plan.md` §7.1 #2) -
+                untouched by this entry**, tracked in full in US-PII-02's own
+                entry above; Phase 4 stays not-formally-closed until it also
+                lands. Within this entry's own scope: the reprobe loop's
+                "recovery without a restart" path is architecturally correct
+                (proven by unit tests against a `PiiSecretStore` double whose
+                answer changes mid-run) but cannot be exercised live until
+                gate item #2 gives `FilePiiSecretClient` (or its successor)
+                a way to change its answer without a process restart -
+                recorded here so a future reader does not mistake the
+                current restart-based recovery for the reprobe loop actually
+                having healed anything. `#3`/`#4` from `plan.md` §7.1
+                (legal meaning of "protected", secret ownership) remain
+                exactly as US-PII-02's own entry states them - untouched by
+                this change.
 
 ---
 
