@@ -29,7 +29,7 @@
 
 ## 1. Where we are
 
-**Phases 0 through 3 are built and live-verified; Phase 4's mechanism is too, though the phase itself is not formally closed.** A TypeScript + Fastify skeleton exists at [`cch-mla`](/home/abdul-rahim/mojaloop/cch-mla) — the four-layer structure, typed and validated configuration, `/health/live` + `/health/ready`, structured logging, a real ingestion pipeline, real envelope construction, real JWS verification, and now real PII tokenization: every record either becomes a schema-valid, tokenized `EventEnvelope` that a live `ppa-stub` accepts over mTLS, or is rejected/skipped for a named, correctly-classified reason — including a genuinely re-signed record verifying and forwarding with prefixed tokens in every listed field, a tampered one failing, a stripped signature failing distinctly, a key-source outage failing distinctly from an invalid signature, and a missing PII secret failing distinctly again, all proven against a real broker and a real `ppa-stub`, not a mock. 262 tests at 100%/97.91%/100%/100% coverage against a mechanically-enforced 96% gate, and a GitLab CI pipeline. Full detail: §16's Phase 0–4 entries, `EPICS/EPIC-0-Scaffolding/`, `EPICS/PHASE-1-Harness/`, `EPICS/EPIC-1-kafka-subscription-audit-topic-ingestion/`, `EPICS/EPIC-2-envelope-construction-jws-validation/` and `EPICS/EPIC-PII-tokenization/`. **Gate item #1 (`continue/continue - before phase 5.md` §2) is done** — a PII secret failure is now transient (retry, park, breaker), live-verified against the real harness §16's new US-PII-01 entry. **Phase 4 stays open on gate item #2 (§7.1 #2, §13.1) — secret rotation — not on any remaining engineering for item #1. Phase 5 (delivery, offsets, resilience, §8) does not depend on either gate item and, by user decision [2026-09-04], is now the active work, prioritized ahead of gate item #2.** See `continue/continue - before phase 5.md`:
+**Phases 0 through 5 are built and live-verified; Phase 4's mechanism is too, though the phase itself is not formally closed.** A TypeScript + Fastify skeleton exists at [`cch-mla`](/home/abdul-rahim/mojaloop/cch-mla) — the four-layer structure, typed and validated configuration, `/health/live` + `/health/ready`, structured logging, a real ingestion pipeline, real envelope construction, real JWS verification, real PII tokenization, and now **real delivery to PPA with the full offset/retry/breaker/reprobe mechanism live**: every forwarded record either reaches PPA and advances the offset on HTTP 200, is logged in full and advanced immediately on a permanent 4xx, or is retried with genuine jitter and — on exhaustion — parked behind a per-partition circuit breaker that re-probes and resumes entirely on its own, no restart required. Every record either becomes a schema-valid, tokenized `EventEnvelope` that a live `ppa-stub` accepts over mTLS, or is rejected/skipped for a named, correctly-classified reason — including a genuinely re-signed record verifying and forwarding with prefixed tokens in every listed field, a tampered one failing, a stripped signature failing distinctly, a key-source outage failing distinctly from an invalid signature, and a missing PII secret failing distinctly again, all proven against a real broker and a real `ppa-stub`, not a mock. 306 tests at 100%/98.01%/100%/100% coverage against a mechanically-enforced 96% gate, and a GitLab CI pipeline. Full detail: §16's Phase 0–5 entries, `EPICS/EPIC-0-Scaffolding/`, `EPICS/PHASE-1-Harness/`, `EPICS/EPIC-1-kafka-subscription-audit-topic-ingestion/`, `EPICS/EPIC-2-envelope-construction-jws-validation/`, `EPICS/EPIC-PII-tokenization/` and `EPICS/EPIC-3-delivery-to-ppa-offset-management/`. **Gate item #1 (`continue/continue - before phase 5.md` §2) is done** — a PII secret failure is now transient (retry, park, breaker), live-verified against the real harness §16's own US-PII-01 entry. **Phase 4 stays open on gate item #2 (§7.1 #2, §13.1) — secret rotation — not on any remaining engineering for item #1; unaffected by Phase 5 closing.** **Phase 5 (delivery, offsets, resilience, §8) is now done** — its exit criterion (§8) is fully met live, §16's US-MLA-06/US-MLA-07 entries have the complete narrative. See `continue/continue - before phase 5.md`, superseded by a Phase 6 handoff once written:
 
 | Asset | State |
 | --- | --- |
@@ -44,6 +44,7 @@
 | **Phase 2 — ingestion path** | **Done**, [2026-09-02/03] — §16 (US-MLA-01/02/03), §5. Kafka consumer, canonical selection, classification, FX-quote-rejection detection, payload selection and the unreadable-record path are all built, wired into one live handler, and verified against a real broker — including a decision-level golden file and a genuine mid-feed kill/restart. |
 | **Phase 3 — envelope construction and JWS validation** | **Done**, [2026-09-03] — §16 (US-MLA-04/05), §6. Envelope construction, ajv schema enforcement, and real RS256/384/512 JWS verification (file-backed, hot-reloadable key store) are all built, wired into one live handler, and verified against a real broker and a real `ppa-stub` — including a genuinely re-signed record, a tampered one, a stripped signature, and a simulated key-source outage, each producing a distinct, correctly-classified outcome. D3 (the envelope `id` scheme) resolved with PPA's owners as Option A during this phase. |
 | **Phase 4 — PII tokenization** | **Mechanism built, tested, and live-verified, [2026-09-04]; gate item #1 (fail-mode) also built, tested, and live-verified, [2026-09-04]** — §16 (US-PII-01/02, plus US-PII-01's follow-up entry), §7. **Not formally closed** — gate item #2 (secret rotation, §7.1 #2, §13.1) is CCH's trigger question to answer, and engineering's mechanism to then build; everything else is done. |
+| **Phase 5 — delivery, offsets, and resilience** | **Done**, [2026-09-07] — §16 (US-MLA-06/07), §8. Delivery client, per-call timeout, the full three-way offset gate (success/permanent/transient), retry with genuine jitter, a per-partition circuit breaker, and automatic reprobe recovery are all built, tested, and live-verified against a real broker and a real `ppa-stub` — including a persistent-503 breaker trip and its own automatic, restart-free recovery, a genuine TLS-handshake failure, and a 4xx logging the full (tokenized) envelope and advancing immediately. Every clause of the phase's own exit criterion (§8) is live-proven. |
 | **A running DRPP environment** | **Not available.** Promised by COMESA; no date. |
 
 The POC is the reason this project does not start from zero. It ran the whole MLA→PPA→TMS path against real captured data, a real ValKey and a real Tazama TMS, and it found real defects doing so. Where the POC and the current user stories disagree, that disagreement is *evidence versus specification* and has to be resolved deliberately — §12.
@@ -285,16 +286,16 @@ There are really three different bars here, and each question sits at a differen
 US-MLA-06, US-MLA-07. This is the phase the harness was built for.
 
 - [x] Endpoint selection by `eventType` per **D4**. *Built, tested, live-verified — `ppa-routing.service.ts`'s `resolvePpaEndpoint`, a pure `Record<EventType, string>` table (exhaustive by construction over the closed `EventType` union). Now wired into the consumer, via `HttpsPpaClient.deliver`'s own use of it — this checklist's own "offset advances only on HTTP 200" item, below.*
-- [x] mTLS client configuration; stable service-name addressing, never individual replicas. *Built, tested, live-verified — `HttpsPpaClient` (`ppa.client.ts`), the `PpaClient` port's only implementation. Certs and `baseUrl` read once at construction, never per-call; addresses PPA via one parsed host/port, never a replica address. Classifies the raw response into `success`/`client-error`/`server-error`/`tls-handshake-failure`/`network-error`/`timeout`. Live-verified against a real, running `ppa-stub`, all four real outcomes plus the unreachable-host case, including a genuinely rejected client cert against a real `rejectUnauthorized: true` server — this specific live run is what found and corrected a real defect in the TLS-handshake-failure classification itself (see `ppa.client.ts`'s own comment on `classifyTransportError`: a text/code heuristic, then a naive "did secureConnect fire" heuristic, were each tried and each live-disproven before the shipped TCP-connected-only signal). Retry and offset-gating are **not** built in this class — separate checklist items, deliberately; both are `ingestion-consumer.service.ts`'s own job, below (the circuit breaker/re-probe remain unbuilt).*
+- [x] mTLS client configuration; stable service-name addressing, never individual replicas. *Built, tested, live-verified — `HttpsPpaClient` (`ppa.client.ts`), the `PpaClient` port's only implementation. Certs and `baseUrl` read once at construction, never per-call; addresses PPA via one parsed host/port, never a replica address. Classifies the raw response into `success`/`client-error`/`server-error`/`tls-handshake-failure`/`network-error`/`timeout`. Live-verified against a real, running `ppa-stub`, all four real outcomes plus the unreachable-host case, including a genuinely rejected client cert against a real `rejectUnauthorized: true` server — this specific live run is what found and corrected a real defect in the TLS-handshake-failure classification itself (see `ppa.client.ts`'s own comment on `classifyTransportError`: a text/code heuristic, then a naive "did secureConnect fire" heuristic, were each tried and each live-disproven before the shipped TCP-connected-only signal). Retry and offset-gating are **not** built in this class — separate checklist items, deliberately; both are `ingestion-consumer.service.ts`'s own job, below.*
 - [x] Per-call timeout, configured **independently** of the retry budget. *Built, tested, live-verified — `HttpsPpaClient.deliver` races an `AbortController`-driven `setTimeout(this.timeoutMs)` against the request (armed across both the wait for headers and the body drain), classifying a breach as its own `{ outcome: 'timeout', timeoutMs }` result rather than folding it into `server-error`/`network-error` — the same "preserve the underlying reason" treatment `tls-handshake-failure` already gets (engineering-rules.md §6.2), distinguished from a real transport failure by tracking the timer's own firing directly (`stage.timedOut`), not by parsing `err`'s code/message. `PpaConfig.timeoutMs` was already independent of `maxRetries`/`retryBaseMs`. **Live-verified** against a real, running `ppa-stub` set to hang forever (`POST /control {mode:"timeout"}`): four real HTTPS requests landed roughly 2000ms apart before each retry's own backoff, confirming the 2000ms budget is enforced per call, not accumulated across the burst.*
-- [x] **Offset advances only on HTTP 200.** Nothing else. *Built, tested, live-verified — `createIngestionHandler` (`ingestion-consumer.service.ts`) calls the injected `PpaClient.deliver` for every `forwarded` outcome and advances the offset only on `{ outcome: 'success' }`. A transient result is retried in place (below) before falling through; once that burst is exhausted — or immediately for the one permanent outcome (4xx) — the delivery's own reason is logged (`logPpaDeliveryFailure`) and `kafka.pause(partition)` is called **without** advancing — **deliberately uniform across every case that reaches this point, for now**, since the 4xx-advances exception and the circuit breaker are still the checklist's own next, not-yet-built items; a partition paused here has no re-probe yet. `HttpsPpaClient` is constructed and injected at the composition root (`index.ts`). **Live-verified against a real, running `ppa-stub` and a real broker**, re-signed real records over several fault-injection rounds (timeout, persistent 503, 4xx, a genuinely untrusted client cert): every non-200 outcome left the offset unadvanced and the partition paused (`kafkajs`'s own "Pausing fetching" log each time), and — the point this item exists to prove — **a full MLA restart against the still-paused partition redelivered the exact same parked offset**, which then advanced cleanly once the underlying fault was cleared (proven twice: once recovering from the timeout fault, once from the untrusted-cert fault), with nothing lost. The automatic re-probe that would make this recovery immediate, not restart-dependent, is still `plan.md` §8's own next, not-yet-built item.*
+- [x] **Offset advances only on HTTP 200.** Nothing else. *Built, tested, live-verified — `createIngestionHandler` (`ingestion-consumer.service.ts`) calls the injected `PpaClient.deliver` for every `forwarded` outcome and advances the offset only on `{ outcome: 'success' }`. A transient result is retried in place first (below); a permanent result (4xx) logs the full envelope and advances immediately, never retried; a still-transient result once the retry burst is exhausted parks the event and hands off to a per-partition breaker/reprobe cycle (below) — the full three-way classification `core-knowledge.md` §3.5's own table describes, all of it built. `HttpsPpaClient` is constructed and injected at the composition root (`index.ts`). **Live-verified against a real, running `ppa-stub` and a real broker**, re-signed real records over several fault-injection rounds (timeout, persistent 503, 4xx, a genuinely untrusted client cert): every non-200, non-permanent outcome left the offset unadvanced and the partition paused (`kafkajs`'s own "Pausing fetching" log each time). Two independent recovery paths proven live: a full restart against a still-paused partition redelivered the exact same parked offset (proven twice, before the reprobe mechanism below existed); once the reprobe mechanism was built, restoring `ppa-stub` health **resumed the same parked partition automatically, with no restart at all** (full detail in the retry/breaker items below) — nothing lost or duplicated either way.*
 - [x] 5xx / timeout / TLS-handshake failure ⇒ retry ×3, exponential backoff **with genuinely random jitter**, offset not advancing. *Built, tested, live-verified — `runPpaRetryBurst` (`ingestion-consumer.service.ts`), mirroring the PII secret's own `runRetryBurst` (`plan.md` §7.1 #1) in the other direction: up to `PpaConfig.maxRetries` further attempts (default 3) beyond the one already made, backoff via the same `computeBackoffMs` under 1s/2s/4s ceilings plus genuine jitter (`retry-backoff.service.ts`, unchanged), offset withheld throughout. **`network-error` is retried in this same bucket too, alongside the three the story names explicitly** — a reasoned default, not a guess: nothing in the story or engineering-rules.md §6.1 calls a bare connection failure permanent, and treating PPA being completely unreachable as *more* final than a mere 5xx would be the exact silent-data-loss failure mode this mechanism exists to prevent. Flagged here to raise back to CCH/COMESA if a future FSD revision says otherwise, not buried in behaviour. The loop re-checks transience every attempt, not just a counter, so a retry that itself turns permanent stops the burst immediately rather than spending remaining attempts on it. **Live-verified twice, against real HTTP round-trips to `ppa-stub`:** a hung connection produced 4 real requests with visibly different waits between them (2739ms, 3943ms, 2772ms, each comfortably inside its own 1s/2s/4s-plus-timeout ceiling); a persistent 503 produced 4 real requests with visibly different, much smaller backoff-only gaps (864ms, 1417ms, 1508ms, each under its own 1s/2s/4s ceiling) — proving the jitter is genuinely sampled per attempt, live, not merely unit-tested with a mocked clock.*
-- [x] TLS handshake failure treated as transient, **with the underlying reason preserved in the alert** so a certificate misconfiguration stays distinguishable from ordinary unavailability. *Built, tested, live-verified — a `tls-handshake-failure` result is retried by the same `runPpaRetryBurst` as a 5xx (R-22, US-MLA-06's own AC), and `logPpaDeliveryFailure`'s own `tls-handshake-failure` branch names the handshake and its reason specifically, never folded into a generic 5xx message, once the retry burst gives up. **Live-verified with a genuinely untrusted client cert** (a throwaway, unrelated self-signed CA, not the harness's own) presented to the real, running `ppa-stub` (`rejectUnauthorized: true`): the connection reset with "socket hang up" exactly as `classifyTransportError`'s own comment predicts, was retried through the full burst, and the resulting alert read "PPA TLS handshake failed at ... : socket hang up - pausing partition" — the handshake named specifically, never a generic "HTTP 5xx." Restoring the correct client cert and restarting redelivered and forwarded the same parked record cleanly.*
-- [ ] 4xx ⇒ log the full envelope, alert, advance. Permanent. *Half live-confirmed as a byproduct of the item above: a real 4xx from `ppa-stub` produced exactly one delivery attempt (`isPpaTransient` correctly excludes `client-error` from the retry loop — no retry, no backoff observed) — but it still pauses rather than advancing, since that half of this item is not built yet.*
-- [ ] **Retry exhaustion and circuit breaking as two coordinated mechanisms, not one.** Exhaustion parks the event and keeps retrying it; those failures accumulate toward a **configurable N**; at N the breaker trips and pauses the partition, re-probing on a timer. *The POC collapsed these into one and had no threshold on the MLA side at all* — §12.
-- [ ] Every pause paired with a re-probe that can resume it. A partition paused with no path back is the bug the POC's own breaker existed to fix.
+- [x] TLS handshake failure treated as transient, **with the underlying reason preserved in the alert** so a certificate misconfiguration stays distinguishable from ordinary unavailability. *Built, tested, live-verified — a `tls-handshake-failure` result is retried by the same `runPpaRetryBurst` as a 5xx (R-22, US-MLA-06's own AC), and `describePpaFailure`'s own `tls-handshake-failure` branch names the handshake and its reason specifically, never folded into a generic 5xx message, wherever the park/reprobe alert wording uses it. **Live-verified with a genuinely untrusted client cert** (a throwaway, unrelated self-signed CA, not the harness's own) presented to the real, running `ppa-stub` (`rejectUnauthorized: true`): the connection reset with "socket hang up" exactly as `classifyTransportError`'s own comment predicts, was retried through the full burst, and the resulting alert named the handshake specifically, never a generic "HTTP 5xx." Restoring the correct client cert and restarting redelivered and forwarded the same parked record cleanly.*
+- [x] 4xx ⇒ log the full envelope, alert, advance. Permanent. *Built, tested, live-verified — `logPpaPermanentRejection` (`ingestion-consumer.service.ts`) logs the full serialized envelope (not just its id/eventType — US-MLA-07's own AC wording), and the caller advances the offset immediately, never pausing, never retrying (`isPpaTransient` excludes `client-error` from `runPpaRetryBurst`'s own loop). Reached identically whether the very first delivery attempt is a 4xx or a retry turns permanent mid-burst. **Live-verified**: a real 4xx from `ppa-stub` produced exactly one delivery attempt and `PPA rejected the envelope at partition 2 offset 497 with HTTP 400 - permanent, advancing. Envelope: {...}` — the full envelope in the log line, including its tokenized fields (`tkn_...` prefixes visible, live confirmation Phase 4's tokenization survives this path unchanged) — with no pause and no retry.*
+- [x] **Retry exhaustion and circuit breaking as two coordinated mechanisms, not one.** Exhaustion parks the event and keeps retrying it; those failures accumulate toward a **configurable N**; at N the breaker trips and pauses the partition, re-probing on a timer. *The POC collapsed these into one and had no threshold on the MLA side at all* — §12. *Built, tested, live-verified — `parkAndReprobePpa` (`ingestion-consumer.service.ts`) parks the event and pauses the partition on burst exhaustion, feeding `PpaCircuitBreaker` (`ppa-circuit-breaker.service.ts`) — **one independent counter per partition**, not process-wide like the PII secret's own breaker (a reasoned scope decision, `plan.md` §16's US-MLA-07 entry has the full argument; flagged to confirm with CCH/COMESA, not silently assumed). The shared counting primitive (`CircuitBreaker`, `circuit-breaker.service.ts`) was generalized out of the PII-only class that previously existed, rather than duplicating a verbatim state machine for PPA. **Live-verified**: a persistent 503 against a real running instance produced the park alert, then, after four further failed reprobes, exactly one `Circuit breaker tripped for partition 2: 5 consecutive PPA delivery failures` (confirmed not repeated across further continued failure) and kafkajs's own `Paused partition 2`.*
+- [x] Every pause paired with a re-probe that can resume it. A partition paused with no path back is the bug the POC's own breaker existed to fix. *Built, tested, live-verified — `parkAndReprobePpa`'s own detached reprobe loop, on `PPA_REPROBE_INTERVAL_MS`, resolves a reprobe three ways (success, a `client-error` surfacing now that PPA is reachable again — itself proof of connectivity, so it resumes and resets the breaker exactly like a success does — or still transient); an offset-advance failure on a recovered reprobe retries the commit on the next tick rather than a bespoke policy; an unhandled exception inside one reprobe tick is caught, logged, and does not stop the loop. **Live-verified, and this is the one this whole mechanism exists to prove**: restoring `ppa-stub` to healthy after a tripped breaker — **with no process restart at all** — produced, on the very next reprobe tick, `PPA recovered at partition 2 offset 498 - circuit breaker reset, resuming partition 2`, `Forwarded QUOTE (id=01KZRP0MH81MYFTW7PH0S9SYF2) at partition 2 offset 498`, and kafkajs's own `Resumed partition 2` — the exact parked record, nothing lost or duplicated, recovered entirely on its own. Per-partition isolation (one partition's own trip never affecting another) is unit-verified only — the one real capture fixture in this repo is entirely partition 2, so a live multi-partition run would need fabricated data; judged not worth trading the "use real captures" discipline for, given the isolation logic itself is a simple, pure per-partition `Map`.*
 
-**Exit criterion — live.** Against `ppa-stub`: a 503 leaves the offset unadvanced and the event is redelivered on recovery; three 5xx responses produce three backed-off retries with visibly different jitter; N consecutive failures trip the breaker and pause consumption; restoring the stub resumes from the paused event with nothing lost or duplicated; a 4xx advances immediately; a TLS handshake failure retries and its alert names the handshake, not a generic 5xx.
+**Exit criterion — live. Met [2026-09-07].** Against `ppa-stub`: a 503 leaves the offset unadvanced and the event is redelivered on recovery ✓ (proven both ways — restart-based before the reprobe mechanism existed, then automatic once it did); three 5xx responses produce three backed-off retries with visibly different jitter ✓ (864ms/1417ms/1508ms, live); N consecutive failures trip the breaker and pause consumption ✓ (5 consecutive, live, logged exactly once); restoring the stub resumes from the paused event with nothing lost or duplicated ✓ (live, with no process restart); a 4xx advances immediately ✓ (live, full envelope logged); a TLS handshake failure retries and its alert names the handshake, not a generic 5xx ✓ (live, genuinely untrusted cert). Full narrative: `plan.md` §16's US-MLA-06/US-MLA-07 entries.
 
 ### 8.1 Pre-work decisions
 
@@ -1487,6 +1488,227 @@ alongside this entry, not superseded by it).
                 (legal meaning of "protected", secret ownership) remain
                 exactly as US-PII-02's own entry states them - untouched by
                 this change.
+
+### US-MLA-06 — Deliver Envelopes to PPA via Per-Action Endpoints [2026-09-07]
+
+**Built**       `HttpsPpaClient` (`src/clients/ppa.client.ts`), the `PpaClient`
+                port's only implementation, and its composition into
+                `ingestion-consumer.service.ts`. Endpoint selection by
+                `eventType` (`ppa-routing.service.ts`'s `resolvePpaEndpoint`,
+                a pure, exhaustive `Record<EventType, string>` table) — both
+                legs of a routing pair share one endpoint, distinguished by
+                `msgType` inside the envelope, never by URL/method. mTLS via
+                a single parsed host/port (never a replica address); certs
+                read once at construction. A per-call timeout
+                (`PPA_TIMEOUT_MS`, default 2000ms) races an
+                `AbortController`-driven `setTimeout` against the whole call
+                (headers and body drain both), producing its own `{ outcome:
+                'timeout', timeoutMs }` result rather than folding a breach
+                into `server-error`/`network-error`. **The offset now
+                advances only on HTTP 200** (N1) — `createIngestionHandler`
+                calls `ppaClient.deliver` for every `forwarded` outcome and
+                gates `kafka.advance` on its result; every other outcome is
+                US-MLA-07's own scope (below).
+
+**Tests**       22 tests directly on this client/routing pair
+                (`ppa.client.test.ts` 18, `ppa-routing.service.test.ts` 4),
+                plus the offset-gate itself covered within
+                `ingestion-consumer.service.test.ts`'s own 36. Categories:
+                every table row (all four routing entries; `success`/
+                `client-error`/`server-error`/`tls-handshake-failure`/
+                `network-error`/`timeout`, six outcomes total); failure
+                paths (TCP-never-connects vs. TCP-connects-then-resets,
+                timeout mid-headers and mid-body-drain, an unexpected status
+                defensively folded to `server-error`); degraded paths (the
+                offset withheld on every non-success). Full suite: 306
+                tests, 100%/98.01%/100%/100% aggregate, above the 96% gate;
+                `ppa.client.ts` and `ingestion-consumer.service.ts` both at
+                100% statements/lines.
+
+**Verified**    `live` — against a real, running `ppa-stub` (`rejectUnauthorized:
+                true`) and a real broker, across two sessions. mTLS/routing/
+                classification: a correct cert (success), a genuinely
+                untrusted cert from an unrelated throwaway CA
+                (`tls-handshake-failure`, surfacing as a bare "socket hang
+                up" — the live run that found and corrected a real defect in
+                the classification itself, see `ppa.client.ts`'s own comment
+                on `classifyTransportError`), an unreachable host
+                (`network-error`), a 4xx, a 5xx via fault injection — each
+                produced the correctly classified outcome. Per-call timeout:
+                `ppa-stub` set to hang forever (`POST /control
+                {mode:"timeout"}`) produced real HTTPS requests landing
+                ~2000ms apart, before each retry's own backoff. Offset gate:
+                across timeout, persistent 503, 4xx, and untrusted-cert
+                fault-injection rounds with re-signed real captured records,
+                every non-200 outcome left the offset unadvanced; **a full
+                MLA restart against a still-paused partition redelivered the
+                exact same parked offset**, twice, which then advanced
+                cleanly with nothing lost once the fault cleared — proving
+                the withheld commit is genuine, not merely a skipped call.
+
+**Diverged**    Nothing from the story text. `network-error` reaching the
+                same retry path as the story's own named transient
+                categories is US-MLA-07's own divergence, recorded there.
+
+**Left open**   Nothing within this story's own scope — FSD Open Item #1
+                (the timeout value) remains formally unagreed with CCH/
+                Paysys; `plan.md` §8.1 #1's decided default (2000ms) is what
+                was built and live-verified against.
+
+### US-MLA-07 — Retry and Circuit-Break on PPA Failures         [2026-09-07]
+
+**Built**       The full retry/park/breaker/reprobe mechanism in
+                `ingestion-consumer.service.ts`, composed with US-MLA-06's
+                client above. **5xx/timeout/TLS-handshake failure ⇒ retry**
+                (`runPpaRetryBurst`): up to `PPA_MAX_RETRIES` further
+                attempts (default 3), exponential backoff plus genuine
+                jitter under 1s/2s/4s ceilings (`computeBackoffMs`, shared
+                with the PII secret's own burst), offset withheld
+                throughout; the loop re-checks transience every attempt, so
+                a retry that itself turns permanent stops the burst
+                immediately. **4xx ⇒ permanent**: logs the full envelope
+                (`logPpaPermanentRejection`) and advances immediately, never
+                retried, never pausing a partition for a malformed envelope
+                that can never be fixed by retrying. **Retry exhaustion
+                parks the event and pauses the partition**
+                (`parkAndReprobePpa`), handed off to a detached reprobe loop
+                on `PPA_REPROBE_INTERVAL_MS` — mirroring the PII secret's own
+                `parkAndReprobe` (gate item #1) with one deliberate scope
+                difference: **the circuit breaker (`PpaCircuitBreaker`,
+                `ppa-circuit-breaker.service.ts`) counts consecutive
+                failures per partition, not process-wide** — a PPA-side
+                issue can genuinely be localized to what one corridor's own
+                envelopes trigger, unlike the PII secret's single, uniformly
+                -shared resource (`circuit-breaker.service.ts`'s own comment
+                has the full reasoning for both scopes; this is a reasoned
+                engineering interpretation, not stated verbatim as an
+                acceptance criterion — flagged here to raise back to CCH/
+                COMESA rather than buried in behaviour). A reprobe resolves
+                three ways, not two: success, a `client-error` surfacing now
+                that PPA is reachable again (logged and advanced exactly as
+                if it had happened on the first attempt — a 4xx is itself
+                proof of connectivity, so it resumes the partition and
+                resets the breaker too), or still transient. The shared
+                counting primitive itself (`CircuitBreaker`,
+                `circuit-breaker.service.ts`) was generalized out of what
+                was previously `PiiCircuitBreaker` — a verbatim-duplicate
+                state machine would otherwise have existed twice; the PII
+                secret's own composition root now injects one process-wide
+                `CircuitBreaker` instance, `PpaCircuitBreaker` wraps one
+                per-partition instance of the same class.
+
+**Tests**       55 tests directly on this mechanism
+                (`ingestion-consumer.service.test.ts`'s own 36 covering the
+                retry burst, the delivery gate, and park/reprobe/breaker
+                together; `circuit-breaker.service.test.ts` 7;
+                `ppa-circuit-breaker.service.test.ts` 4;
+                `retry-backoff.service.test.ts` 7 — jitter genuinely
+                varying, sampled directly, not just "a delay occurred").
+                Categories: every table row (5xx/timeout/TLS-handshake
+                transient, 4xx permanent, retry-exhaustion parked, N-th
+                failure trips, tripped-and-resuming); failure paths (a
+                retry turning permanent stops the burst; a reprobe's own
+                offset-advance failing retries the commit next tick, not a
+                bespoke policy; an unhandled exception inside one reprobe
+                tick is caught, logged, and does not stop the loop);
+                ordering (the breaker trip logs exactly once, never
+                re-logged on later failures); concurrency/isolation (two
+                partitions' own breakers proven independent — one tripping
+                never pauses or otherwise affects the other, unit-tested via
+                `PpaCircuitBreaker`'s own per-partition map and exercised
+                end-to-end through two parallel handler calls). Full suite:
+                306 tests, 100%/98.01%/100%/100% aggregate;
+                `ingestion-consumer.service.ts`, `circuit-breaker.service.ts`
+                and `ppa-circuit-breaker.service.ts` each at
+                100%/100%/100%/100% on their own.
+
+**Verified**    `live` — against the real harness broker and a real, running
+                `ppa-stub`, with re-signed real captured records, in the same
+                sessions as US-MLA-06 above. **Retry with jitter, twice
+                independently**: a hung connection produced 4 real requests
+                spaced 2739ms/3943ms/2772ms apart; a persistent 503 produced
+                4 real requests spaced 864ms/1417ms/1508ms apart — each gap
+                comfortably inside its own 1s/2s/4s ceiling and visibly
+                different from the others, live, not a mocked clock.
+                **4xx**: a real 4xx produced exactly one delivery attempt —
+                no retry — and the resulting alert carried the serialized
+                envelope in full, including its tokenized fields (`tkn_...`
+                prefixes visible in the logged JSON, live confirmation that
+                Phase 4's tokenization survives this path unchanged) — and
+                advanced immediately, no pause. **TLS handshake failure
+                retried like a 5xx, reason preserved** (R-22): a genuinely
+                untrusted client cert produced "socket hang up", retried
+                through the full burst, and the alert read "PPA TLS
+                handshake failed at ...: socket hang up" — never a generic
+                5xx. **Breaker trip and automatic recovery, the whole point
+                of this story, proven without a restart**: a persistent 503
+                against a real running instance (`PPA_CIRCUIT_BREAKER_THRESHOLD=5`,
+                `PPA_REPROBE_INTERVAL_MS` shortened to 3000ms for the run)
+                produced `PPA returned HTTP 503 at partition 2 offset 498
+                after retrying - parking event, pausing partition 2 until it
+                recovers`, then, after four further failed reprobes, exactly
+                one `Circuit breaker tripped for partition 2: 5 consecutive
+                PPA delivery failures` (confirmed not repeated across a
+                further 3s of continued failure) and kafkajs's own `Paused
+                partition 2`. Restoring `ppa-stub` to healthy — **with no
+                process restart** — produced, on the very next reprobe tick,
+                `PPA recovered at partition 2 offset 498 - circuit breaker
+                reset, resuming partition 2`, `Forwarded QUOTE
+                (id=01KZRP0MH81MYFTW7PH0S9SYF2) at partition 2 offset 498`,
+                and kafkajs's own `Resumed partition 2` — the exact parked
+                record, nothing lost or duplicated, recovered entirely on
+                its own. This is the qualitative difference from every
+                US-MLA-06 recovery proof above (each of which needed a
+                restart) and from gate item #1's own PII reprobe (which
+                *could not* be live-verified without a restart, since
+                `FilePiiSecretClient` caches its answer for the process's
+                life) — PPA's reprobe genuinely heals without one, live,
+                proven. **Per-partition isolation** (one partition's own
+                trip never pausing or otherwise affecting another) is
+                unit-verified only, not live: the only real capture fixture
+                in this repo (`raw_topic_slice_partition2.json`) is entirely
+                partition 2, so a live multi-partition run would need
+                fabricated, non-captured data — judged not worth trading the
+                "use real captures" discipline for, given the isolation
+                logic itself (`PpaCircuitBreaker`'s own per-partition `Map`)
+                is simple, pure, and already exercised end-to-end through
+                two parallel real handler calls in the unit suite.
+
+**Diverged**    **`network-error` (PPA host wholly unreachable — connection
+                refused, DNS failure) is retried in the same transient
+                bucket as the three categories the story names explicitly
+                (5xx, timeout, TLS-handshake failure)**, not treated as
+                permanent. Reasoned, not guessed: nothing in the story text
+                or `engineering-rules.md` §6.1 calls a bare connection
+                failure permanent, and treating "PPA is completely
+                unreachable" as *more* final than an ordinary 503 would mean
+                advancing the offset the moment PPA goes fully down — silent
+                data loss, worse than any classified outcome the stories do
+                name, and the exact failure mode this whole mechanism exists
+                to prevent. Worth raising back to CCH/COMESA if a future FSD
+                revision says otherwise. **The circuit breaker's scope is
+                per-partition, not process-wide** — see `Built` above; this
+                is an interpretation of `core-knowledge.md` §3.5's "pause
+                consumption on the affected partition(s)" wording (plural,
+                selective) rather than a verbatim requirement, consistent
+                with the reasoning already on record in this codebase for
+                why the PII secret's own breaker is process-wide instead
+                (`circuit-breaker.service.ts`'s comment, written before this
+                story existed). Flagged, not buried — worth confirming with
+                COMESA once there is someone to ask.
+
+**Left open**   The offset-advance-on-permanent-failure policy (FSD Open
+                Item #8) is what this story built against
+                (`plan.md` §8.1 #3's decided default) — still formally
+                unagreed with CCH. Circuit-breaker threshold (N=5,
+                `plan.md` §8.1 #2) and the timeout value (FSD Open Item #1,
+                `plan.md` §8.1 #1) are both decided defaults, not confirmed
+                values. Per-partition breaker isolation is unit-verified
+                only (see `Verified` above). Phase 6 (`plan.md` §9) is what
+                turns every structured log line built across this whole
+                phase into a real metric and a wired alert — nothing here
+                claims more than an interim log line where the story itself
+                says "alert."
 
 ---
 
