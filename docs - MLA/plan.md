@@ -284,8 +284,8 @@ There are really three different bars here, and each question sits at a differen
 
 US-MLA-06, US-MLA-07. This is the phase the harness was built for.
 
-- [ ] Endpoint selection by `eventType` per **D4**.
-- [ ] mTLS client configuration; stable service-name addressing, never individual replicas.
+- [x] Endpoint selection by `eventType` per **D4**. *Built, tested, live-verified — `ppa-routing.service.ts`'s `resolvePpaEndpoint`, a pure `Record<EventType, string>` table (exhaustive by construction over the closed `EventType` union). Not yet wired into the consumer — that is this checklist's own "offset advances only on HTTP 200" item.*
+- [x] mTLS client configuration; stable service-name addressing, never individual replicas. *Built, tested, live-verified — `HttpsPpaClient` (`ppa.client.ts`), the `PpaClient` port's only implementation. Certs and `baseUrl` read once at construction, never per-call; addresses PPA via one parsed host/port, never a replica address. Classifies the raw response into `success`/`client-error`/`server-error`/`tls-handshake-failure`/`network-error`. Live-verified against a real, running `ppa-stub`, all four real outcomes plus the unreachable-host case, including a genuinely rejected client cert against a real `rejectUnauthorized: true` server — this specific live run is what found and corrected a real defect in the TLS-handshake-failure classification itself (see `ppa.client.ts`'s own comment on `classifyTransportError`: a text/code heuristic, then a naive "did secureConnect fire" heuristic, were each tried and each live-disproven before the shipped TCP-connected-only signal). Per-call timeout, retry, and offset-gating are **not** built here — separate checklist items, deliberately (independently configured, per the story's own AC).*
 - [ ] Per-call timeout, configured **independently** of the retry budget.
 - [ ] **Offset advances only on HTTP 200.** Nothing else.
 - [ ] 5xx / timeout / TLS-handshake failure ⇒ retry ×3, exponential backoff **with genuinely random jitter**, offset not advancing.

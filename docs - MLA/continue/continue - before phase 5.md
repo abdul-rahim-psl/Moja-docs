@@ -83,8 +83,8 @@ Per [`plan.md`](../plan.md) §13.2 (filed as "gates production, not the work ahe
 
 This is [`plan.md`](../plan.md) §8, US-MLA-06 and US-MLA-07. Nothing on it is built yet.
 
-- [ ] **Endpoint selection by `eventType` per D4** — the routing table above, read from the envelope's own `eventType` field, never re-derived from anything else.
-- [ ] **mTLS client configuration**; stable service-name addressing, never individual replica addresses.
+- [x] **Endpoint selection by `eventType` per D4** — the routing table above, read from the envelope's own `eventType` field, never re-derived from anything else. *Built, tested, live-verified — `src/services/ppa-routing.service.ts`'s `resolvePpaEndpoint`. Not yet called from the consumer's own delivery path.*
+- [x] **mTLS client configuration**; stable service-name addressing, never individual replica addresses. *Built, tested, live-verified — `src/clients/ppa.client.ts`'s `HttpsPpaClient`, the `PpaClient` port. Live-verified against a real running `ppa-stub`: a correct cert (success), a genuinely untrusted cert (tls-handshake-failure), an unreachable host (network-error), a 4xx, and a 5xx via fault injection — each produced the correctly classified outcome. Worth reading before touching this file again: the TLS-handshake classification went through two wrong designs before landing on the right one, each ruled out by this exact live check, not by inspection — see `ppa.client.ts`'s own comment on `classifyTransportError`. Not yet wired into `ingestion-consumer.service.ts` — no offset-gating, retry, timeout, or breaker logic consumes this client yet.*
 - [ ] **Per-call timeout, configured independently of the retry budget.**
 - [ ] **Offset advances only on HTTP 200.** This is the load-bearing change this phase makes — replacing `ingestion-consumer.service.ts`'s current unconditional `kafka.advance(...)` with a call gated on the delivery client's own response.
 - [ ] **5xx / timeout / TLS-handshake failure ⇒ retry ×3, exponential backoff (1s/2s/4s) with genuinely random jitter, offset not advancing.**
