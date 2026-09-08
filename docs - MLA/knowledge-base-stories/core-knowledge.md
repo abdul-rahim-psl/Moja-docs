@@ -2,13 +2,13 @@
 
 # Core Knowledge — CCH FRMS Message Ingestion <!-- omit in toc -->
 
-**Scope of this document:** a consolidated, implementation-facing synthesis of the four user-story documents in `docs - MLA/user stories/` — `cch-mla-user-stories.md`, `cch-ppa-user-stories.md`, `cch-pii-user-stories.md`, and `cch-notification-dedup-user-stories.md`. It carries no material from any other source. Where the four documents cite an external source (the FSD, the IID, the `DRPP_Kafka_E2E_Pack` captures), that citation is reproduced as a citation, not treated as knowledge this document independently holds.
+**Scope of this document:** a consolidated, implementation-facing synthesis of the five user-story documents in `docs - MLA/user stories/` — `cch-mla-user-stories.md`, `cch-ppa-user-stories.md`, `cch-pii-user-stories.md`, `cch-notification-dedup-user-stories.md`, and `cch-crosscutting-user-stories.md` (added [2026-09-07]; cross-referenced in as of this revision). It carries no material from any other source. Where the five documents cite an external source (the FSD, the IID, the IDD, the `DRPP_Kafka_E2E_Pack` captures), that citation is reproduced as a citation, not treated as knowledge this document independently holds.
 
 **Owner / provenance:** CCH FRMS | Paysys Labs. Source stories `CCH_UserStories_MessageIngestion_v1.0.md`; review consolidated from `CCH_UserStories_MessageIngestion_ConsolidatedReview_v1.0.md`. Story documents dated 18 August 2026.
 
 **Section-reference convention.** A bare `§N` in *this* document's own prose (`§12`, `§13.1`) is a section of this document. Where a section number is quoted **from** a source — `§6.4.3`, `§10.3`, `§9.3` and similar — it belongs to the **FSD** and is reproduced as the stories cite it. Where an IID or IDD section is meant, it is named as such. This document never renumbers a source's sections.
 
-**⚠️ This document is deliberately capture-blind.** It synthesizes the four story documents and nothing else, so where a story states something the `DRPP_Kafka_E2E_Pack` captures contradict, **this document reproduces the story, not the evidence.** [`cross-reference.md`](cross-reference.md) §2 is the register of every such point (F1–F14), and [`plan.md`](../plan.md) §3.1 carries the decisions taken on them. **Read that register before implementing from this document.** The claims most affected are §2.2 (which records to ingest), §2.5 (decoding), §7.1/§7.3 (payee name, date of birth), §7.5 (the `TxSts` vocabulary), and §12.1's premise that party lookup never reaches Kafka.
+**⚠️ This document is deliberately capture-blind.** It synthesizes the five story documents and nothing else, so where a story states something the `DRPP_Kafka_E2E_Pack` captures contradict, **this document reproduces the story, not the evidence.** [`cross-reference.md`](cross-reference.md) §2 is the register of every such point (F1–F14), and [`plan.md`](../plan.md) §3.1 carries the decisions taken on them. **Read that register before implementing from this document.** The claims most affected are §2.2 (which records to ingest), §2.5 (decoding), §7.1/§7.3 (payee name, date of birth), §7.5 (the `TxSts` vocabulary), and §12.1's premise that party lookup never reaches Kafka.
 
 - [1. What is being built](#1-what-is-being-built)
 - [2. The event model — what the audit topic actually carries](#2-the-event-model--what-the-audit-topic-actually-carries)
@@ -569,6 +569,8 @@ therefore:  the Kafka offset + 7-day audit-topic retention is the recovery buffe
 
 Certificates and secrets are provisioned externally and mounted at startup. DFSP public key storage and rotation follow the FSD §10.1 certificate policy; distribution is owned by CCH / the Mojaloop Partner.
 
+**mTLS certificate lifecycle (US-SEC-01):** minimum 2048-bit RSA or equivalent EC; TLS 1.2+ enforced on every hop, 1.0/1.1 disabled (already stated above, restated here as the same story's own AC); rotation must be possible without a service restart (hot-reload or rolling restart, confirmed with CCH before implementation); expiry is monitored with an alert at a minimum 30-day warning; issuance/rotation policy is documented and owned by a named team before go-live. Certificate tooling itself (Vault PKI, cert-manager, manual issuance) is an infrastructure-setup decision, not specified here.
+
 ---
 
 ## 11. Non-functional requirements
@@ -577,12 +579,16 @@ Certificates and secrets are provisioned externally and mounted at startup. DFSP
 | --- | --- | --- |
 | Sustained throughput | **25 TPS** | FSD §9.1 |
 | Peak throughput | **125 TPS** — the number to size the write-ahead store against | FSD §9.1 |
-| MLA end-to-end ack latency | **≤ 200 ms p95** | US-PERF-01 |
+| MLA end-to-end ack latency (Kafka consume → PPA HTTP 200) | **≤ 200 ms p95** under sustained load | US-PERF-01 |
+| PPA correlation-to-TMS latency (envelope received → TMS HTTP 200) | **≤ 500 ms p95** under sustained load | US-PERF-01 |
+| Peak-to-sustained step-down | **No event loss**; consumer lag must not grow unboundedly at 125 TPS | US-PERF-01 |
 | Audit topic retention | **7 days** — the agreed recovery window | US-MLA-01 |
 | DLQ retention | **90 days** | US-PPA-15 |
-| Test coverage | **95% with Jest, on every piece of code, on every component** | stated in all four documents |
-| ValKey availability | **HA cluster — release-blocking** | US-PPA-06 |
-| TLS | **1.2+; 1.0/1.1 disabled** | US-PPA-01 |
+| Test coverage | **95% with Jest, on every piece of code, on every component** | stated in all five documents |
+| ValKey availability | **HA cluster — release-blocking** | US-PPA-06, US-PERF-02 |
+| TLS | **1.2+; 1.0/1.1 disabled; minimum 2048-bit RSA or equivalent EC** | US-PPA-01, US-SEC-01 |
+
+**Note on the throughput baseline (R-10, Medium, open):** the 25 TPS sustained / 125 TPS peak figures above are themselves flagged by `cch-crosscutting-user-stories.md` as citing a **superseded** IDD version — the current IDD (v2.0) states this baseline as a working assumption still pending CCH sign-off, distinct from the FSD's own Open Item #1. Build against the stated figures; do not treat them as more confirmed than the source itself claims.
 
 ---
 
@@ -619,6 +625,7 @@ There is no separately-published event to deduplicate, so the component has no r
 | Retries-exhausted-but-breaker-not-tripped (R-08, High) | **Pause the offset on that event and keep retrying it**; those failures accumulate toward the breaker threshold. |
 | TLS handshake failure classification (R-22) | **Transient**, folded into the 5xx path, with the specific reason retained in the alert. |
 | pacs.008 field-completeness regression (R-35) | Added to US-PPA-12. |
+| The observability *stack* | **Confirmed, not open.** Prometheus, Grafana, Loki, Tempo, Mimir (IDD §10, 28 July infrastructure discussion). CCH owns the metrics-collection agents; both services expose Prometheus-compatible endpoints. Only the alerting *destination/routing* stays open — see R-37, §13.2. |
 
 ---
 
@@ -642,6 +649,7 @@ There is no separately-published event to deduplicate, so the component has no r
 | # | Sev | What is open |
 | --- | --- | --- |
 | **R-04** | **Critical** | The two **"never synthesize"** prohibitions (no fabricated pacs.002, no fabricated pain.013) have **zero acceptance criteria** in US-PPA-09, US-PPA-11 or US-PPA-16. Highest-consequence rule in the spec. **Do first.** |
+| **R-37** | **High** | Alerting **destination/routing** (PagerDuty/Slack/email, and the mechanism connecting an alert condition to it, e.g. Grafana Alertmanager) is undecided pipeline-wide, despite nearly every story specifying "raise an alert." A SIEM/log-aggregation platform is separately unconfirmed (IDD Open Item #8). Affects every alert path named in Phase 6 (`plan.md` §9). The FSD's own §6.7 cross-references this to a §12 Open Item that does not actually exist there — a gap in the FSD itself. |
 | **R-29** | High | US-PPA-17's out-of-order rationale cites the superseded per-topic architecture. Race is real; cause is the async-ack-then-process model across replicas plus an **unconfirmed audit-topic partition key**. |
 | R-11 | Medium | FSD self-contradicts on pacs.002 `GrpHdr.MsgId` provenance (§6.5.4 "always PPA-generated" vs. §6.4.3's table "where supplied"). US-PPA-11 follows the correct clause; the fix is owed to the FSD. |
 | R-12 | Medium | Payee-name sourcing — stories correct, mapping data already corrected. |
@@ -656,6 +664,9 @@ There is no separately-published event to deduplicate, so the component has no r
 | R-21 | Low | US-PPA-07 applies the domestic discriminator to FXTRANSFER, which per FSD §6.4.1 never reaches that step. |
 | R-33 | Low | "Error callback, no cached transaction" not explicitly named as a unit test in US-PPA-16. |
 | R-34 | Low | §8.2's Rejected Payment scenario has no single dedicated story — split across US-PPA-11 and US-PPA-16. |
+| R-10 | Medium | US-PERF-01's 25/125 TPS baseline cites a superseded IDD version (current IDD v2.0 states it as a working assumption, not confirmed). US-PERF-02's ValKey sizing formula carries no worked target figure — IDD v2.0 works one out (~60K entries, 2–3 GiB, 6-node cluster). |
+| R-17 | Low | US-MON-01's description states "four distinct signals"; its own acceptance criteria list seven. |
+| R-36 | Low | No Phase 1 Exclusions/Non-Goals section anywhere in the stories, mirroring FSD §11 — document-wide scope hygiene, not owned by one component. |
 
 ### 13.3 Undecided outside the finding register
 
@@ -664,7 +675,7 @@ There is no separately-published event to deduplicate, so the component has no r
 - **What "protected" must legally mean** — reversible-by-authorized-lookup, or merely irreversible-without-the-secret? **CCH Legal.**
 - **Named ownership of the tokenization secret** and its rotation schedule — unassigned.
 - **How MLA sources DFSP public keys** — synced local store vs. live lookup service, and how a key-source outage is distinguished from a genuine signature failure.
-- **Alerting destination and routing** (Slack / PagerDuty / email) — the observability stack is confirmed, the destination is not (R-37). Affects every alert path in both services.
+- **Alerting destination and routing** (Slack / PagerDuty / email, and the mechanism wiring a condition to it) — the observability stack is confirmed, the destination is not (R-37). Affects every alert path in both services. **A SIEM/log-aggregation platform is a separate, also-unconfirmed item** (IDD Open Item #8), relevant to audit-log and security-alert output (US-AUD-01) rather than to metrics.
 - **Write-ahead store technology** — pending the hosting-location decision (FSD §4.7).
 - **The pinned `tms-service` commit** for the four ajv schemas — must be identified and documented **before implementation begins**.
 - **Whether conflicting terminal states** (`COMMITTED` after `ABORTED`) actually occur on COMESA's DRPP — the implementation handles it correctly regardless, by treating any repeat as a plain duplicate.
@@ -673,10 +684,10 @@ There is no separately-published event to deduplicate, so the component has no r
 
 ## 14. Known gaps in the document set itself
 
-Worth knowing before treating these four documents as complete:
+Worth knowing before treating these five documents as complete:
 
-1. **`cch-crosscutting-user-stories.md` is referenced repeatedly but is not present in `docs - MLA/user stories/`.** It is cited as the home of **US-AUD-01** (audit-log PII masking), **US-MON-01** (monitoring/alerting, and the R-37 alerting-destination gap), **US-MON-02** (instance-local readiness scoping), and **US-PERF-01** (the ≤200 ms p95 ack-latency budget). Several acceptance criteria in the present documents depend on it. **Obtain it before treating this knowledge base as complete.**
-2. **Epic numbering has holes.** MLA covers Epics 1–3, dedup Epic 4, PPA Epics 6–10. **Epic 5 is unaccounted for** in the available documents — likely the crosscutting or PII epic.
+1. ~~`cch-crosscutting-user-stories.md` is referenced repeatedly but is not present in `docs - MLA/user stories/`.~~ **Resolved [2026-09-07] — obtained and cross-referenced into this revision.** It is the home of **US-AUD-01** (audit-log PII masking, PPA-side), **US-MON-01** (monitoring/alerting), **US-MON-02** (readiness scoping), **US-PERF-01/02** (latency and ValKey sizing), and **US-SEC-01** (mTLS certificate lifecycle) — Epics 11–12, dated 18 August 2026 like the other four. It confirms the observability stack (§12.2 above) and leaves R-37 (alerting destination/routing, §13.2) as the residual open item.
+2. **Epic numbering still has holes.** MLA covers Epics 1–3, dedup Epic 4, PPA Epics 6–10, crosscutting Epics 11–12. **Epic 5 remains unaccounted for** — the crosscutting document's own arrival ruled out "the crosscutting epic" as the answer, since it turned out to be Epics 11–12, not 5.
 3. **US-PPA-14 no longer exists** — merged into US-PPA-04 (R-28). Do not look for it.
 4. **The classify-vs-validate-signature ordering is not settled** between US-PII-01's Method (classify at step 3, validate at step 4) and the MLA stories' framing. The **validate-then-tokenize** invariant *is* settled and is the one that matters. See §3.2.
 5. **The story documents are dated 18 August 2026 and carry open Actions with named owners.** Some findings are marked Resolved in the finding table while the corresponding Action row is still Open, and vice versa — read both.
@@ -714,6 +725,12 @@ Worth knowing before treating these four documents as complete:
 | US-PPA-16 | Park correlation state before ValKey TTL expiry | PPA |
 | US-PPA-17 | Handle out-of-order arrival (fulfil before prepare) | PPA |
 | ~~US-DEDUP-01~~ | ~~Filter and deduplicate Central Ledger notifications~~ | **REMOVED** |
+| US-AUD-01 | Write audit log entries for every processed event | PPA |
+| US-MON-01 | Monitor consumer lag, circuit breaker state, and degraded-message rate | Cross-cutting (MLA + PPA) |
+| US-MON-02 | Expose health endpoints for load balancer and orchestrator | PPA |
+| US-PERF-01 | Meet latency targets at sustained and peak TPS | Cross-cutting (MLA + PPA) |
+| US-PERF-02 | Size and configure ValKey for correlation workload | PPA |
+| US-SEC-01 | Establish mTLS certificates for MLA↔PPA and PPA↔TMS | Cross-cutting (MLA + PPA + TMS boundary) |
 
 ---
 

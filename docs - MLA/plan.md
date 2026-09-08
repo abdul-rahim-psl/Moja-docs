@@ -33,7 +33,7 @@
 
 | Asset | State |
 | --- | --- |
-| Requirements — four user-story documents, broken out per story under `docs - MLA/EPICS/` | Complete; several findings still open (R-04 Critical, R-18, R-23, R-29, R-31) |
+| Requirements — five user-story documents (`cch-crosscutting-user-stories.md` added [2026-09-07]), MLA's and PII's stories broken out per story under `docs - MLA/EPICS/` | Complete; several findings still open (R-04 Critical, R-37 High, R-18, R-23, R-29, R-31) |
 | Synthesized model — [`core-knowledge.md`](knowledge-base-stories/core-knowledge.md) | Complete |
 | Engineering policy — [`engineering-rules.md`](engineering-rules.md) | Complete and binding |
 | POC comparison — [`cross-reference.md`](knowledge-base-stories/cross-reference.md) | Complete; **all seven forks settled (§3.1)** — D3 (the last of them) resolved with PPA's owners as Option A, the per-`eventType` scheme |
@@ -313,11 +313,11 @@ Four items were flagged before starting this phase's build. None are CCH/COMESA 
 ## 9. Phase 6 — Observability and operability
 
 - [ ] Structured logging (`pino`) with `correlationId`, `eventType` and pipeline step on every line — from the first line of real code, not retrofitted.
-- [ ] Metrics for every question an operator must answer without a debugger: throughput and consumer lag; skip counters **by reason** (`egress`, party-lookup, unclassifiable, FX-quote-rejected); rejection counters; signature failures; tokenization failures; retry and breaker state; delivery outcomes; ack latency against the 200 ms p95 budget.
+- [ ] Metrics for every question an operator must answer without a debugger: throughput and **per-partition** consumer lag (US-MON-01); a **paused-offset-rate** metric, alerted separately from lag (US-MON-01 — the two indicate different failure modes); skip counters **by reason** (`egress`, party-lookup, unclassifiable, FX-quote-rejected); rejection counters; signature failures; tokenization failures; retry and breaker state — one gauge per partition for PPA's breaker, one process-wide gauge for PII's (the two breakers' deliberately different scopes, `circuit-breaker.service.ts`'s own comment); delivery outcomes; ack latency against the 200 ms p95 budget, exposed on a Prometheus-compatible endpoint (US-MON-01's own AC — the stack itself, confirmed, is Prometheus/Grafana/Loki/Tempo/Mimir).
 - [ ] **A metric for every decision the code makes silently.** Anything dropped without an alert must still be counted — otherwise a wrongly-dropped record is indistinguishable from a correctly-dropped one.
 - [ ] Alert paths wired for: missing/invalid signature, 4xx, retry exhaustion, breaker trip, tokenization failure.
 
-**Blocked:** alerting *destinations* are undecided (R-37, in the missing crosscutting document). Build the paths; leave the sink configurable.
+**Blocked:** alerting *destinations* are undecided (R-37, `cch-crosscutting-user-stories.md`, obtained [2026-09-07] — the stack itself, Prometheus/Grafana/Loki/Tempo/Mimir, is confirmed; only routing/destination is open). Build the paths against Prometheus-compatible metrics; leave the alert sink configurable.
 
 **Exit criterion.** A full 500-record feed produces a metrics snapshot in which every record is accounted for in exactly one bucket, and the buckets sum to 500.
 
@@ -388,7 +388,7 @@ The POC was live-verified. Where we do something different, the burden of proof 
 | **DFSP public keys / JWKS endpoint unavailable.** We hold 286 real signatures and cannot verify one. | Phase 3's genuine-signature verification. The *mechanism* is unblocked via re-signed fixtures. | CCH / Mojaloop Partner |
 | ~~PII fail-mode — answered [2026-09-04], not yet implemented.~~ **Resolved [2026-09-04] — gate item #1.** COMESA's answer ("fail the transaction and retry") is now implemented, tested, and live-verified — §16's new US-PII-01 entry, §7.1 #1's table cell. Kept here, struck through, rather than deleted, so this table's own history stays legible. | ~~Phase 4 cannot be called complete until the code matches the answer~~ — no longer gates anything | — |
 | **PII secret rotation — headline answered [2026-09-04], trigger mechanism unresolved — gate item #2.** COMESA confirmed versioned keys over drain-first, but "a failure route which looks for and applies new keys" names a trigger that does not map cleanly onto a tokenizer that only ever writes tokens, never checks one — §7.1 #2's table cell has the precise ambiguity. **User decision [2026-09-04, `continue - before phase 5.md` §2]: no technical dependency on Phase 5's own build — confirmed, then Phase 5 was prioritized ahead of this item rather than sequenced after it (superseding an earlier same-day decision that had tied the two together).** | Phase 4's formal closure only — no longer gates starting Phase 5 | CCH (the trigger question) then Engineering (the build) |
-| **`cch-crosscutting-user-stories.md` is referenced throughout but absent** — US-AUD-01, US-MON-01 (and R-37's alerting destinations), US-MON-02, US-PERF-01 (the 200 ms budget). | Phase 6 in full; the latency budget in Phase 7 | Story author |
+| ~~`cch-crosscutting-user-stories.md` is referenced throughout but absent~~ **Resolved [2026-09-07] — obtained**, home of US-AUD-01, US-MON-01, US-MON-02, US-PERF-01/02, US-SEC-01. Confirms the observability stack (Prometheus/Grafana/Loki/Tempo/Mimir, IDD §10); **only R-37 (alerting destination/routing) remains open**, now confirmed High severity. | No longer gates Phase 6 in full — only R-37's own alert-sink question does, same posture as before | CCH (R-37's routing decision) |
 | **R-04 (Critical) has no acceptance criteria** — the "never synthesize" prohibitions. MLA-side equivalent: never fabricate an envelope for an event that did not arrive. | Phase 2/3 acceptance criteria | Story author — liftable from the POC's behaviour |
 
 ### 13.2 Gates production, not the work ahead
@@ -417,6 +417,7 @@ Ordered by how much they change what we build. The first four are the ones to pu
 6. **Is the settlement-leg partition split expected behaviour or a symptom?** It determines whether out-of-order arrival is a permanent design condition or a defect someone will fix. **Bears on Phase 2's out-of-order handling** (the harness itself, Phase 1, only needs to replay the split faithfully, not explain it).
 7. **Is `dateOfBirth` genuinely unavailable on this topic**, or absent only from these test parties? Zero occurrences across every capture; downstream `pacs.008` mapping depends on it. **PPA-side (`pacs.008` translation) — not a numbered cch-mla phase.**
 8. **Is `binId` / `processedAsBatch` (present on 59 of 500 records) relevant to us?** Neither the FSD, the stories, nor the POC models batch processing on this topic. Probably out of scope — worth one question rather than an assumption. **If relevant at all, Phase 2** (ingestion/classification scope).
+9. **Alerting destination/routing** (PagerDuty / Slack / email, and the mechanism connecting a condition to it — e.g. Grafana Alertmanager) — R-37, High, from `cch-crosscutting-user-stories.md`'s own Actions table (its own action #5, owner "CCH + FSD author"). The observability *stack* is already confirmed (Prometheus/Grafana/Loki/Tempo/Mimir, IDD §10) and is not itself a question. A SIEM/log-aggregation platform (IDD Open Item #8) is a separate, related question, relevant to audit-log output rather than metrics. **Gates Phase 6's formal closure** (§9, §13.1).
 
 **Not on this list:** which record is the final-state trigger. That is D5, settled internally as `commitTransfer` with the ISO `TxSts` vocabulary (`COMM`/`RESV`) — §3.1 — so it is not a question for COMESA.
 
