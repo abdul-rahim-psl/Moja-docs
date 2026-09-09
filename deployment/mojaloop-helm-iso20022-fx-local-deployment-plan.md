@@ -218,10 +218,9 @@ sh update-charts-dep.sh
 ```
 
 **Ordering correction found here**: `update-charts-dep.sh` runs `helm dep up --skip-refresh` per chart —
-`--skip-refresh` means it expects the Helm repo indexes (bitnami, mojaloop, redpanda, elastic, etc.,
-the full list in `helmfile.yaml`'s `repositories:` block) to already be cached locally, and fails
-outright if they aren't. So the `helm repo add` block originally sequenced under §7 actually has to run
-**before** this dependency pull, not after:
+`--skip-refresh` means it expects the Helm repo indexes (bitnami, mojaloop, redpanda, elastic, etc.) to
+already be cached locally, and fails outright if they aren't. So `helm repo add` has to run **before**
+this dependency pull, not after (as originally sequenced under §7):
 
 ```bash
 helm repo add stable https://charts.helm.sh/stable
@@ -235,136 +234,164 @@ helm repo add mojaloop-charts https://mojaloop.github.io/charts/repo
 helm repo add redpanda https://charts.redpanda.com
 helm repo update
 ```
+(The first pass through this list omitted `mojaloop-charts` — distinct from, and easy to conflate with,
+`mojaloop` — caught when `update-charts-dep.sh` failed on `ml-operator`, whose `Chart.yaml` depends on
+it. Added above.)
 
-**Correction**: the first pass through this list omitted `mojaloop-charts` → `https://mojaloop.github.io/charts/repo`
-(distinct from, and easy to conflate with, `mojaloop` → `https://mojaloop.io/helm/repo/`) — caught when
-`update-charts-dep.sh` failed on `ml-operator`, whose `Chart.yaml` depends on it.
-
-**Second correction**: `helmfile.yaml`'s `repositories:` block turned out not to be the complete list
-either — `update-charts-dep.sh` walks through *every* chart in this repo unconditionally, including
-several we'll never actually deploy for this scenario (`ml-operator`, `mojaloop-iam`, `thirdparty/*`,
-`bulk-*`, `merchant-registry-svc`, `connection-manager`...), and each one's own `Chart.yaml` can name a
-repo `helmfile.yaml` never listed. Hit next: `mojaloop-iam` needs `https://k8s.ory.sh/helm/charts` (Ory's
+`update-charts-dep.sh` walks through *every* chart in the repo unconditionally, including several never
+actually deployed for this scenario (`ml-operator`, `mojaloop-iam`, `thirdparty/*`, `bulk-*`,
+`merchant-registry-svc`, `connection-manager`...) — and each one's own `Chart.yaml` can name a repo not
+in the list above. Hit next: `mojaloop-iam` needs `https://k8s.ory.sh/helm/charts` (Ory's
 Oathkeeper/Keto/Kratos/Hydra — the IAM/auth stack, matching what the DRPP production infra diagram
-actually shows, though not something this local FX/ISO test needs to deploy). Add it:
+actually shows, though not something this local test deploys). Added the same way — read the failing
+chart's own `Chart.yaml`, add the repo it names, `helm repo update`, retry — rather than guessing a
+"complete" list up front:
 ```bash
 helm repo add ory https://k8s.ory.sh/helm/charts && helm repo update
 ```
-Treating each further miss the same way — add the repo, `helm repo update`, retry — rather than
-front-loading a guessed "complete" list, since the script itself is the authoritative source of what it
-actually needs.
 
-**Dependency pull complete.** After adding `ory` (`https://k8s.ory.sh/helm/charts`), the full run finished
-clean: 50 `charts/` folders populated, no leftover `tmpcharts`. Confirmed directly — the top-level
-`mojaloop/charts/` (the one we actually deploy) has all 18 expected component `.tgz`s, and
-`mojaloop-iam/charts/` (the one that failed the prior attempt) is populated too.
+**Dependency pull complete.** After adding `ory`, the full run finished clean: 50 `charts/` folders
+populated, no leftover `tmpcharts`. Confirmed directly — the top-level `mojaloop/charts/` (the one
+actually deployed) has all 18 expected component `.tgz`s, and `mojaloop-iam/charts/` (the one that
+failed the prior attempt) is populated too.
 
 **Trimmed values file built and confirmed.** `values-mojaloop-iso20022-fx-lean.yaml` created as a copy
-of the full `values-mojaloop-iso20022.yaml` (confirmed `EVENT_SDK_CONFIG` anchor and its 6 reuse points,
-plus `mojaloop-ttk-simulators`, all intact) with `centralsettlement.enabled: false` and
-`transaction-requests-service.enabled: false` appended — neither key existed in the source file, so this
-was a safe append, not an edit-in-place.
+of the full `values-mojaloop-iso20022.yaml` (**not** the `-min` variant — see §2; confirmed
+`EVENT_SDK_CONFIG` anchor and its 6 reuse points, plus `mojaloop-ttk-simulators`, all intact) with two
+trims appended — safe, since neither key existed in the source file:
+- `centralsettlement.enabled: false` — settlement-window mechanics aren't part of what's being
+  validated (message shapes on `topic-event-audit`, not settlement).
+- `transaction-requests-service.enabled: false` — mobile request-money flow, unrelated to FX transfer.
+
+For backend: `values-backend.yaml` as-is (not `-min`, which disables MySQL/Kafka/Redis/MongoDB entirely
+— not optional here), layered with `values-backend-iso20022-min.yaml` (looked like a safe trim of
+unused Mongo/Redis instances from reading it in isolation — **turned out not to be**; the real story is
+in §7, found only once pods actually ran).
 
 **§6 complete.** `helmfile.yaml` edited (confirmed by re-reading the whole file after): the `backend`
 release now layers `values-backend-iso20022-min.yaml` on top of the full `values-backend.yaml`; the
 `moja` release now points at `values-mojaloop-iso20022-fx-lean.yaml` instead of the chart's plain
 default. Moving to §7 — the actual deploy.
 
-Then retry `sh update-charts-dep.sh` from `~/mojaloop-helm`.
-
-In `local-deployment-methods/helmfile/`, create `values-mojaloop-iso20022-fx-lean.yaml` starting as a
-copy of `values-mojaloop-iso20022.yaml` (**not** the `-min` variant — see §2), then apply only these
-trims, each independently safe for the P2P+FX corridor being tested:
-
-- `centralsettlement.enabled: false` — settlement-window mechanics aren't part of what's being
-  validated (message shapes on `topic-event-audit`, not settlement).
-- `transaction-requests-service.enabled: false` — mobile request-money flow, unrelated to FX transfer.
-- Keep `mojaloop-ttk-simulators` as-is (all of `e2e-sim1`, `e2e-sim2`, `e2e-sim-fxp1`) — this is the FX
-  corridor itself; do not touch it.
-- Keep every `configOverride: *EVENT_SDK_CONFIG` block as-is — this is what makes `topic-event-audit`
-  appear at all (§2).
-- If RAM pressure shows up once running (§3's floor is a rough estimate, not a guarantee), the next
-  safe cut is `e2e-sim2` (a second plain DFSP simulator not needed once one payer+payee pair plus the
-  FXP is running) before touching anything FX- or audit-related.
-
-For backend, use `values-backend.yaml` as-is (not `-min`, which disables MySQL/Kafka/Redis/MongoDB
-entirely — those aren't optional here) layered with `values-backend-iso20022-min.yaml` (safe: only
-turns off unused Mongo/Redis instances, doesn't touch anything FX- or audit-related).
-
-Edit `helmfile.yaml`'s `releases[].values` lists to point at these files (currently commented
-placeholders showing exactly where):
-
-```yaml
-- name: backend
-  values:
-    - values-backend.yaml
-    - values-backend-iso20022-min.yaml
-- name: moja
-  values:
-    - values-mojaloop-iso20022-fx-lean.yaml
-```
-
 ## 7. Deploy
 
-**First attempt hit a timeout, not a config problem.** Mid-deploy, the remote machine's internet dropped;
+Six attempts to get a genuinely healthy deployment, each fixing one real thing — logged in order below
+rather than collapsed, since several later fixes only made sense in light of what an earlier attempt
+revealed.
+
+**Attempt 1 — network drop, not a config problem.** Mid-deploy, the remote machine's internet dropped;
 image pulls that should take ~2 minutes took 18-23 minutes ("including waiting", per `kubectl get
 events`). Helm's default 5-minute wait gave up before those pulls finished, marking both `backend` and
 `moja` `failed` — but `backend`'s actual resources (Kafka, MySQL, all 6 Redis pods, provisioning job) had
 by then genuinely finished and were healthy; `moja` had only gotten as far as the central-ledger DB
-migration job (also completed) before timing out, with none of the real service pods created yet. Fix:
-raise Helm's wait timeout on both releases before retrying, rather than hoping the connection is faster
-this time.
-
+migration job (also completed) before timing out, with none of the real service pods created yet.
+Fix — raise Helm's wait timeout on both releases:
 ```bash
 sed -i '/^- name: backend$/a\  timeout: 1800' ~/mojaloop-helm/local-deployment-methods/helmfile/helmfile.yaml
 sed -i '/^- name: moja$/a\  timeout: 1800' ~/mojaloop-helm/local-deployment-methods/helmfile/helmfile.yaml
 ```
 
-Both confirmed landed (`timeout: 1800` under each release, rest of the file unchanged). Retrying
-`helmfile apply` — `backend`'s already-healthy resources should reconcile fast; `moja` still has to pull
-and create every actual service pod (central-ledger, ml-api-adapter, ALS, quoting-service, TTK,
-simulators), which is the slow part given the pull rate observed.
-
-**Second retry hit a different problem, unrelated to our config**: `helmfile apply` refreshes every repo
-in its `repositories:` block before touching any release, unconditionally — and `https://mojaloop.io/helm/repo/`
-timed out (`context deadline exceeded`), even though it had worked fine earlier in §6. Confirmed via
-`grep "^\s*chart:"` that neither active release (`../../example-mojaloop-backend`, `../../mojaloop`) nor
-`kafka-console` (`redpanda/console`) actually depends on that repo — both charts are installed from local
-paths, not the published `mojaloop/...` name. So rather than depend on an endpoint we don't need working,
-removed the unused `- name: mojaloop` / `url: https://mojaloop.io/helm/repo/` entry from the
-`repositories:` block entirely:
+**Attempt 2 — an unused repo endpoint timed out.** `helmfile apply` refreshes every repo in its
+`repositories:` block unconditionally, before touching any release — `https://mojaloop.io/helm/repo/`
+timed out, even though it had worked fine in §6. Confirmed via `grep "^\s*chart:" helmfile.yaml` that
+neither active release actually uses that repo (both install from local chart paths, not the published
+`mojaloop/...` name). Fix — remove the unused entry rather than depend on it working:
 ```bash
 sed -i '/^- name: mojaloop$/,+1d' ~/mojaloop-helm/local-deployment-methods/helmfile/helmfile.yaml
 ```
-Confirmed removed cleanly (8 repos left, `mojaloop-charts` and the harmless duplicate `redpanda` entry
-both intact). Retrying the deploy.
 
-Run on `10.0.150.69`:
-
+**Attempt 3 — a real config issue.** `backend` succeeded. `moja` failed on an nginx ingress-webhook
+rejection: two central-ledger sub-components both template the same ingress hostname
+(`central-ledger-transfer-position.local`) — the **batch** position handler
+(`centralledger-handler-transfer-position-batch`, ingress `moja-handler-pos-batch`) had already
+succeeded; the **non-batch** one (`centralledger-handler-transfer-position`) collided and got rejected.
+These two are meant to be mutually exclusive per §4.2 of the comprehensive-overview doc read at the very
+start of this effort — and critically, **FX position changes only work through the batch handler**, so
+the non-batch one is both redundant and blocking here. Real key names confirmed via
+`centralledger/Chart.yaml` (not guessable from directory names alone). Fix:
 ```bash
-cd ~/mojaloop-helm/local-deployment-methods/helmfile
-helm repo add mojaloop https://mojaloop.io/helm/repo/ && helm repo update
-helmfile apply
+cat <<'EOF' >> ~/mojaloop-helm/local-deployment-methods/helmfile/values-mojaloop-iso20022-fx-lean.yaml
+
+# Disable the non-batch position handler — collides with the batch handler's ingress host, and FX
+# position changes only work through the batch handler anyway (see plan §2 / central-ledger §4.2):
+centralledger:
+  centralledger-handler-transfer-position:
+    enabled: false
+EOF
 ```
 
-kind's `extraPortMappings` (§5) binds ports 80/443 on the kind node container to **the host's own
-interfaces** — so on `10.0.150.69` that's the machine's real IP, not `127.0.0.1`. Add the ingress hosts
-(exact list from `kubectl -n demo get ingress`) to `/etc/hosts` **on whichever machine you'll browse
-from** — the laptop, if driving the TTK UI from there — pointed at the remote IP, not localhost:
+**Attempt 4 — another unused, likely structurally-broken repo.** Same class of problem as attempt 2:
+`https://charts.helm.sh/stable` timed out. This one may not even be transient — it's the Helm project's
+old "stable" repo, deprecated years ago in the real Helm ecosystem. Only ever referenced by
+`monitoring/promfana` (for `prometheus`/`grafana`), not part of anything deployed here, and its
+dependencies were already vendored as local `.tgz`s during §6 regardless. Fix — drop it, and `incubator`
+pre-emptively (same deprecated family, same reasoning):
+```bash
+sed -i '/^- name: stable$/,+1d' ~/mojaloop-helm/local-deployment-methods/helmfile/helmfile.yaml
+sed -i '/^- name: incubator$/,+1d' ~/mojaloop-helm/local-deployment-methods/helmfile/helmfile.yaml
+```
 
+**Attempt 5 — Helm-level success, but pod-level check found real gaps.** All three releases showed
+`STATUS: deployed`, no failures. Independent pod check (never trust Helm's word alone — same discipline
+as §5) found: 4 `CrashLoopBackOff` (`e2e-sim-fxp1`, `e2e-sim1/2/3` — the FX/e2e simulators), 1
+`Init:CreateContainerConfigError` (`ml-testing-toolkit-backend`), 14 `PodInitializing` (mostly
+`quoting-service` and various `-scheme-adapter` pods — later confirmed just a slow image pull, not a
+bug). Root cause for the two real failures traced to `values-backend-iso20022-min.yaml` — the trim
+called "safe" in §6 wasn't: `ttksims-redis` is what the e2e simulator SDKs connect to for cache
+(confirmed by the exact hostname `ttksims-redis-master` in their crash logs, tracing to the
+`MOJA_TTK_SIM_REDIS_HOST` anchor in `values-mojaloop-iso20022.yaml`, §2); `ttk-mongodb` is what the TTK
+backend needs (`secret "ttk-mongodb" not found` — disabling that release meant its credentials Secret
+never existed). `cl-mongodb` and `auth-svc-redis` do appear genuinely safe — nothing running references
+either. Fix — a small third override, layered last so it only re-enables the two wrongly cut:
+```bash
+cat <<'EOF' > ~/mojaloop-helm/local-deployment-methods/helmfile/values-backend-fx-lean.yaml
+ttksims-redis:
+  enabled: true
+ttk-mongodb:
+  enabled: true
+EOF
+sed -i '/- values-backend-iso20022-min.yaml/a\    - values-backend-fx-lean.yaml' \
+  ~/mojaloop-helm/local-deployment-methods/helmfile/helmfile.yaml
+```
+
+**Attempt 6 — succeeded, then a startup race, not a bug.** All three releases `deployed` again. Pod
+check: from 4 `CrashLoopBackOff` + 1 config-error + 14 stuck → 48 `Running`, with only
+`ttksims-redis-master`/`ttk-mongodb` themselves still normally starting and one straggler (`e2e-sim3`)
+still crash-looping. After a ~3 minute wait and recheck: `ttksims-redis-master`/`ttk-mongodb` both
+healthy, `ml-testing-toolkit-backend` and `quoting-service`/`quoting-service-handler` confirmed
+`1/1 Running`, `e2e-sim3` recovered on its own — but `e2e-sim-fxp1`/`e2e-sim1`/`e2e-sim2` were *still*
+crash-looping. Fresh logs showed the error had changed from `ENOTFOUND` to `ECONNREFUSED` (DNS resolves
+fine now, TCP connection itself was refused) while `e2e-sim3` was, at that same moment, successfully
+serving traffic against the identical Redis — meaning these three had been crash-looping since before
+Redis was ready, and `CrashLoopBackOff`'s exponential backoff meant their next natural retry was
+potentially minutes away even though the dependency had since stabilized. Fix — force-delete them so the
+ReplicaSet recreates them immediately, rather than waiting out the backoff timer:
+```bash
+kubectl delete pod -n demo -l app.kubernetes.io/instance=moja-e2e-sim-fxp1-sdk
+kubectl delete pod -n demo -l app.kubernetes.io/instance=moja-e2e-sim1-sdk
+kubectl delete pod -n demo -l app.kubernetes.io/instance=moja-e2e-sim2-sdk
+```
+**Resolved — by time, not the force-delete.** The `kubectl delete pod -l app.kubernetes.io/instance=...`
+commands matched nothing (wrong guess at the label's actual value), so they never fired — but by the time
+that was noticed, all five e2e-sim pods (`fxp1`, `sim1/2/3`, `ttk-backend`) already showed `1/1 Running`
+on their own, confirming the race diagnosis: they just needed enough time for a natural backoff retry to
+land after Redis had stabilized, not an actual intervention. **§7 fully done** — final namespace-wide
+check confirms it: 51 `Running`, 1 `Completed`, zero pods in any other state.
+
+**Still to do once every pod is confirmed healthy**: kind's `extraPortMappings` (§5) binds ports 80/443
+on the kind node container to **the host's own interfaces** — so on `10.0.150.69` that's the machine's
+real IP, not `127.0.0.1`. Add the ingress hosts (exact list from `kubectl -n demo get ingress`) to
+`/etc/hosts` **on whichever machine you'll browse from** — the laptop, if driving the TTK UI from there
+— pointed at the remote IP:
 ```
 10.0.150.69  ml-api-adapter.local central-ledger.local account-lookup-service.local \
              quoting-service.local testing-toolkit.local
 ```
-
 This assumes `10.0.150.69:80/443` is actually reachable from that browsing machine — the same network
-question flagged in §3. If it isn't (firewalled, VPN-only), an SSH tunnel or `kubectl port-forward` run
-from the laptop against the remote cluster's kubeconfig is the fallback — decide once §3's answers are
-in, since it changes whether kubectl needs to run locally against a copied kubeconfig or only over SSH
-on the box itself.
-
-Verify (from wherever the hosts entries point, per above): `curl http://central-ledger.local/health`,
-`curl http://ml-api-adapter.local/health`, and `helm -n demo test moja --logs`.
+question flagged in §3, still unconfirmed. If it isn't (firewalled, VPN-only), an SSH tunnel or `kubectl
+port-forward` run from the laptop against the remote cluster's kubeconfig is the fallback. Verify with
+`curl http://central-ledger.local/health`, `curl http://ml-api-adapter.local/health`, and
+`helm -n demo test moja --logs`.
 
 ## 8. Confirm `topic-event-audit` is actually there before running anything else
 
