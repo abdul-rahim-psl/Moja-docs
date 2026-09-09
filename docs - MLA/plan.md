@@ -29,7 +29,7 @@
 
 ## 1. Where we are
 
-**Phases 0 through 6 are built and live-verified; Phase 4's mechanism is too, though the phase itself is not formally closed.** A TypeScript + Fastify skeleton exists at [`cch-mla`](/home/abdul-rahim/mojaloop/cch-mla) — the four-layer structure, typed and validated configuration, `/health/live` + `/health/ready`, structured logging, a real ingestion pipeline, real envelope construction, real JWS verification, real PII tokenization, **real delivery to PPA with the full offset/retry/breaker/reprobe mechanism live**: every forwarded record either reaches PPA and advances the offset on HTTP 200, is logged in full and advanced immediately on a permanent 4xx, or is retried with genuine jitter and — on exhaustion — parked behind a per-partition circuit breaker that re-probes and resumes entirely on its own, no restart required, and now **full observability and operability**: structured logs carrying `correlationId`/`eventType`/pipeline step on every line, ten Prometheus-compatible metrics answering every operator question `core-knowledge.md` §9 and `engineering-rules.md` §9 name, and alert paths wired at all five named conditions (missing/invalid signature, a PPA 4xx, retry exhaustion, a breaker trip, a PII tokenization failure), each raising both a metrics-based signal (always active) and an optional configurable webhook. Every record either becomes a schema-valid, tokenized `EventEnvelope` that a live `ppa-stub` accepts over mTLS, or is rejected/skipped for a named, correctly-classified reason — including a genuinely re-signed record verifying and forwarding with prefixed tokens in every listed field, a tampered one failing, a stripped signature failing distinctly, a key-source outage failing distinctly from an invalid signature, and a missing PII secret failing distinctly again, all proven against a real broker and a real `ppa-stub`, not a mock. 354 tests at 100%/98.06%/100%/100% coverage against a mechanically-enforced 96% gate, and a GitLab CI pipeline. Full detail: §16's Phase 0–6 entries, `EPICS/EPIC-0-Scaffolding/`, `EPICS/PHASE-1-Harness/`, `EPICS/EPIC-1-kafka-subscription-audit-topic-ingestion/`, `EPICS/EPIC-2-envelope-construction-jws-validation/`, `EPICS/EPIC-PII-tokenization/`, `EPICS/EPIC-3-delivery-to-ppa-offset-management/` and `EPICS/PHASE-6-Observability-Operability/`. **Gate item #1 (`continue/continue - before phase 5.md` §2) is done** — a PII secret failure is now transient (retry, park, breaker), live-verified against the real harness §16's own US-PII-01 entry. **Phase 4 stays open on gate item #2 (§7.1 #2, §13.1) — secret rotation — not on any remaining engineering for item #1; unaffected by Phase 5 or 6 closing.** **Phase 5 (delivery, offsets, resilience, §8) is done** — its exit criterion (§8) is fully met live, §16's US-MLA-06/US-MLA-07 entries have the complete narrative. **Phase 6 (observability and operability, §9) is now done** — its exit criterion (§9), the full 500-record feed accounted for in exactly one bucket summing to 500, is fully met live, §16's US-MON-01/US-PERF-01 entries have the complete narrative; only R-37 (alerting destination/routing) stays open with CCH, gating nothing this codebase controls. See `continue/continue - before phase 6.md`, superseded by a Phase 7 handoff once written:
+**Phases 0 through 6 are built and live-verified; Phase 7 is development-complete and live-verified but not formally closed (its "in CI" clause is blocked on a runner constraint — see its row below and §10); Phase 4's mechanism is built and live-verified too, though that phase is likewise not formally closed.** A TypeScript + Fastify skeleton exists at [`cch-mla`](/home/abdul-rahim/mojaloop/cch-mla) — the four-layer structure, typed and validated configuration, `/health/live` + `/health/ready`, structured logging, a real ingestion pipeline, real envelope construction, real JWS verification, real PII tokenization, **real delivery to PPA with the full offset/retry/breaker/reprobe mechanism live**: every forwarded record either reaches PPA and advances the offset on HTTP 200, is logged in full and advanced immediately on a permanent 4xx, or is retried with genuine jitter and — on exhaustion — parked behind a per-partition circuit breaker that re-probes and resumes entirely on its own, no restart required, and now **full observability and operability**: structured logs carrying `correlationId`/`eventType`/pipeline step on every line, ten Prometheus-compatible metrics answering every operator question `core-knowledge.md` §9 and `engineering-rules.md` §9 name, and alert paths wired at all five named conditions (missing/invalid signature, a PPA 4xx, retry exhaustion, a breaker trip, a PII tokenization failure), each raising both a metrics-based signal (always active) and an optional configurable webhook. Every record either becomes a schema-valid, tokenized `EventEnvelope` that a live `ppa-stub` accepts over mTLS, or is rejected/skipped for a named, correctly-classified reason — including a genuinely re-signed record verifying and forwarding with prefixed tokens in every listed field, a tampered one failing, a stripped signature failing distinctly, a key-source outage failing distinctly from an invalid signature, and a missing PII secret failing distinctly again, all proven against a real broker and a real `ppa-stub`, not a mock. 354 tests at 100%/98.06%/100%/100% coverage against a mechanically-enforced 96% gate, and a GitLab CI pipeline. Full detail: §16's Phase 0–6 entries, `EPICS/EPIC-0-Scaffolding/`, `EPICS/PHASE-1-Harness/`, `EPICS/EPIC-1-kafka-subscription-audit-topic-ingestion/`, `EPICS/EPIC-2-envelope-construction-jws-validation/`, `EPICS/EPIC-PII-tokenization/`, `EPICS/EPIC-3-delivery-to-ppa-offset-management/` and `EPICS/PHASE-6-Observability-Operability/`. **Gate item #1 (`continue/continue - before phase 5.md` §2) is done** — a PII secret failure is now transient (retry, park, breaker), live-verified against the real harness §16's own US-PII-01 entry. **Phase 4 stays open on gate item #2 (§7.1 #2, §13.1) — secret rotation — not on any remaining engineering for item #1; unaffected by Phase 5 or 6 closing.** **Phase 5 (delivery, offsets, resilience, §8) is done** — its exit criterion (§8) is fully met live, §16's US-MLA-06/US-MLA-07 entries have the complete narrative. **Phase 6 (observability and operability, §9) is now done** — its exit criterion (§9), the full 500-record feed accounted for in exactly one bucket summing to 500, is fully met live, §16's US-MON-01/US-PERF-01 entries have the complete narrative; only R-37 (alerting destination/routing) stays open with CCH, gating nothing this codebase controls. See `continue/continue - before phase 6.md`, superseded by a Phase 7 handoff once written:
 
 | Asset | State |
 | --- | --- |
@@ -46,6 +46,7 @@
 | **Phase 4 — PII tokenization** | **Mechanism built, tested, and live-verified, [2026-09-04]; gate item #1 (fail-mode) also built, tested, and live-verified, [2026-09-04]** — §16 (US-PII-01/02, plus US-PII-01's follow-up entry), §7. **Not formally closed** — gate item #2 (secret rotation, §7.1 #2, §13.1) is CCH's trigger question to answer, and engineering's mechanism to then build; everything else is done. |
 | **Phase 5 — delivery, offsets, and resilience** | **Done**, [2026-09-07] — §16 (US-MLA-06/07), §8. Delivery client, per-call timeout, the full three-way offset gate (success/permanent/transient), retry with genuine jitter, a per-partition circuit breaker, and automatic reprobe recovery are all built, tested, and live-verified against a real broker and a real `ppa-stub` — including a persistent-503 breaker trip and its own automatic, restart-free recovery, a genuine TLS-handshake failure, and a 4xx logging the full (tokenized) envelope and advancing immediately. Every clause of the phase's own exit criterion (§8) is live-proven. |
 | **Phase 6 — observability and operability** | **Done**, [2026-09-08] — §16 (US-MON-01/US-PERF-01), §9. Structured logging, ten Prometheus-compatible metrics, and alert paths at all five named conditions (each with a metrics-based sink, always active, plus an optional configurable webhook) are all built, tested, and live-verified against a real broker and a real `ppa-stub` — including every alert condition firing independently on genuinely re-signed records, and the phase's own exit criterion (a full 500-record feed accounted for in exactly one bucket, summing to 500) met live. Only R-37 (alerting destination/routing) stays open with CCH, gating nothing this codebase controls; MLA's own ack-latency p95 *budget* (as opposed to its instrumentation, built here) is Phase 7's own load-test claim to confirm. |
+| **Phase 7 — hardening and validation** | **Development complete and live-verified, [2026-09-09]; the phase is NOT closed** — §16, §10. All six checklist bullets done: load (25 TPS sustained x 30 min and 125 TPS peak, 10440/10440 and 8702/8702 ack samples within the 200 ms budget, consumer lag 0 throughout, and a 125->25 step-down with 6,000 fed = 6,000 accounted), two-instance rebalance (delivered set identical to a single-instance baseline, no duplicates, no gaps), chaos (broker restart, MLA `SIGKILL` mid-dispatch, stub flapping — nothing lost in any), and `npm run scenario:all` running all 15 named scenarios unattended from a cold start. **Open on the exit criterion's "in CI" clause**: the project's first-ever pipeline (#44134) ran [2026-09-09] and failed at `build` — the runner is a `shell` executor (so `image:` is inert and `services:` unsupported, meaning no broker in CI) on a host running Node < 16 against `engines: >=22.17`. Infrastructure's to resolve, not engineering's. |
 | **A running DRPP environment** | **Not available.** Promised by COMESA; no date. |
 
 The POC is the reason this project does not start from zero. It ran the whole MLA→PPA→TMS path against real captured data, a real ValKey and a real Tazama TMS, and it found real defects doing so. Where the POC and the current user stories disagree, that disagreement is *evidence versus specification* and has to be resolved deliberately — §12.
@@ -1874,3 +1875,72 @@ alongside this entry, not superseded by it).
 ---
 
 *This document is updated as work happens — what was built, what broke, the root cause, the fix, and what was proven live versus assumed.*
+
+### Phase 7 — Hardening and validation (dev complete, CI pending)      [2026-09-09]
+
+**Built**       All six of §10's checklist bullets, plus the two tools the phase needed and did not have.
+                `tools/load-test/` — `metrics-snapshot.ts` (Prometheus text parsing; exact bucket-counting
+                p95) and `run.ts` (npm script `loadtest`), an **observation-only** instrument that reads
+                Phase 6's own `mla_ack_latency_ms` rather than timing anything itself, because a second
+                tool-side stopwatch would measure the harness instead of the service.
+                `tools/scenario-library/` — `harness.ts` (cold-start bootstrap: mTLS certs, all 19 DFSP
+                keypairs, the PII secret, broker, 12-partition topic, compile, process lifecycle) and
+                `run-all.ts` (npm script `scenario:all`), which supplies the thing the library never had:
+                **a definition of "passes"**. Each scenario now carries a `ScenarioExpectation` — floors
+                rather than exact equalities, except `accountsForAll`, which is exact. `capture-feeder`
+                gained `isResignable` so `--resign` over a range no longer aborts the whole feed.
+                `mla-restart` and `two-mla-instances` moved to `runnableNow: true`; **all 15 scenarios in
+                the library are now runnable**, none deferred.
+
+**Tests**       367 tests / 25 suites, 100%/98.06%/100%/100% against the mechanically-enforced 96 gate,
+                zero lint errors. 13 new (`__tests__/load-test-metrics.test.ts`) pin the budget logic:
+                boundary cases at exactly 95%, a genuinely breaching distribution, the refusal to
+                approximate when no bucket sits at or below the budget, and the empty-histogram
+                divide-by-zero guard — the failure paths a real broker cannot be made to produce on
+                demand. `engineering-rules.md` §10.2 categories covered here: failure paths and races
+                (chaos), concurrency (two instances), regression checks (goldens). `tools/` sits outside
+                `collectCoverageFrom`, so these add correctness, not coverage percentage.
+
+**Verified**    `live` — against a real Redpanda broker, a real `ppa-stub` over real mTLS, on genuinely
+                re-signed records, on this machine. **Load:** 25 TPS sustained x 30 min (45,002 records,
+                10,440 ack samples, 10440/10440 within the 200ms budget, consumer lag 0 at all fifteen
+                120-second samples); 125 TPS peak x 5 min (37,504 records, 8702/8702 within budget, lag 0);
+                step-down 125->25 with 6,000 fed and exactly 6,000 accounted for, zero event loss.
+                **Concurrency:** rebalance to `MEMBERS 2` with partitions split 6/6, the delivered envelope
+                set identical to a single-instance baseline (no duplicates, no gaps), A=66/B=50 so neither
+                instance was idle. **Chaos:** broker restart mid-feed (500 produced = 500 accounted, MLA
+                reconnected unaided); MLA `SIGKILL` mid-dispatch (28 of 116 delivered at the kill, all 116
+                after restart, no gaps); stub flapping (102 transient failures, 6 retry exhaustions, two
+                partitions paused, full automatic recovery to 116/116 with no restart).
+                **Unattended, from a cold start:** `npm run scenario:all` runs all 15 scenarios and passes.
+                Both new instruments were verified **able to fail**, not merely to pass — the load tool
+                refuses a verdict below `--min-samples` and exits 1; an impossible floor injected into a
+                scenario produced a named FAIL and exit 1, then was reverted.
+                **`in CI` is NOT verified** — see "Left open". Nothing here is claimed as CI evidence.
+
+**Diverged**    No new divergence from §12. Two corrections to this plan's own prior assumptions, both
+                found by running rather than reasoning. (1) **The envelope identity key is `id` + `msgType`,
+                not `id`** — the 500-record export yields 116 envelopes over only 75 distinct `id`s, since
+                D3 makes `id` a per-`eventType` business identifier shared by a leg's request and its
+                callback. Deduplicating on `id` alone would have reported 41 false duplicates. This is now
+                stated in `core-knowledge.md` §5, and it is why §6.4's idempotency key is the compound
+                `{id}:{isoMessageType}`. (2) **`runnableNow: false` on `mla-restart`/`two-mla-instances`
+                was stale, not a real dependency** — the blocker each named ("needs the real MLA consumer")
+                was satisfied when Phase 2 closed.
+
+**Left open**   **The exit criterion's "in CI" clause — the phase is NOT closed.** The branch was pushed
+                [2026-09-09] and GitLab created the project's first-ever pipeline (#44134, commit
+                `6e4ccfec`); it ran and failed at `build`. Two facts, both pre-existing and neither caused
+                by this phase: the runner is a **`shell` executor**, so `image: node:22-bullseye` is inert
+                and there is **no `services:` support** (hence no broker in CI); and the runner host runs
+                **Node < 16** against `engines: >=22.17` and a `lockfileVersion: 3` lock file. The repository
+                is not at fault — `tsc` exits 0, the build's `include` is `./src/**/*` only, the lock file
+                is consistent. Resolution is infrastructure's: register a Docker-executor runner (the only
+                route that puts broker-dependent scenarios in CI), or install Node >= 22.17 on the shell
+                host (turns `build`/`lint`/`test`/`regression` green, still no broker). `scenario:all` is
+                deliberately not wired into `.gitlab-ci.yml` until that is settled.
+                Also open, unchanged and unrelated: **gate item #2** (PII secret rotation trigger, §7.1 #2),
+                **R-10** (the 25/125 TPS baseline is a working assumption pending CCH sign-off — this phase
+                tested against the stated figures and does not upgrade their confirmation status), and
+                **R-37** (alerting destination). The stronger cold-start claim — a throwaway container
+                carrying none of this machine's state — is scoped to the other session and not yet run.

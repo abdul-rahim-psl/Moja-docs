@@ -2,7 +2,7 @@
 
 # Continue — Before Phase 7 <!-- omit in toc -->
 
-**What this document is.** A session handoff. It marks the point where Phase 6's observability and operability work is fully built, tested, and live-verified end to end — every clause of its own exit criterion met, including a full 500-record feed accounted for in exactly one bucket, summing to 500, and all five named alert conditions raised independently against the real harness. Phase 7's hardening and validation ([`plan.md`](../plan.md) §10) is now the active work. Read this in full before touching anything; it is short by design.
+**What this document is.** A session handoff. It marks the point where Phase 6's observability and operability work is fully built, tested, and live-verified end to end — every clause of its own exit criterion met, including a full 500-record feed accounted for in exactly one bucket, summing to 500, and all five named alert conditions raised independently against the real harness. Phase 7's hardening and validation ([`plan.md`](../plan.md) §10) is the active work. **As of [2026-09-09] all six of its checklist bullets are done and live-verified, and `npm run scenario:all` runs all 15 named scenarios unattended from a cold start and passes — but the phase is NOT closed**, because the exit criterion's "in CI" clause is outstanding on an infrastructure blocker (§7). Read this in full before touching anything; it is short by design.
 
 **What this document is not.** It is not the record of Phase 6's own closure — that is `plan.md` §16's US-MON-01/US-PERF-01 entries and [`docs - MLA/EPICS/PHASE-6-Observability-Operability/`](../EPICS/PHASE-6-Observability-Operability/), both already written and current. Nor is it Phase 4's own closure — gate item #2 (secret rotation) is still open and tracked in §2 below, carried forward again, unrelated to anything in this document.
 
@@ -70,7 +70,7 @@ Everything Phases 5 and 6 settled stays settled; Phase 7 does not reopen any of 
 
 ## 5. The Phase 7 checklist
 
-This is [`plan.md`](../plan.md) §10. Nothing on it has started as of this document.
+This is [`plan.md`](../plan.md) §10. **All six bullets are now complete and live-verified [2026-09-09]** — each is annotated below with what was actually run. The **phase itself is still open**: its exit criterion has one clause outstanding ("in CI"), for the reason §7 records. `plan.md` §10 carries the full narrative for every bullet; the annotations here are the short form.
 
 - [x] Full-capture regression: all five folders, the partition-2 slice, and the 500-record export, each against its golden file, in CI. *Built and locally verified [2026-09-09] — see `plan.md` §10 for the full entry; the CI job is wired but not yet observed running on a GitLab runner.* All seven captures now have a decision-level golden (only the partition-2 slice did before), driven from a checked-in registry (`tools/golden/captures.ts`) via one command with one exit code (`npm run golden:ingestion:all`, CI job `regression`). The six new goldens were cross-checked against Phase 6's live numbers before recording — `raw_export_500` reproduces 273/92/19/116 = 500 exactly — and the mechanism was proven able to **fail** (a flipped decision and a record-count divergence each produce exit 1), not merely to pass. Cold-start-safe: passes with an entirely empty environment, needing no broker, stub, certs, keys or secret.
 - [x] **Run the suite in default parallel mode.** *Verified [2026-09-09] - see `plan.md` §10 for the full entry.* Six consecutive green runs in default parallel mode (24 suites, 354 tests, no flakes). One real finding, fixed: `npm test`'s `--forceExit` (inherited from Phase 0 scaffolding, not added for a real leak) was masking handle leaks; removed after proving the suite exits cleanly on its own under `timeout 300`.
@@ -107,15 +107,20 @@ From [`plan.md`](../plan.md) §10, verbatim:
 
 > Every scenario in the Phase 1 library passes, unattended, in CI, from a cold start.
 
-Concretely:
+Concretely, this is now one command:
 
 ```
-npm run harness:up
-npm run ppa-stub
-# every scenario tools/scenario-library/scenarios.ts names, run without a human
-# watching for it to succeed, in a CI job that starts from nothing (no prior
-# state, no manually-generated certs/keys/secret already sitting on disk)
+npm run scenario:all      # cold-starts everything, runs all 15, exits 0/1
 ```
+
+**Status [2026-09-09] — three clauses met, one not. The phase is NOT closed.** `plan.md` §10 carries the full entry; the short form:
+
+- **Passes / unattended / from a cold start — met.** `tools/scenario-library/run-all.ts` bootstraps certs, all 19 DFSP keypairs, the PII secret, the broker and the 12-partition topic, compiles, starts `ppa-stub` and MLA, runs all 15 scenarios with real assertions, and exits 0/1: *All 15 scenarios passed, unattended, from a cold start.* Verified **able to fail** too (an injected impossible floor gave a named FAIL and exit 1) — a suite that has only ever passed proves nothing.
+- **In CI — NOT met.** The branch was pushed [2026-09-09] and GitLab created the project's **first-ever pipeline (#44134)**, which ran and failed at `build`. Two facts came out of it: the runner is a **`shell` executor**, so `image: node:22-bullseye` is inert and there is **no `services:` support** (hence no broker in CI); and the runner host runs **Node < 16** (`npm ERR! Cannot read property 'ajv' of undefined` — the pre-Node-16 phrasing) against `engines: >=22.17` and a `lockfileVersion: 3` lock file. Nothing in the repository is at fault: `tsc` exits 0, the build's `include` is `./src/**/*` only, and the lock file is consistent.
+
+**The remaining blocker is infrastructure's, not engineering's:** register a Docker-executor runner (the only route that puts the broker-dependent scenarios in CI), or install Node >= 22.17 on the existing shell host (turns `build`/`lint`/`test`/`regression` green, still no broker). `scenario:all` is deliberately **not** wired into `.gitlab-ci.yml` until that is settled.
+
+**Do not record Phase 7 as done on the strength of a local `scenario:all` pass.** The honest form is *"every scenario passes, unattended, from a cold start; CI execution pending a runner"* — the phase stays open on an external dependency, exactly as Phase 4 stays open on gate item #2.
 
 **When this is genuinely done:**
 
