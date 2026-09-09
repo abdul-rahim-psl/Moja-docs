@@ -10,7 +10,9 @@ in this same folder — that's the execution reference. This document is the "wh
 - [4. Getting onto the external machine](#4-getting-onto-the-external-machine)
 - [5. Installing the toolchain](#5-installing-the-toolchain)
 - [6. Standing up the Kubernetes cluster — the real fight](#6-standing-up-the-kubernetes-cluster--the-real-fight)
-- [7. Where we are right now](#7-where-we-are-right-now)
+- [7. Preparing the actual Mojaloop chart](#7-preparing-the-actual-mojaloop-chart)
+- [8. Deploying — two false starts, both environmental](#8-deploying--two-false-starts-both-environmental)
+- [9. Where we are right now](#9-where-we-are-right-now)
 
 ---
 
@@ -123,13 +125,55 @@ After that, installed the **ingress controller** — the component that lets out
 browser hitting `central-ledger.local`) actually reach the right thing running inside the cluster. Also
 confirmed genuinely ready, not just "created."
 
-## 7. Where we are right now
+## 7. Preparing the actual Mojaloop chart
 
-The cluster and its networking are fully up and verified. The next step in progress when you stepped
-away: cloning the actual Mojaloop chart source (pinned to `v17.2.0`, matching production) onto the
-remote machine, and pulling in its chart dependencies — the last setup step before we assemble the
-trimmed values file (§6 of the detailed plan) and actually deploy Mojoloop itself.
+Came back to this after an overnight gap. First thing done: checked nothing had silently broken while
+away — it hadn't. The cluster had been sitting untouched for 19 hours, still perfectly healthy. What
+*hadn't* happened yet was cloning the chart source itself, so that's where we picked back up.
 
-**Nothing about Mojoloop is deployed yet** — everything so far has been building the empty Kubernetes
-cluster it's going to run on, plus resolving three real environment problems (RAM location, no docker
-group, cgroup v1) that would have silently blocked every later step if left unfound.
+- Cloned the real `mojaloop/helm` chart repository at `v17.2.0` — the version already confirmed to match
+  production almost exactly (§3).
+- Pulled in every chart's dependencies (databases, message queues, and — for one specific piece, IAM —
+  an authentication stack). This needed every source those dependencies come from registered first.
+  Two were missing from the first pass and only surfaced when the one chart that actually needed them
+  failed — fixed each time by reading that chart's own declared dependency rather than guessing a
+  "complete" list up front. Ended with all ~50 dependency sets pulled clean.
+- Built our own trimmed configuration file: a copy of the full ISO20022+FX+audit-topic recipe (§3), with
+  two unrelated pieces explicitly switched off — settlement-window bookkeeping and the mobile
+  "request-money" flow, neither part of the FX corridor being tested. Confirmed first that neither was
+  already configured elsewhere in the file, so this was a clean addition, not overriding something.
+- Pointed the deployment's orchestration file at that trimmed configuration instead of the chart's plain
+  default (which has none of the ISO/FX/audit-topic setup) — this is the actual switch from "generic
+  Mojaloop" to "our specific test configuration."
+
+## 8. Deploying — two false starts, both environmental
+
+First real deploy attempt, and two problems hit — neither one a mistake in the configuration itself.
+
+**Attempt 1 — the network dropped mid-pull.** The remote machine's internet connection dropped while
+container images were downloading. Images that should take ~2 minutes took ~20. The deploy tool gives
+up waiting after 5 minutes by default, so it marked the deploy "failed" — but checking the cluster
+directly told a different story: the underlying infrastructure (database, message queue, cache) had
+actually finished and was healthy by then; only Mojoloop itself hadn't gotten far (one setup step done,
+none of the real service pods created yet). Fix: told it to wait up to 30 minutes instead of assuming
+the connection would behave better on a retry.
+
+**Attempt 2 — an unused external address timed out.** Before touching anything else, the deploy tool
+always double-checks every chart source it knows about — including one we don't actually use (our two
+pieces install from local files, not a published catalog entry), and that specific address happened to
+time out. Confirmed it was genuinely unused, then removed it rather than depend on something reaching a
+site we don't need at all.
+
+**Currently retrying** with both fixes in place.
+
+## 9. Where we are right now
+
+The cluster, its networking, and the fully-prepared Mojoloop chart are all in place. The deploy itself is
+mid-retry as of this writing — first two attempts each hit an environmental snag (network, then an
+unused external dependency), not a problem with the actual configuration, and both are now fixed.
+
+**Nothing about Mojoloop is confirmed running yet** — that's the next thing to verify once this attempt
+finishes. Once it is, the remaining work is exactly what §§8-10 of the detailed plan describe: confirm
+`topic-event-audit` actually appears in Kafka, drive the FX corridor through it, then work through the
+edge-case matrix (reject, timeout, abort, duplicate, etc.) that item 3.5 of the handover doc is asking
+for.

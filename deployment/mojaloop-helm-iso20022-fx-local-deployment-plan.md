@@ -171,7 +171,9 @@ extra `KubeletConfiguration` patch (`failCgroupV1: false`) added to the kind con
 
 **§5 complete.** Cluster up and verified (node `Ready`, all system pods `Running`, zero restarts) with
 the cgroup v1 fix in place. nginx ingress controller deployed via kind's own manifest and confirmed
-`Ready` (`kubectl wait` returned `condition met`). Moving to §6.
+`Ready` (`kubectl wait` returned `condition met`). **Re-confirmed healthy after an overnight gap** — 19h
+uptime, node still `Ready`, every pod (incl. ingress-nginx) still `Running`, zero restarts; no reboot, no
+drift. Moving to §6.
 
 ```bash
 # Single-node kind cluster with ports 80/443 exposed for ingress. Run on 10.0.150.69.
@@ -215,6 +217,61 @@ cd ~/mojaloop-helm
 sh update-charts-dep.sh
 ```
 
+**Ordering correction found here**: `update-charts-dep.sh` runs `helm dep up --skip-refresh` per chart —
+`--skip-refresh` means it expects the Helm repo indexes (bitnami, mojaloop, redpanda, elastic, etc.,
+the full list in `helmfile.yaml`'s `repositories:` block) to already be cached locally, and fails
+outright if they aren't. So the `helm repo add` block originally sequenced under §7 actually has to run
+**before** this dependency pull, not after:
+
+```bash
+helm repo add stable https://charts.helm.sh/stable
+helm repo add incubator https://charts.helm.sh/incubator
+helm repo add kokuwa https://kokuwaio.github.io/helm-charts
+helm repo add elastic https://helm.elastic.co
+helm repo add codecentric https://codecentric.github.io/helm-charts
+helm repo add bitnami https://charts.bitnami.com/bitnami
+helm repo add mojaloop https://mojaloop.io/helm/repo/
+helm repo add mojaloop-charts https://mojaloop.github.io/charts/repo
+helm repo add redpanda https://charts.redpanda.com
+helm repo update
+```
+
+**Correction**: the first pass through this list omitted `mojaloop-charts` → `https://mojaloop.github.io/charts/repo`
+(distinct from, and easy to conflate with, `mojaloop` → `https://mojaloop.io/helm/repo/`) — caught when
+`update-charts-dep.sh` failed on `ml-operator`, whose `Chart.yaml` depends on it.
+
+**Second correction**: `helmfile.yaml`'s `repositories:` block turned out not to be the complete list
+either — `update-charts-dep.sh` walks through *every* chart in this repo unconditionally, including
+several we'll never actually deploy for this scenario (`ml-operator`, `mojaloop-iam`, `thirdparty/*`,
+`bulk-*`, `merchant-registry-svc`, `connection-manager`...), and each one's own `Chart.yaml` can name a
+repo `helmfile.yaml` never listed. Hit next: `mojaloop-iam` needs `https://k8s.ory.sh/helm/charts` (Ory's
+Oathkeeper/Keto/Kratos/Hydra — the IAM/auth stack, matching what the DRPP production infra diagram
+actually shows, though not something this local FX/ISO test needs to deploy). Add it:
+```bash
+helm repo add ory https://k8s.ory.sh/helm/charts && helm repo update
+```
+Treating each further miss the same way — add the repo, `helm repo update`, retry — rather than
+front-loading a guessed "complete" list, since the script itself is the authoritative source of what it
+actually needs.
+
+**Dependency pull complete.** After adding `ory` (`https://k8s.ory.sh/helm/charts`), the full run finished
+clean: 50 `charts/` folders populated, no leftover `tmpcharts`. Confirmed directly — the top-level
+`mojaloop/charts/` (the one we actually deploy) has all 18 expected component `.tgz`s, and
+`mojaloop-iam/charts/` (the one that failed the prior attempt) is populated too.
+
+**Trimmed values file built and confirmed.** `values-mojaloop-iso20022-fx-lean.yaml` created as a copy
+of the full `values-mojaloop-iso20022.yaml` (confirmed `EVENT_SDK_CONFIG` anchor and its 6 reuse points,
+plus `mojaloop-ttk-simulators`, all intact) with `centralsettlement.enabled: false` and
+`transaction-requests-service.enabled: false` appended — neither key existed in the source file, so this
+was a safe append, not an edit-in-place.
+
+**§6 complete.** `helmfile.yaml` edited (confirmed by re-reading the whole file after): the `backend`
+release now layers `values-backend-iso20022-min.yaml` on top of the full `values-backend.yaml`; the
+`moja` release now points at `values-mojaloop-iso20022-fx-lean.yaml` instead of the chart's plain
+default. Moving to §7 — the actual deploy.
+
+Then retry `sh update-charts-dep.sh` from `~/mojaloop-helm`.
+
 In `local-deployment-methods/helmfile/`, create `values-mojaloop-iso20022-fx-lean.yaml` starting as a
 copy of `values-mojaloop-iso20022.yaml` (**not** the `-min` variant — see §2), then apply only these
 trims, each independently safe for the P2P+FX corridor being tested:
@@ -248,6 +305,39 @@ placeholders showing exactly where):
 ```
 
 ## 7. Deploy
+
+**First attempt hit a timeout, not a config problem.** Mid-deploy, the remote machine's internet dropped;
+image pulls that should take ~2 minutes took 18-23 minutes ("including waiting", per `kubectl get
+events`). Helm's default 5-minute wait gave up before those pulls finished, marking both `backend` and
+`moja` `failed` — but `backend`'s actual resources (Kafka, MySQL, all 6 Redis pods, provisioning job) had
+by then genuinely finished and were healthy; `moja` had only gotten as far as the central-ledger DB
+migration job (also completed) before timing out, with none of the real service pods created yet. Fix:
+raise Helm's wait timeout on both releases before retrying, rather than hoping the connection is faster
+this time.
+
+```bash
+sed -i '/^- name: backend$/a\  timeout: 1800' ~/mojaloop-helm/local-deployment-methods/helmfile/helmfile.yaml
+sed -i '/^- name: moja$/a\  timeout: 1800' ~/mojaloop-helm/local-deployment-methods/helmfile/helmfile.yaml
+```
+
+Both confirmed landed (`timeout: 1800` under each release, rest of the file unchanged). Retrying
+`helmfile apply` — `backend`'s already-healthy resources should reconcile fast; `moja` still has to pull
+and create every actual service pod (central-ledger, ml-api-adapter, ALS, quoting-service, TTK,
+simulators), which is the slow part given the pull rate observed.
+
+**Second retry hit a different problem, unrelated to our config**: `helmfile apply` refreshes every repo
+in its `repositories:` block before touching any release, unconditionally — and `https://mojaloop.io/helm/repo/`
+timed out (`context deadline exceeded`), even though it had worked fine earlier in §6. Confirmed via
+`grep "^\s*chart:"` that neither active release (`../../example-mojaloop-backend`, `../../mojaloop`) nor
+`kafka-console` (`redpanda/console`) actually depends on that repo — both charts are installed from local
+paths, not the published `mojaloop/...` name. So rather than depend on an endpoint we don't need working,
+removed the unused `- name: mojaloop` / `url: https://mojaloop.io/helm/repo/` entry from the
+`repositories:` block entirely:
+```bash
+sed -i '/^- name: mojaloop$/,+1d' ~/mojaloop-helm/local-deployment-methods/helmfile/helmfile.yaml
+```
+Confirmed removed cleanly (8 repos left, `mojaloop-charts` and the harmless duplicate `redpanda` entry
+both intact). Retrying the deploy.
 
 Run on `10.0.150.69`:
 
