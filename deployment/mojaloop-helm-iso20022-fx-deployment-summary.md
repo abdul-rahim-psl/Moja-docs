@@ -1,8 +1,12 @@
 # Summary — Where We Are and Why <!-- omit in toc -->
 
-A plain-language walkthrough of this effort so far. For exact commands, see
+A plain-language walkthrough of this effort so far. For exact commands, **and the exact resume point**,
+see the ["Current status — resume here"](mojaloop-helm-iso20022-fx-local-deployment-plan.md#current-status--resume-here)
+section at the top of
 [`mojaloop-helm-iso20022-fx-local-deployment-plan.md`](mojaloop-helm-iso20022-fx-local-deployment-plan.md)
-in this same folder — that's the execution reference. This document is the "why," kept short on purpose.
+in this same folder — that's the execution reference, and the two documents are kept in sync. This one is
+the "why," kept short on purpose; read it first for context, then jump to that section to continue the
+work.
 
 - [1. Why this started](#1-why-this-started)
 - [2. Why not your laptop](#2-why-not-your-laptop)
@@ -11,8 +15,9 @@ in this same folder — that's the execution reference. This document is the "wh
 - [5. Installing the toolchain](#5-installing-the-toolchain)
 - [6. Standing up the Kubernetes cluster — the real fight](#6-standing-up-the-kubernetes-cluster--the-real-fight)
 - [7. Preparing the actual Mojaloop chart](#7-preparing-the-actual-mojaloop-chart)
-- [8. Deploying — two false starts, both environmental](#8-deploying--two-false-starts-both-environmental)
-- [9. Where we are right now](#9-where-we-are-right-now)
+- [8. Deploying — six attempts, each fixing one real thing](#8-deploying--six-attempts-each-fixing-one-real-thing)
+- [9. Confirming `topic-event-audit` — the actual point of all this](#9-confirming-topic-event-audit--the-actual-point-of-all-this)
+- [10. Where we are right now](#10-where-we-are-right-now)
 
 ---
 
@@ -146,34 +151,66 @@ away — it hadn't. The cluster had been sitting untouched for 19 hours, still p
   default (which has none of the ISO/FX/audit-topic setup) — this is the actual switch from "generic
   Mojaloop" to "our specific test configuration."
 
-## 8. Deploying — two false starts, both environmental
+## 8. Deploying — six attempts, each fixing one real thing
 
-First real deploy attempt, and two problems hit — neither one a mistake in the configuration itself.
+The deploy took six tries to get genuinely healthy — worth naming all six briefly, since half were
+environmental noise and half were real bugs in the configuration this effort itself introduced, and it
+matters which was which:
 
-**Attempt 1 — the network dropped mid-pull.** The remote machine's internet connection dropped while
-container images were downloading. Images that should take ~2 minutes took ~20. The deploy tool gives
-up waiting after 5 minutes by default, so it marked the deploy "failed" — but checking the cluster
-directly told a different story: the underlying infrastructure (database, message queue, cache) had
-actually finished and was healthy by then; only Mojoloop itself hadn't gotten far (one setup step done,
-none of the real service pods created yet). Fix: told it to wait up to 30 minutes instead of assuming
-the connection would behave better on a retry.
+1. **Network dropped mid-pull** — images took ~20 min instead of ~2, the deploy tool's 5-minute patience
+   ran out first. Not a real failure (the infrastructure had actually finished fine underneath) — just
+   told it to wait longer.
+2. **An unused external address timed out** — the deploy tool always double-checks every chart source it
+   knows about, including one we don't actually use. Confirmed unused, removed it.
+3. **A real collision**: two different pieces of central-ledger both tried to claim the same web address
+   internally (one handles position updates the normal way, one handles them in efficient batches — FX
+   specifically only works through the batch one). Turned off the redundant one.
+4. **Another unused, likely permanently-dead external address** — same shape as #2, different repo (the
+   Helm project's own long-deprecated "stable" catalog). Removed it too.
+5. **The deploy tool itself said success, but checking pod-by-pod told a different story**: 4 crashing
+   pods, 1 that couldn't even start, several stuck initializing. Root cause: a values file I'd earlier
+   called "safe to trim" — wrongly. Two of the pieces it disabled turned out to be genuinely needed: a
+   small cache the FX/simulator components use, and a database the built-in test tool needs. Re-enabled
+   just those two.
+6. **Deployed clean, then one more wrinkle**: three simulator pods kept restarting even after their
+   dependency came up healthy — not a bug, just bad timing (they'd been retrying on a growing backoff
+   schedule since before the dependency existed, so their next attempt was still minutes away even though
+   waiting would have fixed it). They recovered on their own once given a little more time.
 
-**Attempt 2 — an unused external address timed out.** Before touching anything else, the deploy tool
-always double-checks every chart source it knows about — including one we don't actually use (our two
-pieces install from local files, not a published catalog entry), and that specific address happened to
-time out. Confirmed it was genuinely unused, then removed it rather than depend on something reaching a
-site we don't need at all.
+**Deploy is now fully healthy** — confirmed pod-by-pod, not just by the deploy tool's own report: 51
+running, 1 completed setup job, zero pods in any other state.
 
-**Currently retrying** with both fixes in place.
+## 9. Confirming `topic-event-audit` — the actual point of all this
 
-## 9. Where we are right now
+With the switch itself healthy, the next question was the one this whole build exists to answer: does
+`topic-event-audit` actually show up the way §3 said it would?
 
-The cluster, its networking, and the fully-prepared Mojoloop chart are all in place. The deploy itself is
-mid-retry as of this writing — first two attempts each hit an environmental snag (network, then an
-unused external dependency), not a problem with the actual configuration, and both are now fixed.
+Listing every Kafka topic on the deployed broker showed all the normal per-action topics (quotes,
+transfers, FX quotes, bulk, notifications) — but not the audit topic itself, since nothing had sent any
+real traffic through the switch yet to trigger it. Rather than guess whether it would appear
+automatically once traffic starts, tested it directly: sent one message straight to that topic name. It
+appeared immediately — confirming this Kafka broker creates a topic the first time anything tries to use
+it, so `topic-event-audit` needs no manual setup at all; it'll simply exist, clean, the moment real
+switch traffic starts flowing. Deleted the one test message immediately after, so it doesn't sit there as
+noise when the real captures are later compared against it.
 
-**Nothing about Mojoloop is confirmed running yet** — that's the next thing to verify once this attempt
-finishes. Once it is, the remaining work is exactly what §§8-10 of the detailed plan describe: confirm
-`topic-event-audit` actually appears in Kafka, drive the FX corridor through it, then work through the
-edge-case matrix (reject, timeout, abort, duplicate, etc.) that item 3.5 of the handover doc is asking
-for.
+**This is the answer to the open question flagged all the way back in §3** — the mechanism is real, it's
+present in this deployment exactly as predicted, and it needs zero special provisioning.
+
+## 10. Where we are right now
+
+The cluster, the full Mojoloop switch (in ISO20022+FX+audit-topic configuration), and the audit-topic
+mechanism are all confirmed working end to end — verified pod-by-pod, not just taken on the deploy
+tool's word: 51 running, 1 completed setup job, zero pods in any other state. Nothing has been driven
+through the switch yet — no quote, no transfer, no FX corridor traffic — so `topic-event-audit` doesn't
+currently hold any real data.
+
+**What's blocking the next step, specifically**: driving any traffic through the built-in test tool
+needs knowing the right named test collection for the FX+ISO20022 corridor *inside this particular
+packaging* — confirmed not to be the same label set the old test-harness used. That's the very first
+thing to resolve next; the detailed plan's "Current status — resume here" section has the exact command
+to try first, plus one more thing that hasn't happened yet either: pointing a browser at the built-in
+test tool's web UI needs a small one-line networking step that also hasn't been run.
+
+This document and the detailed plan are fully in sync as of this point — a new session should read this
+one for the why, then go straight to the plan's resume section to continue.

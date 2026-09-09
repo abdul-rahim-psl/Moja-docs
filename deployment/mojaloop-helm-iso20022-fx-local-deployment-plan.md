@@ -12,6 +12,38 @@ machine against it) and paste back the output, I read that output before decidin
 rather than handing over a whole block to run unattended. This applies from §4 onward — nothing here
 gets batch-executed.
 
+## Current status — resume here
+
+**§§1-8 are done and independently verified — not just "attempted."** A healthy Mojoloop switch, in
+ISO20022+FX+audit-topic configuration, is running right now on `10.0.150.69`: kind cluster `mojaloop-fx`,
+namespace `demo`, 51 pods `Running` + 1 `Completed`, zero pods in any other state (last confirmed at the
+end of §7). `topic-event-audit` is confirmed to exist and auto-populate on first real use (§8) — it's
+currently empty because no real switch traffic has been driven through it yet.
+
+**Facts a fresh session needs immediately, without re-deriving them:**
+- Everything runs as **root** via `sudo -i` on `10.0.150.69` (no `docker` group on that host — see §3).
+- Chart source: `~/mojaloop-helm` (cloned at tag `v17.2.0`). Deploy orchestration:
+  `~/mojaloop-helm/local-deployment-methods/helmfile/` (`helmfile.yaml`, plus our two custom values
+  files, `values-mojaloop-iso20022-fx-lean.yaml` and `values-backend-fx-lean.yaml`).
+- Kafka pod is `kafka-controller-0` (a StatefulSet — not a Deployment, and not named `backend-*`).
+- This session has no network path to `10.0.150.69` — see "Working method" above. That constraint
+  applies to every future session too, not just this one.
+- **Before doing anything else, re-verify health** (cluster may have sat idle since last touched —
+  same check used after the overnight gap in §5, and again at the end of §7):
+  ```bash
+  kubectl get nodes && kubectl get pods -n demo --no-headers | awk '{print $3}' | sort | uniq -c
+  ```
+
+**The literal next action** is §9 — drive the FX golden path — and it's currently blocked on one open
+question (§13): the exact TTK test-collection name for the FX+ISO20022 corridor *in this chart's bundled
+test cases* hasn't been confirmed yet (CTH's equivalent was `--labels std,fx,fx-sdk`, but this is a
+different packaging and that label set isn't confirmed to carry over). First command for a new session
+to run is finding that — e.g. `kubectl exec -n demo moja-ml-testing-toolkit-backend-0 -- ls
+/opt/mojaloop-testing-toolkit/collections` (or equivalent mounted path — not yet confirmed) — then §9's
+two paths (automated collection vs. manual TTK-UI-driven requests) follow from whatever that turns up.
+Second still-open item, needed before the TTK UI can be driven from a browser at all: the `/etc/hosts` +
+ingress-reachability step described at the end of §7 hasn't been executed yet.
+
 ## 0. Why this exists
 
 [`topic_event_audit_Environment_Configuration.md`](topic_event_audit_Environment_Configuration.md) — the
@@ -395,12 +427,31 @@ port-forward` run from the laptop against the remote cluster's kubeconfig is the
 
 ## 8. Confirm `topic-event-audit` is actually there before running anything else
 
-Don't proceed to FX scenarios until this is checked — it's the entire point of the exercise.
+**Real Kafka pod is `kafka-controller-0`** (a StatefulSet, not the Deployment name originally guessed
+here). Listing topics directly against it (`kafka-topics.sh --bootstrap-server localhost:9092 --list`)
+showed every per-action domain topic (`topic-quotes-*`, `topic-transfer-*`, `topic-fx-quotes-*`,
+`topic-bulk*`, `topic-notification-event`, ...) but **not** `topic-event-audit` — unlike CTH, which
+explicitly pre-creates it, this Helm deployment's Kafka provisioning doesn't. Not a failure by itself:
+the audit topic is only ever *produced to* when a real service handles a real request (§2's mechanism),
+and no traffic had been driven yet.
 
+**Confirmed empirically, not just inferred**: tested whether this broker auto-creates a topic on first
+produce, since a `false` setting would mean the topic silently never appears until explicitly created.
 ```bash
-kubectl -n demo exec -it deploy/backend-kafka-controller -- \
-  kafka-topics.sh --bootstrap-server localhost:9092 --list | grep topic-event-audit
+kubectl exec -n demo kafka-controller-0 -- bash -c \
+  "echo 'test-message' | kafka-console-producer.sh --bootstrap-server localhost:9092 --topic topic-event-audit"
+kubectl exec -n demo kafka-controller-0 -- kafka-topics.sh --bootstrap-server localhost:9092 --list \
+  | grep topic-event-audit
 ```
+Auto-create is **on** — the topic appeared immediately (one harmless `UNKNOWN_TOPIC_OR_PARTITION` retry
+warning, then success). Deleted it straight after, since it now held one junk test record that isn't a
+real Mojaloop audit event and would pollute later comparison against the real capture shapes:
+```bash
+kubectl exec -n demo kafka-controller-0 -- kafka-topics.sh --bootstrap-server localhost:9092 --delete \
+  --topic topic-event-audit
+```
+**§8 complete.** No explicit provisioning needed — the topic will recreate itself, clean, the moment §9
+drives real traffic through the switch.
 
 The `kafka-console` release in `helmfile.yaml` (Redpanda Console) gives a browser UI for this instead —
 port-forward it and watch the topic live while driving traffic in §9, rather than only inspecting after
@@ -454,16 +505,18 @@ Run on `10.0.150.69`. Nothing on the laptop needs undoing — Tazama was never t
 kind delete cluster --name mojaloop-fx
 ```
 
-## 13. Open risks / unknowns going in
+## 13. Open risks / unknowns
 
-- **SELinux/cgroup version on RHEL 8** — untested against `kind` on this host yet; §5's cluster-create
-  step may need extra flags or a config change first. Check before assuming §5 runs as written.
-- Whether `10.0.150.69:80/443` is reachable from wherever you'll browse the TTK UI (§7) is still open —
-  separate from SSH/terminal reachability, which is clearly fine since the diagnostic command already
-  ran there.
-- The §3 resource budget is an estimate from reading values files, not a measured run — first deploy
-  is the real test, and the trim list is there because of that, not despite it.
-- Exact TTK collection name/labels for the FX+ISO20022 corridor in *this* chart's bundled TTK test
-  cases hasn't been confirmed yet — flagged as a manual-UI fallback in §9 for that reason.
-- inter-scheme-proxy-adapter version mismatch (§2) is untouched here since proxy/cross-scheme routing
-  is out of scope for a single-scheme local FX test — revisit only if that changes.
+Resolved (kept here only so a fresh session doesn't re-investigate them): SELinux/cgroup v1 on this RHEL
+host (§3, §5 — cleared, `failCgroupV1: false` patch works); the §3 resource budget being just an estimate
+(§7's actual deploy succeeded within it — 51/52 pods healthy, no resource-pressure symptoms observed).
+
+**Still genuinely open:**
+- **Blocking §9 right now**: exact TTK collection name/labels for the FX+ISO20022 corridor in *this*
+  chart's bundled TTK test cases — not yet confirmed (CTH's `--labels std,fx,fx-sdk` is not confirmed to
+  carry over to this packaging). See "Current status" above for the first command to try.
+- Whether `10.0.150.69:80/443` is reachable from wherever you'll browse the TTK UI (end of §7) — separate
+  from SSH/terminal reachability, which is clearly fine; the `/etc/hosts` step itself hasn't run yet.
+- `inter-scheme-proxy-adapter` version mismatch (§2, chart default `1.0.0` vs. production `v1.3.3`) —
+  untouched since proxy/cross-scheme routing is out of scope for a single-scheme local FX test; revisit
+  only if that changes.
