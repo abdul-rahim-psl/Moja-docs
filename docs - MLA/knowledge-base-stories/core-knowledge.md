@@ -268,6 +268,8 @@ PPA never reads raw Kafka payloads. The envelope is the entire interface.
 
 Missing `msgType`, `eventType`, or `id` fails envelope construction: log, advance offset, do not forward.
 
+**`id` does not identify an envelope on its own — `id` + `msgType` does.** The table above already implies this (TRANSFER carries `transferId` on *both* the prepare and the fulfil leg), but it is worth stating flatly because the naive reading is a silent data-loss bug: one business object legitimately produces two envelopes sharing one `id`, a `request` and its `callback`, and any component treating `id` as the identity will read the second as a duplicate of the first. This is precisely why §6.4's idempotency key is the compound **`{id}:{isoMessageType}`** and not `id` alone — `isoMessageType` is what separates the two legs, since it is derived from `eventType` + `msgType`. **`correlationId` is not an alternative key**: it is minted per event processed (see its row above), so the same envelope re-delivered after a crash carries a different one, and a genuinely duplicated record is invisible to it. Measured on the 500-record export, the four event types yield 116 envelopes over only 75 distinct `id`s — deduplicating on `id` would discard 41 legitimate callbacks, with no error raised anywhere (`plan.md` §10, Phase 7 item #4, has the run).
+
 **Correlation happens on `id` plus fields already inside each event's decoded body** — for example matching a Transfer's `PmtId.TxId` against the originating Quote's `PmtId.EndToEndId` (confirmed in `DRPP_Kafka_E2E_Pack`, both equal to `transferId`/`transactionId` for the sampled transaction).
 
 **Envelope versioning is not specified** (IID §5.2: schema changes additive-only, breaking change = new endpoint path). Open — R-23.
