@@ -354,10 +354,23 @@ connections since deployment. So every currency-conversion request that reached 
 and that download failed. The half of it that doesn't need the download started fine, so Kubernetes
 reports the whole thing as healthy, and nothing anywhere surfaces that the other half is dead.
 
-Two things follow. The full currency-conversion happy path can't complete until that's fixed. And
-restarting it won't currently help — the machine has no route to GitHub at all right now. More
-generally: a test component that silently half-starts when it can't reach the public internet is a
-genuine fragility, and would make these simulators unusable on any properly isolated network.
+**We've since traced this all the way down, and it's fixable.** The three files it tries to download
+aren't part of the software image at all — they're supplied by the deployment configuration, which
+lists them as web addresses instead of actual content. So nothing needs rebuilding; the configuration
+just needs the real files in place of the links. All three have now been downloaded (from this machine,
+which *can* reach GitHub, unlike the server) and committed alongside the plan, at the exact versions
+the configuration asks for.
+
+Two things make this worth doing rather than working around. **One fix revives all three simulators at
+once** — payer, payee and FX provider all share this same broken helper — which also clears the
+separate problem from §11, where the golden path stalled because nothing was answering the switch's
+callbacks. The reason nothing answered is that the things that should have answered were dead. And it's
+the only way to produce records for the four currency-conversion event types that exist in the real
+production reference set but in none of our captures.
+
+The ordered steps are written up in the plan (§9.20). More generally, though: a test component that
+silently half-starts when it can't reach the public internet is a genuine fragility, and would make
+these simulators unusable on any properly isolated network.
 
 Neither blocker stopped the error-scenario work, because those scenarios drive **both** sides of every
 exchange by hand rather than waiting for a simulator to answer.
@@ -417,7 +430,12 @@ quoting stages, and it means this local deployment remains a valid stand-in for 
   alongside the plan in the same layout as the real reference pack, with a README explaining what each
   one shows and what it means for the mapping work.
 
-The one thing genuinely outstanding is the correction described in §14 — the COMESA write-up needs
-fixing before it's sent. Everything else is either finished or optional.
+Two things are genuinely outstanding:
+
+- **The correction described in §14** — the COMESA write-up needs reviewing before it's sent.
+- **The full currency-conversion happy path**, which is now an understood, bounded piece of work rather
+  than an unknown. Root cause is traced, the missing files are in hand, and the ordered steps are in the
+  plan at §9.20. Completing it would also close the last gap in the shape comparison against the real
+  production records — the four currency-conversion event types we've never been able to produce.
 
 Both documents are fully in sync as of this point.

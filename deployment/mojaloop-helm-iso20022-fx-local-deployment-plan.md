@@ -94,9 +94,13 @@ now holds real traffic from every scenario below.
    captures README are the substantive output: liquidity/limit failures are not distinguishable by
    `operation`; FX-quote error egress records carry no correlation identifiers at all; and no expiry
    event is ever emitted on the quoting leg.
-3. **Optional — revive the FX happy path** by giving the sims' TTK backend its OpenAPI specs without a
-   GitHub fetch (`@mojaloop/api-snippets` is already in the image). Only worth it if a *complete* FX
-   corridor run is wanted; every §10 edge case was captured without it.
+3. **Complete the FX happy path — §9.20 has the ordered steps.** Root cause is fully traced (§9.19):
+   the chart ships three config entries as bare GitHub URLs, the host has no egress, and the resulting
+   uncaughtException stops the simulators' shared backend from binding port 4040. All three files are
+   fetched and committed at [`ttk-sim-offline-specs/`](ttk-sim-offline-specs/). One fix revives all
+   three sims at once, which also removes §9.10's `{$prev}` callback blocker. It is the only route to
+   `prepareFxTransfer`/`fulfilFxTransfer`/`reserveFxTransfer`/`notifyFxTransfer` records — four
+   operations present in the DRPP reference pack that none of our current captures contain.
 4. Still open and unchanged: the duplicate/resend async behaviour (§9.11 Finding 1); the full Kafka
    envelope comparison against the DRPP pack (§9.12's caveat); the `/etc/hosts` + ingress step for the
    browser TTK UI (end of §7).
@@ -1117,10 +1121,12 @@ failure. Confirmed directly: from inside that pod, `127.0.0.1:5050` answers and 
 Two consequences worth carrying forward:
 - **The FX happy path cannot complete in this deployment** until that is fixed — independent of, and in
   addition to, the `{$prev}` chaining gap in §9.10.
-- **Restarting the pod will not currently fix it**: neither the pod nor the host can reach
-  `raw.githubusercontent.com` at all right now (`ETIMEDOUT` from both). The chart's runtime dependency
-  on fetching specs from GitHub is itself a fragility worth flagging — it makes the simulators
-  unbootable on an air-gapped or egress-restricted network, and it fails *silently*.
+- **A pod restart alone will not fix it**: neither the pod nor the host can reach
+  `raw.githubusercontent.com` at all (`ETIMEDOUT` from both). The chart's runtime dependency on fetching
+  specs from GitHub is itself a fragility worth flagging — it makes the simulators unbootable on an
+  air-gapped or egress-restricted network, and it fails *silently*.
+  **This is now solved in principle** — the three files have been fetched at their pinned tags and
+  committed; see §9.19 for the full root cause and §9.20 for the ordered fix.
 
 The edge-case work in §9.17 was unaffected, because those scenarios drive **both** sides by hand —
 acting as payer, payee and FXP directly — rather than relying on the simulators to respond.
@@ -1183,6 +1189,122 @@ expiration handling whatsoever — not even persistence.
 quoting-service. Expiry is enforced **only** on the transfer leg, by central-ledger's timeout handler
 (`HANDLERS.TIMEOUT.TIMEXP`, a 15-second cron), and surfaces as `operation: timeoutReserved` with
 `3303 "Transfer expired"`. Any FRMS-side expiry monitoring must key off the transfer leg.
+
+
+### 9.19 The dead simulator backend, fully root-caused — it's a chart values problem, not an image problem
+
+§9.16 established *that* the sims' TTK backend never started its SPEC_API on port 4040. This is the
+complete chain, traced end to end, because the fix depends on where exactly the bad value originates.
+
+1. **The chart ships three config entries as bare GitHub URLs rather than content.**
+   `mojaloop-helm/mojaloop-ttk-simulators/e2e-sim-ttk-backend/values.yaml`, lines 39–41:
+   ```yaml
+   rules_response__default.json: https://raw.githubusercontent.com/mojaloop/testing-toolkit-test-cases/refs/tags/v20.2.5/rules/e2e/sync-response-rules.json
+   api_definitions__mojaloop_connector_backend_2.1__api_spec.yaml:  "https://raw.githubusercontent.com/mojaloop/api-snippets/refs/tags/v17.10.2/docs/sdk-scheme-adapter-backend-v2_1_0-openapi3-snippets.yaml"
+   api_definitions__mojaloop_connector_outbound_2.1__api_spec.yaml: "https://raw.githubusercontent.com/mojaloop/api-snippets/refs/tags/v17.10.2/docs/sdk-scheme-adapter-outbound-v2_1_0-openapi3-snippets.yaml"
+   ```
+2. **Helm renders them verbatim** into ConfigMap `moja-e2e-sim-ttk-backend-config-default`, whose keys
+   are exactly those names.
+3. **They are mounted over the real file paths** with `subPath` — confirmed on the StatefulSet. So inside
+   the pod, `/opt/app/spec_files/rules_response/default.json` is a **125-byte file containing a URL
+   string**, and the two `api_spec.yaml` files are 139/140 bytes of the same.
+4. **The Toolkit resolves them over HTTP at boot** and the fetch failed (`HTTP ERROR 503` on 9 September;
+   now `ETIMEDOUT` — the host has no egress to `raw.githubusercontent.com` at all).
+5. `json-schema-ref-parser` raises an **uncaughtException**, the SPEC_API on 4040 never binds, the
+   ADMIN_API on 5050 does, and the pod reports `1/1 Running`.
+6. **All three sims share that backend** — `e2e-sim1-sdk`, `e2e-sim2-sdk` and `e2e-sim-fxp1-sdk` all
+   have `BACKEND_ENDPOINT=moja-e2e-sim-ttk-backend:4040`. So every simulator's backend call is
+   `ECONNREFUSED`, and the FXP returns `2001` to every FX quote.
+
+**Two consequences that make this worth fixing rather than working around:**
+
+- **This is a values problem, not an image problem.** Nothing needs rebuilding; the offending strings
+  come from the chart's own values file. The pod filesystem is entirely read-only (including `/tmp`),
+  so it cannot be patched in place — but it does not need to be.
+- **One fix unblocks all three sims at once**, which means it also removes §9.10's `{$prev}`
+  callback-chaining blocker: the reason nothing was listening for the async callbacks is that the
+  simulators that should have answered them were dead. Fixing this is therefore the single highest-value
+  change available for getting a genuine end-to-end FX corridor.
+
+**The content is obtainable.** All three files were fetched successfully at the exact pinned tags and
+are committed at [`ttk-sim-offline-specs/`](ttk-sim-offline-specs/) (~284 KB total), named as the
+ConfigMap keys. Note the image's own `@mojaloop/api-snippets` is **18.3.0**, whose copies differ from the
+pinned `v17.10.2` — so the in-image copies are *not* a substitute, and `rules_response__default.json`
+(the rule set that makes the FXP actually answer an FX quote — 16 `fxQuotes`/`fxTransfers` rules) has no
+in-image copy at all.
+
+### 9.20 Ordered steps to complete the FX happy path
+
+Do these in order. Steps 1–4 are the fix and are well-understood; steps 5 onward are verify-and-iterate,
+because what the corridor does once the simulators are actually alive has never been observed here.
+
+**1. Get the three files onto the host.** They are in the repo at
+[`ttk-sim-offline-specs/`](ttk-sim-offline-specs/). The host cannot reach GitHub, so copy them over SSH
+rather than fetching there:
+```bash
+scp -i ~/.ssh/mojaloop_fx_10_0_150_69 docs/deployment/ttk-sim-offline-specs/{rules_response__default.json,api_definitions__*} \
+    root@10.0.150.69:/root/ttk-sim-offline-specs/
+```
+
+**2. Replace the ConfigMap's three bad keys, keeping the other three intact.** The ConfigMap also holds
+`api_definitions__mojaloop_connector_outbound_2.1__callback_map.json`, `system_config.json` and
+`user_config.json` — those are fine and must be preserved. Simplest safe route is to dump the current
+ConfigMap, swap the three values, and re-apply:
+```bash
+kubectl create configmap moja-e2e-sim-ttk-backend-config-default -n demo \
+  --from-file=/root/ttk-sim-offline-specs/ \
+  --from-literal=... # re-add the three untouched keys, or use `kubectl patch` / `--dry-run=client -o yaml | kubectl apply -f -`
+```
+Total size will be ~290 KB, comfortably under the 1 MiB ConfigMap limit. **Verify before restarting**:
+the three keys should now be large file contents, not 125-byte URLs.
+
+**3. Restart the backend and confirm 4040 actually binds.** This is the real success test — not pod
+readiness, which was green throughout the failure:
+```bash
+kubectl delete pod -n demo moja-e2e-sim-ttk-backend-0
+kubectl logs -n demo moja-e2e-sim-ttk-backend-0 -c ml-testing-toolkit-backend | grep -i "started on port"
+```
+Expect a line for **4040** as well as 5050. If only 5050 appears, read the exception — the fetch has been
+replaced, so any remaining failure is a different fault and should be diagnosed before going further.
+
+**4. Make it survive a redeploy.** Step 2 is a live patch that `helmfile apply` will overwrite. Persist
+it by pointing the release's values at the local files — either by editing
+`mojaloop-ttk-simulators/e2e-sim-ttk-backend/values.yaml` in the host's chart clone, or (cleaner) by
+adding the three keys to our own `values-mojaloop-iso20022-fx-lean.yaml` so the override lives with the
+rest of this deployment's customisations. Do this **after** step 3 proves the content is right, so a
+values change isn't being debugged at the same time as the content.
+
+**5. Re-run the FX quote and confirm the FXP now answers properly.** Re-use the existing scenario —
+it already sends a well-formed ISO 20022 FX quote in the supported `XXX → XTS` corridor:
+```bash
+cd docs/deployment/fx-edge-case-scripts && ./run.sh s_fxquote_expiry_put.js
+```
+Success looks like a real `PUT /fxQuotes/{ID}` **from `e2e-sim-fxp1` carrying actual conversion terms**,
+instead of the `2001 "Internal server error"` seen throughout §9.16. Check the FXP sim's own log for the
+backend call to `moja-e2e-sim-ttk-backend:4040/fxQuotes` returning 200 rather than `ECONNREFUSED`.
+
+**6. Drive the full five-step corridor.** With the sims alive, the bundled collection
+`dfsp/p2p_fx_happy_path.json` becomes viable again — §9.10's two failures were `{$prev}` references to
+callbacks nobody was answering, and now someone is. Two things from §9.14 still apply and will bite
+otherwise: the collection's ids must be **ULIDs, not UUIDs**, and request 1's `{$inputs.accept}` must be
+plain-FSPIOP form because the TTK's own transformer adds the `.iso20022.` segment itself. Expect to
+re-derive a small `run_golden_path.js`; the prose in §9.10 plus `fxlib.js` covers what it needs to do.
+
+**7. Capture the result.** A complete FX corridor should produce `prepareFxTransfer`, `fulfilFxTransfer`,
+`reserveFxTransfer` and `notifyFxTransfer` records — four operations present in the real DRPP reference
+pack that **none** of our current captures contain. Add it to
+[`topic-event-audit-edge-case-captures/`](topic-event-audit-edge-case-captures/) as
+`09_fx_corridor_happy_path` and re-run the tag comparison against the DRPP pack; that would extend the
+§9.12/§9.17 shape match across the FX legs, which is the last part of goal #3 still unevidenced.
+
+**Known risks, stated honestly:**
+- The FXP needs a **currency-conversion rule matching `XXX → XTS`**. The bundled rule set is written for
+  the Toolkit's own e2e corridors; if it has no rule for this pair, the FXP will answer but with an
+  error, and the rule set will need an added rule. This is the most likely place step 5 stalls.
+- The payee sim must also answer `POST /quotes` and `POST /transfers`, and its ILP fulfilment must hash
+  to the condition in the packet. That is the sim's own job and should work, but it has never run here.
+- Steps 1–4 change a running deployment. They are confined to one simulator's ConfigMap and are
+  reversible by re-running `helmfile apply`, but they are not read-only.
 
 
 ## 10. Edge-case matrix — this is what answers handover item 3.5
