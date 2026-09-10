@@ -251,7 +251,26 @@ the error/reject/timeout scenarios the handover document actually needs. **Chose
 of those scenarios don't need a fully successful transfer anyway, and they more directly serve what item
 3.5 is actually asking for.
 
-## 12. First edge-case captures — one clean, one new puzzle
+## 12. Checked against the real thing — and it matches
+
+Before going further, checked something more fundamental than "does traffic flow at all": does what
+we're capturing actually *look like* the real DRPP records the Tazama/FRMS message mapping is built
+against? This matters beyond this one deployment effort — PPA is what ultimately emits these messages in
+production, and the mapping work is the actual core deliverable everything else here feeds into.
+
+Compared our captures directly against a pack of five real, complete transactions captured from the
+actual DRPP production/UAT environment in mid-August. **They match, field for field** — same structure,
+same field names, same categorization tags, on both a quote-request record and a party-lookup record
+checked side by side. The only differences found were expected ones (our test used fresh, made-up test
+data, so a couple of trace fields that only get populated once a real caller's request chain reaches this
+point aren't present yet) — nothing that suggests this local switch produces a *different shape* of
+record than the real one.
+
+This is real, independent confirmation, on top of confirming the mechanism exists at all: this local
+deployment's captures are a genuinely valid stand-in for real DRPP traffic when it comes to building and
+testing the FRMS-side message mapping.
+
+## 13. First edge-case captures — one clean, one new puzzle
 
 Rather than keep fighting the test tool's own collection format (which is what was blocking the last two
 golden-path steps), edge-case testing switched to sending individual requests by hand, the same way the
@@ -269,8 +288,29 @@ onboarding itself was done. Three things came out of this:
   genuinely tried to forward the request to the real FX provider simulator — but that specific attempt
   failed in an unusual way (looked like a dropped connection rather than a normal error response), while
   a manually reconstructed version of the same request to the same simulator got back an ordinary error
-  message instead. Something subtle differs between what the switch actually sends and what was
-  reconstructed by hand — worth its own focused look later rather than guessing further right now.
+  message instead.
+
+## 14. The puzzle, solved — a real bug in Mojaloop's own quoting component
+
+Dug into this at your request, since it looked like it might be worth reporting upstream. It is — this
+turned out to be two genuine bugs in the quoting component's own code, not anything about this deployment,
+found by reading the actual failure on both ends rather than guessing:
+
+1. **It sends the wrong message format when forwarding to a foreign-currency-mode partner.** This whole
+   deployment runs in the newer ISO 20022 message mode. The switch's own quoting component correctly
+   *requires* that format when messages come in — but when it *forwards* a request onward to another
+   party, it never learned to use that same format itself. It quietly falls back to the older format
+   instead, which the receiving side (correctly, running in the newer mode itself) rejects.
+2. **When the receiving side rejects it, the real reason gets thrown away.** The specific, useful
+   rejection reason ("wrong message format") never makes it back to whoever asked for the quote in the
+   first place. Instead, they're told nothing more specific than "network error" — which sent this
+   investigation looking for a dropped connection or a firewall problem for a while, when the real
+   answer was a formatting bug two logical steps removed. Any real integrator hitting this in production
+   would see the exact same misleading message and have no way to tell it apart from an actual outage.
+
+Both are traced to specific lines in the quoting component's own source code, not configuration this
+deployment could have set differently, so this is squarely worth flagging to the Mojaloop project (and
+relevant to COMESA, since the real DRPP environment runs the same ISO 20022 mode this deployment does).
 
 This document and the detailed plan are fully in sync as of this point — a new session should read this
 one for the why, then go straight to the plan's resume section to continue.

@@ -855,21 +855,131 @@ matching §10's first edge case ("FX quote rejected by FXP... currency pair the 
 for") — the "wrong currency" wasn't a mistake to fix, it's the edge case itself, already exercised.
 
 **Finding 3 — confirmed the currency mismatch (not participant setup) was the actual cause, and found a
-new distinct bug**: resent the same request with the *correct* currency pair (`XXX`→`XTS`) and the real
-FXP ID. This time quoting-service's own validation passed and it genuinely attempted to forward the
-request on to the real FXP: `POST http://moja-e2e-sim-fxp1-sdk:4000/fxQuotes` — but that forward itself
-failed with `errorCode: 1001, "Destination communication error - Network error"`, delivered back to
-`e2e-sim1-sdk` via another real error callback. Checked whether the FXP pod itself was actually reachable
-(directly `GET /health` against it — got a clean `404 Unknown URI`, i.e. it's up and responding, not a
-network-level failure) and then directly replicated quoting-service's exact forwarded payload by hand
-against the same pod — got a clean `400 Malformed syntax` response, not a connection failure. **This is a
-new, real, unexplained finding**: quoting-service's own outgoing request to the FXP sim causes something
-closer to a connection-level failure, while a near-identical hand-built request gets a normal HTTP error
-response instead. Not yet root-caused — possibly a subtle payload difference (a header, encoding, or
-body-shape detail this reconstruction didn't capture exactly) causing the FXP sim's HTTP server to reset
-the connection rather than respond. Worth a focused follow-up session on its own, comparing the two
-requests byte-for-byte (e.g. via a packet/traffic capture or by adding temporary logging to the FXP sim),
-rather than guessing further.
+new distinct bug, since fully root-caused (§9.13)**: resent the same request with the *correct* currency
+pair (`XXX`→`XTS`) and the real FXP ID. This time quoting-service's own validation passed and it
+genuinely attempted to forward the request on to the real FXP: `POST
+http://moja-e2e-sim-fxp1-sdk:4000/fxQuotes` — but that forward itself failed with `errorCode: 1001,
+"Destination communication error - Network error"`, delivered back to `e2e-sim1-sdk` via another real
+error callback. Checked whether the FXP pod itself was actually reachable (directly `GET /health` against
+it — got a clean `404 Unknown URI`, i.e. it's up and responding, not a network-level failure) and then
+directly replicated quoting-service's exact forwarded payload by hand against the same pod — got a clean
+`400 Malformed syntax` response, not a connection failure. See §9.13 for the full root cause, found by
+reading source on both sides rather than guessing further: it's a real bug in quoting-service, not a
+network issue at all.
+
+### 9.12 Confirmed: our captures structurally match the real DRPP production/UAT `topic-event-audit` shape
+
+Before going further, checked something more fundamental than "does traffic flow" — **does the shape of
+what we're capturing actually match the real thing the Tazama/FRMS mapping is built against?** This
+matters beyond this plan: PPA ultimately emits these messages, and the FRMS-side mapping (the actual
+core deliverable this whole effort feeds into) is built against the real DRPP capture shape, not an
+assumption about what Mojoloop *should* produce.
+
+Compared directly against `/home/abdul-rahim/mojaloop/DRPP_Kafka_E2E_Pack 2/DRPP_Kafka_E2E_Pack/` — five
+complete real transactions captured from the actual DRPP `topic-event-audit` topic via Redpanda Console
+(11-13 August 2026, corridors `MWK→ZMW`, `ZMW→MWK` ×2, `ZMW→EGP`, `ZMW→KES`), each a `raw_messages.json`
+array of full Kafka records (`partitionID`, `offset`, `timestamp`, `headers`, `key`, complete
+`value.payload` envelope).
+
+**Result: field-for-field structural match**, checked on two different record types:
+- `postFxQuotes` (our correct-currency attempt, §9.11 Finding 3, vs. the real pack's
+  `01_MWK_to_ZMW_PRIMARY` index 3): identical `metadata.event`/`metadata.trace` shape —
+  same tag set exactly (`auditType`, `contentType`, `conversionId`, `conversionRequestId`, `destination`,
+  `determiningTransferId`, `httpMethod`, `httpPath`, `operation: "postFxQuotes"`,
+  `serviceName: "quoting-service"`, `source`, `transactionAction`, `transactionId`, `transactionType`).
+  The only difference: our record's `trace` object is missing `flags`/`parentSpanId`/`sampled` — because
+  our hand-built request sent no incoming `traceparent` header, not a switch-side difference.
+- `getPartiesByTypeAndID` (our §9.10 party lookup vs. the real pack's index 0): same match — identical
+  tag set (`auditType`, `contentType`, `httpMethod`, `httpPath`, `operation`, `partyIdType`,
+  `partyIdentifier`, `serviceName: "account-lookup-service"`, `source`, `transactionAction`,
+  `transactionType`). Real capture additionally shows a resolved `destination` tag (ALS had already
+  resolved the owning FSP in that production transaction); ours doesn't yet since our test party lookup
+  was fresh — a data difference, not a structural one.
+
+**One caveat worth flagging**: our own captures were pulled via `kafka-console-consumer.sh`, which prints
+only the record *value* — the real pack's records additionally carry the full Kafka envelope
+(`partitionID`, `offset`, `timestamp`, `key` with `rawPayload`, `compression`, etc., as Redpanda Console
+exports it) that we haven't captured or compared yet. Worth doing via the `kafka-console` (Redpanda
+Console) release already in `helmfile.yaml` (§8) if a closer full-envelope comparison is ever needed.
+
+**Bottom line: this local deployment is a valid stand-in for real DRPP traffic for FRMS-mapping purposes**
+— the switch's own audit-emission logic (not something this plan controls) produces the same shape here
+as in the real environment. This is independent, positive confirmation on top of §3/§9.10's "does
+`topic-event-audit` exist and populate" finding — it also *looks like the real thing*, not just present.
+
+### 9.13 Root cause of Finding 3, fully nailed down: a real quoting-service bug, not a network issue
+
+Requested by the user specifically, since this looked like it might be worth surfacing upstream. Traced
+completely by reading source on both ends of the failed call — no more guessing.
+
+**Step 1 — the request genuinely arrived; it wasn't a network failure at all.** `e2e-sim-fxp1-sdk`'s own
+logs, at the exact timestamp of the failed forward:
+```
+10:13:16.648 - info: [==> req] POST /fxQuotes ... "accept":"application/vnd.interoperability.fxQuotes+json;version=2.0"
+10:13:16.651 - error: accept header is invalid
+```
+The SDK's inbound middleware (`modules/api-svc/src/InboundServer/middlewares.js`) correctly identified an
+invalid `Accept` header and set a proper `400` response with a real FSPIOP error body
+(`Errors.MojaloopApiErrorCodes.MALFORMED_SYNTAX`, code `3101`) — confirmed by reading the middleware code
+directly: it does *not* drop the connection, it returns a normal, well-formed HTTP error response. My own
+manual replication of the same request a minute later (`10:14:27`) hit the identical `"accept header is
+invalid"` log line and got that clean `400` body back over a plain `http.request` call — proving the SDK
+side behaves correctly and consistently.
+
+**Step 2 — why the header was invalid in the first place.** `e2e-sim-fxp1-sdk` runs `API_TYPE: iso20022`
+(same confirmed pattern as ALS/quoting-service, §9.9), so its inbound validation — the identical shared
+`parseAcceptHeader(resource, header, apiType)` from `@mojaloop/central-services-shared` used everywhere
+else in this stack (§9.9's ALS investigation) — requires the ISO20022-form media type
+(`application/vnd.interoperability.iso20022.<resource>+json;version=X.X`). Quoting-service forwarded the
+**plain FSPIOP form** instead (`application/vnd.interoperability.fxQuotes+json;version=2.0`, no
+`.iso20022.`), which fails that exact same validation function on the receiving end.
+
+**Step 3 — traced why quoting-service sends the plain form: it's a genuine gap in its outbound code, not
+a config toggle anyone forgot to set.** The forwarding call
+(`src/model/fxQuotes.js`, the `postFxQuotes`/forward step matching the real trace's
+`qs_fxQuote_forwardFxQuoteRequest` service tag) builds its headers via
+`this.libUtil.generateRequestHeaders(headers, this.envConfig.protocolVersions, false, RESOURCES.fxQuotes,
+null)`. Read `generateRequestHeaders` and the `headersMappingDto` function it calls
+(`src/lib/util.js`) end to end: **neither takes an `apiType` parameter, and `iso20022`/`apiType` appear
+nowhere in that header-generation code path at all** (confirmed by grepping the whole file — the one
+unrelated `iso20022` match in it is for selecting quoting-service's own *inbound* swagger spec file, not
+outbound headers). So quoting-service's inbound side correctly *enforces* ISO20022-form headers when it's
+the receiver (§9.9), but its outbound side has no equivalent awareness at all when it's the sender
+forwarding a request onward — a real asymmetry in this chart/version's ISO20022 support, not a missed
+setting.
+
+**Step 4 — why it surfaced as "Network error" instead of the real reason: a second, compounding bug in
+quoting-service's own error handling.** `src/lib/http.js`'s shared `httpRequest()` helper (used by every
+forwarding call in `fxQuotes.js`, `quotes.js`, `bulkQuotes.js`):
+```js
+} catch (e) {
+  const [fspiopErrorType, fspiopErrorDescr] = e.response && e.response.status === 404
+    ? [ErrorHandler.Enums.FSPIOPErrorCodes.CLIENT_ERROR, 'Not found']
+    : [ErrorHandler.Enums.FSPIOPErrorCodes.DESTINATION_COMMUNICATION_ERROR, 'Network error']
+  throw ErrorHandler.CreateFSPIOPError(fspiopErrorType, fspiopErrorDescr, ...)
+}
+// ...
+if (res.status < 200 || res.status >= 300) {
+  throw ErrorHandler.CreateFSPIOPError(ErrorHandler.Enums.FSPIOPErrorCodes.DESTINATION_COMMUNICATION_ERROR,
+    'Non-success response in HTTP request', ...)
+}
+```
+**Every non-2xx response except a bare 404 gets collapsed into the same generic `"Network error"`**,
+regardless of whether it was an actual connection failure or — as here — a perfectly well-formed `400`
+with a specific, useful FSPIOP error body. The real reason (`"accept header is invalid"`, code `3101`)
+never survives to the caller; it's discarded at this exact point and replaced with a misleading generic
+message. (The real error detail *is* appended to an internal-only extension list on the thrown error via
+`e.stack`/`util.inspect(e)` — so it's not entirely lost server-side, in logs — but it never reaches the
+FSPIOP error response actually delivered back to the payer DFSP.)
+
+**Summary, worth surfacing upstream as-is**: in this Mojoloop version, when quoting-service forwards an
+FX quote (and, by the same code path, a plain quote or bulk quote) to a destination running in ISO20022
+mode, it (a) sends the wrong media-type format because its outbound header builder has no ISO20022
+awareness, and (b) even when the destination correctly rejects that with a specific, useful error, the
+forwarding caller discards the real reason and reports a generic "Network error" instead — actively
+misleading anyone debugging the failure from the payer side. Both are real code-level findings
+(`src/lib/util.js`'s `generateRequestHeaders`/`headersMappingDto`, and `src/lib/http.js`'s `httpRequest`),
+not something specific to this deployment's configuration.
 
 ## 10. Edge-case matrix — this is what answers handover item 3.5
 
@@ -886,10 +996,15 @@ resulting `topic-event-audit` records for each:
 | Duplicate/resend | Replay the identical `POST /fxQuotes` or `POST /fxTransfers` body with the same ID | **Partially explored (§9.11 Finding 1)** — no distinct rejection at the HTTP layer; whether/how the async pipeline actually flags it is still open |
 | ILP condition mismatch on the FX leg | Manually corrupt the fulfilment condition sent back | Not started |
 
-Also newly found, not originally in this matrix: **quoting-service's own forward-to-FXP request causes a
-"Network error" against `e2e-sim-fxp1-sdk` that a hand-built equivalent request doesn't reproduce**
-(§9.11 Finding 3) — a real, distinct technical issue worth its own investigation, separate from the
-edge-case matrix itself.
+Also newly found, not originally in this matrix, and now fully root-caused (§9.13): **quoting-service has
+a real bug (not a config or deployment issue) when forwarding FX quotes/quotes/bulk quotes to a
+destination running in ISO20022 mode** — its outbound header builder
+(`src/lib/util.js`'s `generateRequestHeaders`/`headersMappingDto`) has no ISO20022 awareness at all and
+always sends the plain-FSPIOP media type, which a correctly-configured ISO20022 destination rejects; and
+separately, its shared HTTP-forwarding helper (`src/lib/http.js`'s `httpRequest`) collapses *any* non-2xx
+response other than a bare 404 into a generic `"Network error"`, discarding the destination's real,
+specific error reason. Worth surfacing to Mojaloop/COMESA as-is — it's reproducible, source-confirmed on
+both ends, and not specific to anything this deployment did.
 
 For each: capture the `topic-event-audit` record(s), check the shape against what
 `docs/docs-poc-mla-ppa/MLA-PPA-Technical-Design.md` and `rejected-events.md` already assume from the
