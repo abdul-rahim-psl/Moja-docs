@@ -58,3 +58,54 @@
 **Context.** `04_ZMW_to_EGP_partition_split` spans partitions 7 and 10, with the whole settlement leg on a different partition under a fresh trace id; the 500-record export carries 52 distinct Kafka keys against only 44 distinct `transactionId`s. Kafka orders only within a partition, so this is what makes out-of-order arrival real rather than theoretical.
 
 **Question.** "What is the partition key on `topic-event-audit`? We see a single transaction's settlement leg landing on a different partition under a fresh trace id, and 52 distinct Kafka keys across only 44 transactions — so the key clearly is not transaction-scoped. Is that intentional? Because if it is, cross-partition out-of-order arrival is permanent and we design around it forever; if it is not, someone may fix it."
+
+---
+
+## Open questions for COMESA — 2026-09-10 (quoting-service ISO 20022 forwarding bug)
+
+Found while validating our own Kafka/broker config against a local Mojaloop instance (handover item 3.4)
+— a local `mojaloop/helm` deployment at tag `v17.2.0`, ISO 20022 + FX mode, onboarded with test DFSPs
+(`e2e-sim1` payer, `e2e-sim2` payee, `e2e-sim-fxp1` FXP). Not part of the 2026-09-09 meeting; a separate
+technical thread, tracked here so it isn't lost or merged with the questions above.
+
+1. **`quoting-service` sends the wrong message format when forwarding an FX quote to an ISO 20022-mode
+   participant, and then mislabels the resulting rejection as a generic network error.** Root-caused by
+   reading source on both ends, not guessed: `quoting-service`'s outbound header builder
+   (`src/lib/util.js`'s `generateRequestHeaders`/`headersMappingDto`) has no ISO 20022 awareness at all —
+   confirmed by reading the function end to end, no `apiType` parameter exists anywhere in that path —
+   so it always sends the plain-FSPIOP media type
+   (`application/vnd.interoperability.fxQuotes+json;version=2.0`) even though `quoting-service` itself
+   *requires* the ISO 20022 form (`application/vnd.interoperability.iso20022.fxQuotes+json;...`) on its
+   own inbound side. A correctly-configured ISO 20022 destination rejects the plain form as invalid
+   (confirmed directly in the destination's own logs: `error: accept header is invalid`, a clean `400`
+   with FSPIOP error code `3101`). But that real, specific rejection reason never survives the trip back:
+   `quoting-service`'s shared HTTP-forwarding helper (`src/lib/http.js`'s `httpRequest`) collapses *any*
+   non-2xx response other than a bare `404` into a generic `"Network error"` (FSPIOP error code `1001`),
+   discarding the destination's actual error entirely. From the payer DFSP's side this is indistinguishable
+   from a real network/connectivity fault.
+
+## How to ask it
+
+**Context.** Reproduced cleanly and repeatedly on a local instance: an FX quote in the corridor's actual
+supported currency pair, sent to a correctly-onboarded FXP participant running in ISO 20022 mode, fails
+every time at the forwarding step with error code `1001` ("Network error") — while the FXP's own logs
+show it received the request and cleanly rejected it (code `3101`, "accept header is invalid") because
+`quoting-service` sent the plain-FSPIOP media type instead of the ISO 20022 form. Both failure points are
+confirmed by reading `quoting-service`'s own source, not inferred from behaviour alone. Since the real
+DRPP environment runs ISO 20022 mode in production and its captured transactions settle successfully
+(`TxSts: COMM`, no error records, per `DRPP_Kafka_E2E_Pack`), either production runs a patched/different
+version, or there's a configuration difference between our local reproduction and the real deployment that
+avoids this — worth confirming before assuming it's purely a local artefact.
+
+**Question.** "We've hit what looks like a real bug in `quoting-service`: when forwarding a `POST
+/fxQuotes` to a participant running in ISO 20022 mode, it sends the plain-FSPIOP media type instead of
+the ISO 20022 form its own inbound side requires — and when the destination correctly rejects that, the
+real reason gets discarded and reported back as a generic 'Network error' instead. We've traced both to
+specific functions in `quoting-service`'s own source (`src/lib/util.js` and `src/lib/http.js`) and can
+share the detail. A few things we'd like to check: (1) Have you seen this in the real DRPP environment,
+or is it patched/absent there? (2) What exact `quoting-service` / chart version does DRPP prod/UAT run —
+is it the same base as the public `mojaloop/helm` chart at tag `v17.2.0`, or a fork with fixes applied?
+(3) Is there a config or deployment-level difference in your setup (e.g. hub↔participant traffic actually
+staying in classic FSPIOP mode at this specific hop) that avoids triggering it? (4) Should we raise this
+upstream with the Mojaloop project ourselves, or do you already have a channel/fork where fixes like this
+get tracked?"
