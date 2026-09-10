@@ -1,0 +1,147 @@
+[
+  {
+    "content": {
+      "dataUri": "data:application/vnd.interoperability.iso20022.transfers+json;version=2.0;base64,eyJHcnBIZHIiOnsiTXNnSWQiOiIwMU0yNUg1UzNBOU1UQkdBRjU5UERCVktFTiIsIkNyZUR0VG0iOiIyMDI2LTA5LTEwVDExOjI3OjQ2LjI4M1oiLCJOYk9mVHhzIjoiMSIsIlN0dGxtSW5mIjp7IlN0dGxtTXRkIjoiQ0xSRyJ9LCJQbXRJbnN0clhwcnlEdFRtIjoiMjAyNi0wOS0xMFQxMTozNzo0Ni4yNjdaIn0sIkNkdFRyZlR4SW5mIjp7IlBtdElkIjp7IlR4SWQiOiIwMU0yNUg1UzJSS043Q0g1TUdWUUtRVEVUWiJ9LCJDaHJnQnIiOiJTSEFSIiwiQ2R0ciI6eyJJZCI6eyJPcmdJZCI6eyJPdGhyIjp7IklkIjoiZTJlLXNpbTIifX19fSwiRGJ0ciI6eyJJZCI6eyJPcmdJZCI6eyJPdGhyIjp7IklkIjoiZTJlLXNpbTEifX19fSwiQ2R0ckFndCI6eyJGaW5JbnN0bklkIjp7Ik90aHIiOnsiSWQiOiJlMmUtc2ltMiJ9fX0sIkRidHJBZ3QiOnsiRmluSW5zdG5JZCI6eyJPdGhyIjp7IklkIjoiZTJlLXNpbTEifX19LCJJbnRyQmtTdHRsbUFtdCI6eyJDY3kiOiJYWFgiLCJBY3RpdmVDdXJyZW5jeUFuZEFtb3VudCI6IjEwIn0sIlZyZmN0bk9mVGVybXMiOnsiSWxwVjRQcmVwUGFja2V0IjoiRElJQ3BRQUFBQUFBQVlhZ01qQXlOakE1TVRBeE1UTTNORFl5TmpmZ29FOGdJWkpmU2gtX1o4QjRXRnFvUXBoMDY2QzMtZmVvbVo5Si1TbVNKQXBuTG0xdmFtRnNiMjl3Z2dKZVpYbEtNR050Um5Wak1rWnFaRWRzZG1KcmJHdEphbTlwVFVSR1RrMXFWa2xPVmsxNVZXdDBUMDR3VGtsT1ZURklWbXhHVEZWV1VrWldSbTlwVEVOS2VHUlhPVEJhVld4clNXcHZhVTFFUms1TmFsWkpUbFpOZVZac2NGcFZlbEpJVmtSS1ZGTXdXVFZSVldkNFRXdE5hVXhEU25kWldHeHNXbE5KTm1WNVNuZFpXRW93WlZWc2ExTlhOVzFpZVVrMlpYbEtkMWxZU2pCbFZXeHJWa2hzZDFwVFNUWkphekZVVTFaT1JWUnBTWE5KYmtKb1kyNVNOVk5YVW14aWJsSndXbTFzYkdOcFNUWkphbXMxVDFSQmQwMUVTWGROUkVWcFRFTktiV016UWtwYVEwazJTVzFWZVZwVE1YcGhWekI1U1c0eE9VeERTbmRaV0d4c1kybEpObVY1U25kWldFb3daVlZzYTFOWE5XMWllVWsyWlhsS2QxbFlTakJsVld4clZraHNkMXBUU1RaSmF6RlVVMVpPUlZScFNYTkpia0pvWTI1U05WTlhVbXhpYmxKd1dtMXNiR05wU1RaSmFtczFUMVJCZDAxRVJYZE5SRVZwVEVOS2JXTXpRa3BhUTBrMlNXMVZlVnBUTVhwaFZ6QjRTVzR4T1V4RFNtaGlWemt4WW01UmFVOXVjMmxaTTFaNVkyMVdkVmt6YTJsUGFVcFpWMFpuYVV4RFNtaGlWemt4WW01UmFVOXBTWGhOUTBvNVRFTktNR050Um5Wak1rWnFaRWRzZG1Kc1VqVmpSMVZwVDI1emFXTXlUbXhpYlVaNVlWYzRhVTlwU2xWVmEwWlBWVEJhUmxWcFNYTkpiV3gxWVZoU2NGbFlVblpqYVVrMlNXeENRbGRWVmxOSmFYZHBZVmMxY0dSSGJHaGtSemw1Vmtoc2QxcFRTVFpKYTA1UVZHeE9WbFJWVmxOSmJqQnpTVzFXTkdOSGJIbFpXRkp3WWpJMGFVOXBTWGxOUkVreVRGUkJOVXhVUlhkV1JFVjRUMnBOTTA5cVVUSk1ha2t5VGpGdmFXWlIifX19",
+      "headers": {
+        "accept": "application/vnd.interoperability.iso20022.transfers+json;version=2.0",
+        "connection": "keep-alive",
+        "content-length": "1470",
+        "content-type": "application/vnd.interoperability.iso20022.transfers+json;version=2.0",
+        "date": "Thu, 10 Sep 2026 11:27:46 GMT",
+        "fspiop-destination": "e2e-sim2",
+        "fspiop-source": "e2e-sim1",
+        "host": "moja-ml-api-adapter-service"
+      },
+      "payload": {
+        "amount": {
+          "amount": "10",
+          "currency": "XXX"
+        },
+        "condition": "4KBPICGSX0ofv2fAeFhaqEKYdOugt_n3qJmfSfkpkiQ",
+        "expiration": "2026-09-10T11:37:46.267Z",
+        "ilpPacket": "DIICpQAAAAAAAYagMjAyNjA5MTAxMTM3NDYyNjfgoE8gIZJfSh-_Z8B4WFqoQph066C3-feomZ9J-SmSJApnLm1vamFsb29wggJeZXlKMGNtRnVjMkZqZEdsdmJrbGtJam9pTURGTk1qVklOVk15VWt0T04wTklOVTFIVmxGTFVWUkZWRm9pTENKeGRXOTBaVWxrSWpvaU1ERk5NalZJTlZNeVZscFpVelJIVkRKVFMwWTVRVWd4TWtNaUxDSndZWGxsWlNJNmV5SndZWEowZVVsa1NXNW1ieUk2ZXlKd1lYSjBlVWxrVkhsd1pTSTZJazFUU1ZORVRpSXNJbkJoY25SNVNXUmxiblJwWm1sbGNpSTZJams1T1RBd01ESXdNREVpTENKbWMzQkpaQ0k2SW1VeVpTMXphVzB5SW4xOUxDSndZWGxsY2lJNmV5SndZWEowZVVsa1NXNW1ieUk2ZXlKd1lYSjBlVWxrVkhsd1pTSTZJazFUU1ZORVRpSXNJbkJoY25SNVNXUmxiblJwWm1sbGNpSTZJams1T1RBd01ERXdNREVpTENKbWMzQkpaQ0k2SW1VeVpTMXphVzB4SW4xOUxDSmhiVzkxYm5RaU9uc2lZM1Z5Y21WdVkza2lPaUpZV0ZnaUxDSmhiVzkxYm5RaU9pSXhNQ0o5TENKMGNtRnVjMkZqZEdsdmJsUjVjR1VpT25zaWMyTmxibUZ5YVc4aU9pSlVVa0ZPVTBaRlVpSXNJbWx1YVhScFlYUnZjaUk2SWxCQldVVlNJaXdpYVc1cGRHbGhkRzl5Vkhsd1pTSTZJa05QVGxOVlRVVlNJbjBzSW1WNGNHbHlZWFJwYjI0aU9pSXlNREkyTFRBNUxURXdWREV4T2pNM09qUTJMakkyTjFvaWZR",
+        "payeeFsp": "e2e-sim2",
+        "payerFsp": "e2e-sim1",
+        "transferId": "01M25H5S2RKN7CH5MGVQKQTETZ"
+      }
+    },
+    "id": "731a4ee5-7293-4b76-891d-00cb3d8a5564",
+    "metadata": {
+      "event": {
+        "action": "start",
+        "createdAt": "2026-09-10T11:27:46.300Z",
+        "id": "1b6a99ce-b3d7-4e79-a10b-31493f5f5f8c",
+        "state": {
+          "status": "success"
+        },
+        "type": "audit"
+      },
+      "protocol.createdAt": 1789039666301,
+      "trace": {
+        "service": "transfers",
+        "spanId": "e4ec6ce85c9b063a",
+        "startTimestamp": "2026-09-10T11:27:46.291Z",
+        "tags": {
+          "auditType": "transactionFlow",
+          "contentType": "httpRequest",
+          "destination": "e2e-sim2",
+          "httpMethod": "post",
+          "operation": "prepareTransfer",
+          "serviceName": "ml-api-adapter-service",
+          "source": "e2e-sim1",
+          "tracestate": "mojaloop=eyJzcGFuSWQiOiJlNGVjNmNlODVjOWIwNjNhIiwidGltZUFwaVByZXBhcmUiOiIxNzg5MDM5NjY2MzAwIn0=",
+          "transactionAction": "prepare",
+          "transactionId": "01M25H5S2RKN7CH5MGVQKQTETZ",
+          "transactionType": "transfer",
+          "transferId": "01M25H5S2RKN7CH5MGVQKQTETZ"
+        },
+        "traceId": "fb7f260bd017cc0a87eabbc423c46c20",
+        "tracestates": {
+          "mojaloop": {
+            "spanId": "e4ec6ce85c9b063a",
+            "timeApiPrepare": "1789039666300"
+          }
+        }
+      }
+    },
+    "type": "application/json"
+  },
+  {
+    "content": {
+      "headers": {
+        "connection": "keep-alive",
+        "content-type": "application/vnd.interoperability.iso20022.transfers+json;version=2.0",
+        "date": "Thu, 10 Sep 2026 11:27:46 GMT",
+        "fspiop-destination": "e2e-sim1",
+        "fspiop-http-method": "PUT",
+        "fspiop-signature": "{\"protectedHeader\":\"eyJhbGciOiJSUzI1NiIsIkZTUElPUC1VUkkiOiIvdHJhbnNmZXJzLzAxTTI1SDVTMlJLTjdDSDVNR1ZRS1FURVRaL2Vycm9yIiwiRlNQSU9QLUhUVFAtTWV0aG9kIjoiUFVUIiwiRlNQSU9QLVNvdXJjZSI6Ikh1YiIsIkZTUElPUC1EZXN0aW5hdGlvbiI6ImUyZS1zaW0xIiwiRGF0ZSI6IlRodSwgMTAgU2VwIDIwMjYgMTE6Mjc6NDYgR01UIn0\",\"signature\":\"kfk6NOmg2q0MyRosE0BRvHtluRl79ADCgiWOZEbkiur2ZHLRQxsqaSC2Wth8LsSqynlNrVlp0CzygPkNL8534h-2A3eB0e7q3qk7utGMnsLubE4VHMXDiHk04buFH08LkTcH6vIWTrdE0d6BEoc6Gp46_jnOGLEscFHq0ruWE57BxS3jhHrGnQayQ1_hEkOCNHJDuiSiQQA5_P1yNUfBdQwpjepMRxMuH1OYIHvDtUhvN-99Ku0ZnEz-UC_H4kxwAvqiB3542ccC66bxHLRB2kb4Ky1_B1tqZ-6z53IswBVeZza6rfixpPTkLz1gR63Fkx-ldCqKdOBccPt9qJoP2w\"}",
+        "fspiop-source": "Hub",
+        "fspiop-uri": "/transfers/01M25H5S2RKN7CH5MGVQKQTETZ/error",
+        "traceparent": "00-fb7f260bd017cc0a87eabbc423c46c20-4955796ddc8586f8-00",
+        "tracestate": "mojaloop=eyJzcGFuSWQiOiI0OTU1Nzk2ZGRjODU4NmY4IiwidGltZUFwaVByZXBhcmUiOiIxNzg5MDM5NjY2MzAwIn0="
+      },
+      "method": "PUT",
+      "payload": {
+        "GrpHdr": {
+          "CreDtTm": "2026-09-10T11:27:46.506Z",
+          "MsgId": "01M25H5SAAXZHE1HJZTB777N73"
+        },
+        "TxInfAndSts": {
+          "StsRsnInf": {
+            "AddtlInf": "Payer limit error",
+            "Rsn": {
+              "Prtry": "4200"
+            }
+          }
+        }
+      },
+      "responseType": "json",
+      "timeout": 20000,
+      "url": "http://moja-e2e-sim1-sdk:4000/transfers/01M25H5S2RKN7CH5MGVQKQTETZ/error"
+    },
+    "id": "cdcba25a-5e44-4b44-a04c-293d165645ed",
+    "metadata": {
+      "event": {
+        "action": "egress",
+        "createdAt": "2026-09-10T11:27:46.522Z",
+        "id": "845bd3e4-13b0-4b8e-9dec-847dfdedc30c",
+        "state": {
+          "status": "success"
+        },
+        "type": "audit"
+      },
+      "protocol.createdAt": 1789039666523,
+      "trace": {
+        "parentSpanId": "abb37603008df50f",
+        "service": "ml_notification_event",
+        "spanId": "4955796ddc8586f8",
+        "startTimestamp": "2026-09-10T11:27:46.504Z",
+        "tags": {
+          "auditType": "transactionFlow",
+          "binId": "9-9",
+          "contentType": "httpRequest",
+          "destination": "e2e-sim2",
+          "httpMethod": "PUT",
+          "httpUrl": "http://moja-e2e-sim1-sdk:4000/transfers/01M25H5S2RKN7CH5MGVQKQTETZ/error",
+          "operation": "prepareTransfer",
+          "processedAsBatch": true,
+          "serviceName": "ml-notification-handler",
+          "source": "e2e-sim1",
+          "tracestate": "mojaloop=eyJzcGFuSWQiOiI0OTU1Nzk2ZGRjODU4NmY4IiwidGltZUFwaVByZXBhcmUiOiIxNzg5MDM5NjY2MzAwIn0=",
+          "transactionAction": "prepare",
+          "transactionId": "01M25H5S2RKN7CH5MGVQKQTETZ",
+          "transactionType": "transfer",
+          "transferId": "01M25H5S2RKN7CH5MGVQKQTETZ"
+        },
+        "traceId": "fb7f260bd017cc0a87eabbc423c46c20",
+        "tracestates": {
+          "mojaloop": {
+            "spanId": "4955796ddc8586f8",
+            "timeApiPrepare": "1789039666300"
+          }
+        }
+      }
+    },
+    "type": "application/json"
+  }
+]

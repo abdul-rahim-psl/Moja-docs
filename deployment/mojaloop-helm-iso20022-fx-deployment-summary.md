@@ -17,8 +17,15 @@ work.
 - [7. Preparing the actual Mojaloop chart](#7-preparing-the-actual-mojaloop-chart)
 - [8. Deploying — six attempts, each fixing one real thing](#8-deploying--six-attempts-each-fixing-one-real-thing)
 - [9. Confirming `topic-event-audit` — the actual point of all this](#9-confirming-topic-event-audit--the-actual-point-of-all-this)
-- [10. Where we are right now](#10-where-we-are-right-now)
-
+- [10. Onboarding the test participants — three hidden prerequisites](#10-onboarding-the-test-participants--three-hidden-prerequisites)
+- [11. Driving the FX golden path — real traffic, most of the way through](#11-driving-the-fx-golden-path--real-traffic-most-of-the-way-through)
+- [12. Checked against the real thing — and it matches](#12-checked-against-the-real-thing--and-it-matches)
+- [13. First edge-case captures — one clean, one new puzzle](#13-first-edge-case-captures--one-clean-one-new-puzzle)
+- [14. The puzzle, half-solved — and then half-corrected](#14-the-puzzle-half-solved--and-then-half-corrected)
+- [15. Making the switch actually usable — two things nobody had documented](#15-making-the-switch-actually-usable--two-things-nobody-had-documented)
+- [16. The error scenarios — all captured](#16-the-error-scenarios--all-captured)
+- [17. Why these captures are worth more than the golden path](#17-why-these-captures-are-worth-more-than-the-golden-path)
+- [18. Where things stand](#18-where-things-stand)
 ---
 
 ## 1. Why this started
@@ -290,27 +297,127 @@ onboarding itself was done. Three things came out of this:
   a manually reconstructed version of the same request to the same simulator got back an ordinary error
   message instead.
 
-## 14. The puzzle, solved — a real bug in Mojaloop's own quoting component
+## 14. The puzzle, half-solved — and then half-corrected
 
-Dug into this at your request, since it looked like it might be worth reporting upstream. It is — this
-turned out to be two genuine bugs in the quoting component's own code, not anything about this deployment,
-found by reading the actual failure on both ends rather than guessing:
+Dug into this at your request, since it looked like it might be worth reporting upstream. Two things
+were concluded. **One of them turned out to be wrong, and was caught the next day by testing it rather
+than only reading code** — worth recording honestly, because the wrong half had already been written up
+for COMESA.
 
-1. **It sends the wrong message format when forwarding to a foreign-currency-mode partner.** This whole
-   deployment runs in the newer ISO 20022 message mode. The switch's own quoting component correctly
-   *requires* that format when messages come in — but when it *forwards* a request onward to another
-   party, it never learned to use that same format itself. It quietly falls back to the older format
-   instead, which the receiving side (correctly, running in the newer mode itself) rejects.
-2. **When the receiving side rejects it, the real reason gets thrown away.** The specific, useful
-   rejection reason ("wrong message format") never makes it back to whoever asked for the quote in the
-   first place. Instead, they're told nothing more specific than "network error" — which sent this
-   investigation looking for a dropped connection or a firewall problem for a while, when the real
-   answer was a formatting bug two logical steps removed. Any real integrator hitting this in production
-   would see the exact same misleading message and have no way to tell it apart from an actual outage.
+**What was concluded first:**
 
-Both are traced to specific lines in the quoting component's own source code, not configuration this
-deployment could have set differently, so this is squarely worth flagging to the Mojaloop project (and
-relevant to COMESA, since the real DRPP environment runs the same ISO 20022 mode this deployment does).
+1. *"It sends the wrong message format when forwarding to a foreign-currency-mode partner."* — the
+   switch's quoting component was said to have no awareness of the newer message format at all when
+   forwarding a request onward, always falling back to the older one.
+2. *"When the receiving side rejects it, the real reason gets thrown away."* — the specific rejection
+   reason never reaches whoever asked for the quote; they're told only "network error".
 
-This document and the detailed plan are fully in sync as of this point — a new session should read this
-one for the why, then go straight to the plan's resume section to continue.
+**What testing then showed.** Sending a quote in the newer format and watching what the receiving side
+actually got proved point 1 wrong: the request arrived in the **correct** newer format and was accepted.
+Reading the deployed component's own source then explained why — the awareness is there; what the
+component actually does is **pass the caller's own format straight through** when relaying a request
+onward. It never converts between the two.
+
+So the real finding is narrower, and different in kind: **this switch does not translate between the
+older and newer message formats.** A scheme running a mix of both — some participants on the old
+format, some on the new — will see quote forwarding fail between them. That's still worth reporting,
+but it's a design gap, not the "component is unaware of the new format" bug originally described.
+
+**Point 2 stands, re-checked against the running system and unchanged.** And it has a close cousin found
+later on a different leg: when a transfer is completed with the wrong cryptographic proof, the switch's
+own logs say plainly "invalid fulfilment" — but what reaches the payer is only "generic validation
+error". In both cases the specific, useful reason exists server-side and is discarded before anyone
+outside can see it. That pattern — real diagnosis kept in the logs, generic message on the wire — is
+the more valuable thing to raise with COMESA than either individual instance.
+
+**Action outstanding**: the write-up added to `docs/docs - MLA/questions for comesa.md` under the
+`2026-09-10` heading still describes the original, disproved version of point 1. It needs correcting
+before it's sent. (The separate, older question set in that file — forwarded to Behjet on 2026-09-08 —
+is a different thread and is untouched.)
+
+## 15. Making the switch actually usable — two things nobody had documented
+
+Before any error scenario could be exercised properly, two blockers had to be cleared. Both were found
+the same way as everything else here: by trying it and reading the real rejection.
+
+**The participants had no money.** Onboarding (§10) registered everyone correctly, and their spending
+limits were set generously — but nobody had ever *deposited* anything. Every single attempted transfer
+failed with "payer has insufficient liquidity", which reads like a limits problem and isn't: the limit
+was fine, the account was simply empty. One deposit step per participant fixed it, and immediately
+afterwards a transfer went through and settled properly. **This is a fourth setup prerequisite on top of
+the three found in §10** — and without it nothing involving actual money movement can ever work.
+
+**One of the simulators has been quietly broken since the day it was deployed.** The fake foreign-
+exchange provider hands incoming requests to a helper service, and that helper has been refusing
+connections since deployment. So every currency-conversion request that reached it came back as
+"internal server error". The cause: on startup, the helper downloads its API definitions from GitHub —
+and that download failed. The half of it that doesn't need the download started fine, so Kubernetes
+reports the whole thing as healthy, and nothing anywhere surfaces that the other half is dead.
+
+Two things follow. The full currency-conversion happy path can't complete until that's fixed. And
+restarting it won't currently help — the machine has no route to GitHub at all right now. More
+generally: a test component that silently half-starts when it can't reach the public internet is a
+genuine fragility, and would make these simulators unusable on any properly isolated network.
+
+Neither blocker stopped the error-scenario work, because those scenarios drive **both** sides of every
+exchange by hand rather than waiting for a simulator to answer.
+
+## 16. The error scenarios — all captured
+
+This is what item 3.5 actually asked for, and it's now done. Each was driven against the real switch and
+confirmed two ways: by the money actually moving (or correctly not moving), and by the real error
+message delivered back to the payer.
+
+First, a baseline worth stating: **a complete transfer now works end to end** — reserved, then settled,
+with both participants' balances moving correctly. That's the first one in this deployment.
+
+Then the failures, each a genuine capture:
+
+- **Wrong cryptographic proof on completion** — reservation released, payee not paid.
+- **Payee refuses the transfer** — reservation released, and the payee's own stated reason reaches the
+  payer intact.
+- **Spending cap exceeded** — rejected outright, balance untouched.
+- **Empty account** — rejected, and notably with a *different* error than the spending-cap case. These
+  two are genuinely different conditions and shouldn't be treated as one.
+- **Payee never responds** — the switch's own housekeeping sweeps it up about twelve seconds after it
+  expires, and tells *both* parties.
+- **Expired currency-conversion quote** — see below; this one couldn't be triggered at all.
+
+**One clean negative result.** The quoting component doesn't check expiry. Not on the request, not on
+the response — a quote answered forty seconds after it expired was accepted without complaint, and so
+was one that had already been cancelled. Reading its source confirms it: expiry is stored in the
+database and never looked at again. This matters more than it sounds: **no "expired quote" record will
+ever appear in the audit feed**, so anything watching for expiry has to watch the transfer stage
+instead, where it *is* enforced.
+
+## 17. Why these captures are worth more than the golden path
+
+The five real production transactions we'd been checking against are all successful ones. Comparing the
+new captures against them shows **six kinds of event that simply don't exist in the reference set** —
+abort, timeout, validation failure, quote error, and so on. That's exactly the gap item 3.5 named.
+
+Three of them matter directly for the message-mapping work this all feeds:
+
+1. **A rejected transfer looks identical to an accepted one**, as far as the event's own labelling goes.
+   Only the error message attached later distinguishes them. Anything sorting events by their label
+   alone will quietly count failures as successes.
+2. **Currency-conversion error events carry no identifiers at all** — no conversion id, no transaction
+   id, nothing to join them back to the transaction they belong to. The only way to correlate them is to
+   parse the id out of the URL in the record.
+3. **Expiry is invisible on the quoting stage**, per §16.
+
+Alongside that, the good news: the transfer-stage records match the real production ones **exactly**,
+field for field. That extends the earlier check (§12), which had only compared the lookup and
+quoting stages, and it means this local deployment remains a valid stand-in for the real thing.
+
+## 18. Where things stand
+
+- **Item 3.4** (validate broker config against our own instance): done and unchanged.
+- **Item 3.5** (error/abort/reject/timeout captures): **done.** Eight captured scenarios, stored
+  alongside the plan in the same layout as the real reference pack, with a README explaining what each
+  one shows and what it means for the mapping work.
+
+The one thing genuinely outstanding is the correction described in §14 — the COMESA write-up needs
+fixing before it's sent. Everything else is either finished or optional.
+
+Both documents are fully in sync as of this point.

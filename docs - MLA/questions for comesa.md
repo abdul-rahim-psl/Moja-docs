@@ -61,51 +61,100 @@
 
 ---
 
-## Open questions for COMESA — 2026-09-10 (quoting-service ISO 20022 forwarding bug)
+## Open questions for COMESA — 2026-09-10 (ISO 20022 mixed-mode forwarding, and error-detail loss)
 
 Found while validating our own Kafka/broker config against a local Mojaloop instance (handover item 3.4)
 — a local `mojaloop/helm` deployment at tag `v17.2.0`, ISO 20022 + FX mode, onboarded with test DFSPs
 (`e2e-sim1` payer, `e2e-sim2` payee, `e2e-sim-fxp1` FXP). Not part of the 2026-09-09 meeting; a separate
 technical thread, tracked here so it isn't lost or merged with the questions above.
 
-1. **`quoting-service` sends the wrong message format when forwarding an FX quote to an ISO 20022-mode
-   participant, and then mislabels the resulting rejection as a generic network error.** Root-caused by
-   reading source on both ends, not guessed: `quoting-service`'s outbound header builder
-   (`src/lib/util.js`'s `generateRequestHeaders`/`headersMappingDto`) has no ISO 20022 awareness at all —
-   confirmed by reading the function end to end, no `apiType` parameter exists anywhere in that path —
-   so it always sends the plain-FSPIOP media type
-   (`application/vnd.interoperability.fxQuotes+json;version=2.0`) even though `quoting-service` itself
-   *requires* the ISO 20022 form (`application/vnd.interoperability.iso20022.fxQuotes+json;...`) on its
-   own inbound side. A correctly-configured ISO 20022 destination rejects the plain form as invalid
-   (confirmed directly in the destination's own logs: `error: accept header is invalid`, a clean `400`
-   with FSPIOP error code `3101`). But that real, specific rejection reason never survives the trip back:
-   `quoting-service`'s shared HTTP-forwarding helper (`src/lib/http.js`'s `httpRequest`) collapses *any*
-   non-2xx response other than a bare `404` into a generic `"Network error"` (FSPIOP error code `1001`),
-   discarding the destination's actual error entirely. From the payer DFSP's side this is indistinguishable
-   from a real network/connectivity fault.
+1. **`quoting-service` does not translate media types between a plain-FSPIOP caller and an ISO 20022
+   destination — it passes the caller's own media type straight through.** Its inbound side is genuinely
+   dual-mode: `resolveOpenApiSpecPath(isIsoApi)` (`src/lib/util.js:350`) selects
+   `QuotingService-swagger_iso20022.yaml` or `QuotingService-swagger.yaml` per request, based on that
+   request's own `content-type`, so it accepts both forms. On the outbound side,
+   `applyResourceVersionHeaders` (`:137`) only *rebuilds* the `accept`/`content-type` headers when
+   `fspiop-source` is the Hub; for a DFSP-originated request being forwarded onward, the caller's headers
+   are relayed verbatim. The result: a plain-FSPIOP DFSP's quote, forwarded to a participant running
+   `API_TYPE: iso20022`, arrives in the plain form and is correctly rejected by the destination
+   (`error: accept header is invalid`, a clean `400`, FSPIOP code `3101`). Verified both ways on our
+   instance — an ISO 20022 caller's quote is forwarded with the correct ISO 20022 media type and is
+   accepted; a plain-FSPIOP caller's is not.
+
+2. **When that rejection comes back, the real reason is discarded and replaced with a generic network
+   error.** `quoting-service`'s shared HTTP-forwarding helper (`src/lib/http.js`'s `httpRequest`, used by
+   `fxQuotes.js`, `quotes.js` and `bulkQuotes.js` alike) collapses *any* non-2xx response other than a
+   bare `404` into `DESTINATION_COMMUNICATION_ERROR` / `"Network error"` (FSPIOP code `1001`). The
+   destination's specific, well-formed FSPIOP error body never reaches the payer DFSP. From the payer's
+   side a media-type mismatch is indistinguishable from a genuine connectivity fault — which is what sent
+   our own investigation looking for a network problem for some time.
+
+3. **The same pattern appears on the transfer leg, independently.** When a transfer is fulfilled with a
+   fulfilment that doesn't match the ILP condition, `central-ledger`'s fulfil handler logs the exact
+   cause — `error: error in FulfilHandler: invalid fulfilment` — but classifies it as `3100`
+   ("Generic validation error"). The payer receives `3100`, never the FSPIOP-specified `5104`. So in
+   both components, the real diagnosis exists server-side in logs and is genericised before it reaches
+   the counterparty.
+
+4. **`quoting-service` does not enforce quote or FX-quote expiry at all.** There is no reference to
+   `expired`/`isExpired` anywhere in its `src/`; `expiration` appears only in `src/model/quotes.js`
+   (`:308`, `:598`), where it is persisted to the database and never read back. `src/model/fxQuotes.js`
+   has no expiration handling whatsoever. Confirmed empirically on both legs: a `POST /fxQuotes` with an
+   expiration 60 seconds in the past is accepted (`202`) and forwarded normally, and a
+   `PUT /fxQuotes/{ID}` delivered 40 seconds after expiry is accepted (`200`) — even when the quote had
+   already been terminated with an error callback. **Consequence for `topic-event-audit` consumers: no
+   "expired quote" record is ever emitted on the quoting leg.** Expiry is enforced only on the transfer
+   leg, by `central-ledger`'s timeout handler, surfacing as `operation: timeoutReserved` with `3303`.
+
+5. **FX-quote error events on `topic-event-audit` carry no correlation identifiers.** The egress record
+   for a `PUT /fxQuotes/{ID}/error` has no `operation` tag, and no `conversionId`,
+   `conversionRequestId`, `determiningTransferId` or `transactionId`. Its tags are only the generic set
+   plus `transactionType: fxquote` and `transactionAction: put`. The single way to correlate such a
+   record back to its transaction is to parse the id out of the `httpUrl` tag or the payload. Relatedly,
+   a *rejected* transfer prepare (`4001` insufficient liquidity, `4200` limit breach) produces
+   `operation: prepareTransfer` records structurally identical to a successful prepare — the rejection is
+   visible only in the error payload of the following egress record.
 
 ## How to ask it
 
-**Context.** Reproduced cleanly and repeatedly on a local instance: an FX quote in the corridor's actual
-supported currency pair, sent to a correctly-onboarded FXP participant running in ISO 20022 mode, fails
-every time at the forwarding step with error code `1001` ("Network error") — while the FXP's own logs
-show it received the request and cleanly rejected it (code `3101`, "accept header is invalid") because
-`quoting-service` sent the plain-FSPIOP media type instead of the ISO 20022 form. Both failure points are
-confirmed by reading `quoting-service`'s own source, not inferred from behaviour alone. Since the real
-DRPP environment runs ISO 20022 mode in production and its captured transactions settle successfully
-(`TxSts: COMM`, no error records, per `DRPP_Kafka_E2E_Pack`), either production runs a patched/different
-version, or there's a configuration difference between our local reproduction and the real deployment that
-avoids this — worth confirming before assuming it's purely a local artefact.
+**Context.** All of the above is reproduced on a local `v17.2.0` instance and confirmed by reading the
+deployed components' own source, not inferred from behaviour alone. Points 1–3 matter for interop and
+for debuggability; points 4–5 matter directly for what we can and cannot rely on when mapping
+`topic-event-audit` records on the FRMS side. Since the real DRPP environment runs ISO 20022 in
+production and its captured transactions settle successfully (`TxSts: COMM`, no error records, per
+`DRPP_Kafka_E2E_Pack`), point 1 in particular may simply never fire there if every participant is
+uniformly ISO 20022 — which is worth confirming rather than assuming.
 
-**Question.** "We've hit what looks like a real bug in `quoting-service`: when forwarding a `POST
-/fxQuotes` to a participant running in ISO 20022 mode, it sends the plain-FSPIOP media type instead of
-the ISO 20022 form its own inbound side requires — and when the destination correctly rejects that, the
-real reason gets discarded and reported back as a generic 'Network error' instead. We've traced both to
-specific functions in `quoting-service`'s own source (`src/lib/util.js` and `src/lib/http.js`) and can
-share the detail. A few things we'd like to check: (1) Have you seen this in the real DRPP environment,
-or is it patched/absent there? (2) What exact `quoting-service` / chart version does DRPP prod/UAT run —
-is it the same base as the public `mojaloop/helm` chart at tag `v17.2.0`, or a fork with fixes applied?
-(3) Is there a config or deployment-level difference in your setup (e.g. hub↔participant traffic actually
-staying in classic FSPIOP mode at this specific hop) that avoids triggering it? (4) Should we raise this
-upstream with the Mojaloop project ourselves, or do you already have a channel/fork where fixes like this
-get tracked?"
+**Question.** "While validating our broker config against a local Mojaloop `v17.2.0` instance we found a
+few things in `quoting-service` and `central-ledger` we'd like to check against your environment.
+
+(1) `quoting-service` doesn't translate media types when forwarding — it relays the caller's own
+`accept`/`content-type` onward, so a plain-FSPIOP participant's quote reaches an ISO 20022 participant in
+the wrong form and is rejected. Are *all* DFSPs in DRPP prod/UAT uniformly ISO 20022, or do you have any
+mixed-mode participants where this hop could bite?
+
+(2) When that rejection comes back, `quoting-service` replaces the destination's real FSPIOP error with a
+generic `1001` 'Network error' (`src/lib/http.js`). Similarly, an ILP fulfilment mismatch is reported as
+`3100` rather than `5104`, even though `central-ledger`'s own logs name the real cause. Have you hit
+either of these while debugging, and do you have a patched build, or do you rely on server-side logs for
+this?
+
+(3) `quoting-service` appears not to enforce quote/FX-quote expiry at all — we could get both an expired
+request and a late response accepted. Does DRPP see the same? We're asking because it means **no expired-
+quote event ever appears on `topic-event-audit`**, and we want to be sure any expiry monitoring we build
+keys off the transfer leg (`timeoutReserved` / `3303`) rather than the quoting leg.
+
+(4) For the FRMS mapping specifically: FX-quote *error* records on `topic-event-audit` carry no
+`operation` tag and no conversion/transaction identifiers, so they can only be correlated by parsing the
+`httpUrl`. And a rejected transfer prepare is tagged identically to a successful one. Is that what you
+see in DRPP too, and is `httpUrl` parsing what you'd recommend, or is there a field we've missed?
+
+(5) What exact `quoting-service` / chart version does DRPP prod/UAT run — the same base as public
+`mojaloop/helm` `v17.2.0`, or a fork with fixes applied? And if these are genuinely unpatched upstream,
+should we raise them with the Mojaloop project ourselves, or do you have a channel where such fixes get
+tracked?"
+
+**Supporting evidence available on request**: eight captured `topic-event-audit` scenarios (abort,
+timeout, ILP mismatch, NDC breach, insufficient liquidity, both expiry variants, plus a committed
+baseline), in the same layout as `DRPP_Kafka_E2E_Pack`, at
+`docs/deployment/topic-event-audit-edge-case-captures/`.

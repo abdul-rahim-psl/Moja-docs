@@ -36,66 +36,70 @@ say when it's back, rather than this being a sign of something wrong with the de
 
 ## Current status — resume here
 
-**§§1-8 are done and independently verified — not just "attempted."** A healthy Mojoloop switch, in
-ISO20022+FX+audit-topic configuration, is running right now on `10.0.150.69`: kind cluster `mojaloop-fx`,
-namespace `demo`, 51 pods `Running` + 1 `Completed`, zero pods in any other state (last confirmed after a
-42-hour idle gap, at the top of §9 below). `topic-event-audit` is confirmed to exist and auto-populate on
-first real use (§8) — it's currently empty because no real switch traffic has landed yet (one attempt so
-far failed before reaching the switch — see below).
+**§§1-8 are done and independently verified.** A healthy Mojaloop switch, in ISO20022+FX+audit-topic
+configuration, is running on `10.0.150.69`: kind cluster `mojaloop-fx`, namespace `demo`, 51 pods
+`Running` + 1 `Completed` (re-confirmed 10 September). `topic-event-audit` exists, auto-populates, and
+now holds real traffic from every scenario below.
+
+**§10's edge-case matrix is complete. Handover items 3.4 and 3.5 both have evidence-backed answers.**
 
 **Facts a fresh session needs immediately, without re-deriving them:**
-- Everything on the box runs as **root** via `sudo -i` (no `docker` group on that host — see §3). SSH
-  access (see "Working method" above) logs in as `abdul.rahim`, a separate, non-root account — use `sudo`
-  from there for anything `kubectl`/`helm`/`docker` related that needs root.
-- Chart source: `~/mojaloop-helm` (cloned at tag `v17.2.0`). Deploy orchestration:
-  `~/mojaloop-helm/local-deployment-methods/helmfile/` (`helmfile.yaml`, plus our two custom values
-  files, `values-mojaloop-iso20022-fx-lean.yaml` and `values-backend-fx-lean.yaml`).
-- Kafka pod is `kafka-controller-0` (a StatefulSet — not a Deployment, and not named `backend-*`).
-- **Before doing anything else, re-verify health** (cluster may have sat idle since last touched —
-  same check used after the overnight gap in §5, and again at the end of §7):
+- SSH is direct, as **root**, key at `~/.ssh/mojaloop_fx_10_0_150_69` (see "Working method" above).
+  Reaching the host depends on the user's VPN — connection-level failures mean the VPN, not the
+  deployment.
+- Chart source `~/mojaloop-helm` (tag `v17.2.0`); deploy orchestration
+  `~/mojaloop-helm/local-deployment-methods/helmfile/`. Kafka pod is `kafka-controller-0`.
+- Re-verify health before anything else:
   ```bash
   kubectl get nodes && kubectl get pods -n demo --no-headers | awk '{print $3}' | sort | uniq -c
   ```
-  (Already re-run once this way — 42h idle, node still `Ready`, still 51 `Running` + 1 `Completed`, zero
-  drift.)
+- DFSPs: payer `e2e-sim1`, payee `e2e-sim2`, FXP `e2e-sim-fxp1`. Currencies: sims `XXX` only, FXP
+  `XXX,XTS` — corridor `XXX → XTS`. Payee test party: MSISDN `9990002001`.
+- **The scripts are committed now** — [`fx-edge-case-scripts/`](fx-edge-case-scripts/), with a README.
+  This replaces the previous session's lost `onboard.js` / `run_golden_path.js`. Read that README
+  before hand-building any request: it covers the ISO 20022 body transformer, the ULID requirement,
+  and ILP packet generation, none of which are obvious.
+- **Onboarding needs four prerequisites, not three** — §9.9's Hub currency accounts, Settlement Model
+  and ISO20022 ALS headers, **plus funding** (§9.16). Without funds-in, every transfer fails `4001`.
+  Participants are funded as of 10 September.
+- Real DRPP reference captures: `/home/abdul-rahim/mojaloop/DRPP_Kafka_E2E_Pack 2/DRPP_Kafka_E2E_Pack/`.
 
-**Major update**: onboarding is fully done (§9.9) and `topic-event-audit` **now holds real records from
-real switch traffic** — confirmed on Kafka directly, not a manual test message (§9.10). This is the
-direct answer to §3's original open question. The full 5-request golden path isn't 100% clean yet: 3 of 5
-requests (party lookup, FX quote, FX transfer) get genuine `202 Accepted` from the real switch; the other
-2 (quote, transfer) get `400`s from an unresolved-template-variable issue tied to this collection needing
-a live callback listener to chain requests together (§9.10 has the full root-cause and the open question
-of whether to invest further in a fully clean run vs. move to §10's edge cases, several of which don't
-need the happy path to fully resolve anyway).
+**What was established on 10 September, in order:**
 
-**What it took to get here (all in §9, in order): the deployment has zero DFSP participants registered by
-default** — the Helm/helmfile deploy stands up switch infrastructure only; onboarding DFSPs is a separate
-manual step this plan had to do itself, needing three real prerequisites found only by attempting each
-step (§9.9): Hub currency reconciliation accounts, a Settlement Model (none existed by default), and
-ISO20022-specific FSPIOP headers for ALS's party-registration API. Then driving the golden path itself
-needed two more real fixes (§9.10): the collection's own request-transformation feature
-(`fspiopToISO20022`) means headers must stay plain-FSPIOP, not be manually rewritten to ISO20022 form; and
-since this deployment has no unified hub gateway (confirmed via `kubectl get ingress` — every service has
-its own separate host), each request's destination has to be set explicitly per-service rather than
-relying on the TTK's single global (and wrongly-defaulted) callback-endpoint config.
+1. **Onboarding, real traffic, DRPP shape match** (§§9.9–9.12) — unchanged and still correct.
+2. **§9.13's finding (a) was wrong and is corrected in §9.15.** quoting-service *does* have ISO20022
+   awareness in its outbound header path; what it actually does is **pass the caller's media type
+   through**. The real, narrower finding is that it does not translate between a plain-FSPIOP caller
+   and an ISO 20022 destination. **§9.13's finding (b) — the `"Network error"` masking — stands,
+   re-verified.** If the COMESA write-up dated `2026-09-10` in
+   `docs/docs - MLA/questions for comesa.md` has not yet been sent, it needs this correction first.
+3. **A working ISO 20022 direct-request harness** (§9.14) — plus the discovery that ISO 20022 mode
+   requires **ULIDs, not UUIDs**, for the ids mapping onto `PmtId.InstrId`/`EndToEndId`. This is a
+   second, independent explanation for one of §9.10's unexplained `400`s.
+4. **A fourth onboarding prerequisite (funding) and a silently dead simulator backend** (§9.16). The
+   sims' TTK backend never started its SPEC_API on port 4040 — it fetches OpenAPI specs from GitHub at
+   boot and that fetch failed — so the FXP returns `2001` to every FX quote, while the pod reports
+   `1/1 Running`. **The FX happy path cannot complete until this is fixed, and a pod restart will not
+   fix it**: neither the pod nor the host can currently reach `raw.githubusercontent.com` at all.
+5. **Every remaining §10 row captured** (§9.17, §9.18) — plus the first complete end-to-end
+   prepare→fulfil→COMMITTED transfer in this deployment. Captures in
+   [`topic-event-audit-edge-case-captures/`](topic-event-audit-edge-case-captures/).
 
-**Facts confirmed along the way, useful for any further work here:**
-- Bundled TTK collections live at `/opt/app/examples/collections` inside
-  `moja-ml-testing-toolkit-backend-0`. `dfsp/p2p_fx_happy_path.json` is the golden-path one (5 requests:
-  party lookup → FX quote → quote → FX transfer → transfer), triggered headlessly via `POST
-  /api/outbound/template/:traceID?sync=true` on port **5050** (not 4040).
-- Real DFSP IDs: payer `e2e-sim1`, payee `e2e-sim2`, FXP `e2e-sim-fxp1`. Currencies: both sims support
-  only `XXX`; the FXP supports `XXX,XTS` — so the corridor here is `XXX → XTS` (both intentional ISO 4217
-  placeholder codes, not real currencies — expected for a generic local demo).
-- A companion file, `/opt/app/examples/environments/hub-k8s-default-environment.json`, matches this
-  chart's exact k8s service names and supplied the payee's test MSISDN (`9990002001`) — but its dedicated
-  FX block (`ttkfxpayer`/`ttkfxpayee`/`XDR` currency) targets a larger simulator roster this lean
-  deployment doesn't run; don't reuse that part.
-- The onboarding (`onboard.js`) and golden-path trigger (`run_golden_path.js`) scripts are both in this
-  session's scratchpad only, not yet committed to the repo — worth relocating if this plan is revisited.
+**Genuinely useful next steps, in rough priority order:**
 
-Second, independent still-open item, needed only for the manual/browser-UI path (§9's other option): the
-`/etc/hosts` + ingress-reachability step described at the end of §7 hasn't been executed yet.
+1. **Correct the COMESA write-up** in `docs/docs - MLA/questions for comesa.md` (the `2026-09-10`
+   section) to match §9.15 before it goes out — it currently states the disproved version. Keep the
+   `2026-09-08` question set to Behjet separate and untouched.
+2. **Feed the captures into the FRMS mapping work** (§11) — the three mapping consequences in the
+   captures README are the substantive output: liquidity/limit failures are not distinguishable by
+   `operation`; FX-quote error egress records carry no correlation identifiers at all; and no expiry
+   event is ever emitted on the quoting leg.
+3. **Optional — revive the FX happy path** by giving the sims' TTK backend its OpenAPI specs without a
+   GitHub fetch (`@mojaloop/api-snippets` is already in the image). Only worth it if a *complete* FX
+   corridor run is wanted; every §10 edge case was captured without it.
+4. Still open and unchanged: the duplicate/resend async behaviour (§9.11 Finding 1); the full Kafka
+   envelope comparison against the DRPP pack (§9.12's caveat); the `/etc/hosts` + ingress step for the
+   browser TTK UI (end of §7).
 
 ## 0. Why this exists
 
@@ -907,7 +911,17 @@ Console) release already in `helmfile.yaml` (§8) if a closer full-envelope comp
 as in the real environment. This is independent, positive confirmation on top of §3/§9.10's "does
 `topic-event-audit` exist and populate" finding — it also *looks like the real thing*, not just present.
 
-### 9.13 Root cause of Finding 3, fully nailed down: a real quoting-service bug, not a network issue
+### 9.13 Root cause of Finding 3 — part (a) is WRONG, see §9.15; part (b) stands
+
+> **Correction (10 September, later the same day).** Part (a) below — "quoting-service's outbound
+> header builder has no ISO20022 awareness at all and always sends the plain-FSPIOP media type" — is
+> **not correct**, and was disproved by direct evidence: an FX quote sent with ISO 20022 headers was
+> forwarded to the FXP with the correct ISO 20022 media type. The real mechanism is media-type
+> *pass-through*, and the actual reading of the deployed source is in **§9.15**. Part (b) (the
+> `"Network error"` masking in `src/lib/http.js`) was re-verified against the deployed pod and is
+> **unchanged and correct**. The rest of this section is kept as written, because the observations in
+> Steps 1 and 2 are accurate — it is the Step 3 conclusion drawn from them that was wrong.
+
 
 Requested by the user specifically, since this looked like it might be worth surfacing upstream. Traced
 completely by reading source on both ends of the failed call — no more guessing.
@@ -981,6 +995,196 @@ misleading anyone debugging the failure from the payer side. Both are real code-
 (`src/lib/util.js`'s `generateRequestHeaders`/`headersMappingDto`, and `src/lib/http.js`'s `httpRequest`),
 not something specific to this deployment's configuration.
 
+### 9.14 A working ISO 20022 direct-request harness — and two things it took to get there
+
+Everything in §§9.15–9.17 depends on being able to hand-build requests the switch actually accepts.
+Two obstacles had to be cleared first, neither documented anywhere.
+
+**The bodies must be genuine ISO 20022, and there is a library in the image that builds them.**
+`@mojaloop/ml-schema-transformer-lib` ships inside the TTK backend image — the same library the TTK's
+own `transformerName: "fspiopToISO20022"` option uses (§9.10). Calling
+`TransformFacades.FSPIOP.<resource>.<op>({ body, headers, params })` converts a plain-FSPIOP body into
+real ISO wire format. One catch: the default mapping for `transfers.post` / `quotes.put` requires a
+`$context` carrying the ISO quote response from an earlier leg, and throws
+`"Invalid source object for post transfers, missing $context"` without it. `configure({ isTestingMode:
+true })` selects an alternative mapping whose `$alt` fallbacks read `headers.fspiop-source` /
+`fspiop-destination` instead — which is exactly right for a single hand-built request with no prior leg.
+
+**In ISO 20022 mode the id fields must be ULIDs, not UUIDs.** The FSPIOP `conversionId` and
+`determiningTransferId` map onto `PmtId.InstrId` and `PmtId.EndToEndId`. `InstrId` is constrained to
+`^[0-9A-HJKMNP-TV-Z]{26}$` (a ULID) and `EndToEndId` to 35 characters — a 36-character UUID overflows
+it. Sending UUIDs produces:
+```
+3100 Generic validation error - /requestBody/CdtTrfTxInf/PmtId/InstrId must match pattern "^[0-9A-HJKMNP-TV-Z]{26}$"
+```
+**This is the same root cause as the unexplained `"must NOT have more than 35 characters"` failure in
+§9.10**, which was attributed there to unresolved `{$prev...}` placeholders. The placeholder problem was
+real, but this constraint is a second, independent reason those requests could not have succeeded.
+`ulidx` is available in the image; `fxlib.js`'s `id()` uses it.
+
+A third piece the transfer scenarios need: **the ILP condition travels inside the packet**, not as its
+own field. The ISO body carries only `VrfctnOfTerms.IlpV4PrepPacket`, and central-ledger decodes the
+condition out of it — so a copied sample packet will not work. `Ilp.ilpFactory(v4).getResponseIlp()`
+from `@mojaloop/sdk-standard-components` (also in the image) returns a matching
+`{fulfilment, condition, ilpPacket}` triple.
+
+The harness built on these is committed at
+[`fx-edge-case-scripts/`](fx-edge-case-scripts/) — deliberately, since the previous session's
+`onboard.js` / `run_golden_path.js` existed only in a scratchpad and were lost.
+
+### 9.15 Correcting §9.13(a): quoting-service passes the caller's media type through
+
+**Direct evidence first.** An FX quote sent to `moja-quoting-service` with ISO 20022 headers and an ISO
+20022 body was forwarded to the FXP with the **correct** ISO media type — from `e2e-sim-fxp1-sdk`'s own
+inbound log:
+```
+[==> req] POST /fxQuotes ... "accept":"application/vnd.interoperability.iso20022.fxQuotes+json;version=2.0"
+```
+No `"accept header is invalid"`, no rejection. That alone disproves §9.13's "always sends the plain
+form".
+
+**Why**, from the deployed pod's `src/lib/util.js` (quoting-service `17.14.3`):
+```js
+const isIso20022ApiRequest = (headers) => getContentTypeHeader(headers)?.includes(ISO_HEADER_PART)  // :358
+const makeAppInteroperabilityHeader = (resource, version, isIsoApi) => {                            // :132
+  const isoPart = isIsoApi ? `.${ISO_HEADER_PART}` : ''
+  return `application/vnd.interoperability${isoPart}.${resource}+json;version=${version}`
+}
+function applyResourceVersionHeaders (headers, protocolVersions, resource) {                        // :137
+  const isIsoApi = isIso20022ApiRequest(headers)
+  let contentTypeHeader = getContentTypeHeader(headers)
+  let acceptHeader = getAcceptHeader(headers)
+  if (Util.HeaderValidation.getHubNameRegex(config.hubName).test(headers['fspiop-source'])) {
+    ... contentTypeHeader = makeAppInteroperabilityHeader(resource, ..., isIsoApi)
+    ... acceptHeader      = makeAppInteroperabilityHeader(resource, ..., isIsoApi)
+  }
+  return { contentTypeHeader, acceptHeader }
+}
+```
+So ISO20022 awareness **is** present in this code path — §9.13's "grepped the whole file, `iso20022`
+appears nowhere in it" was simply wrong. **A version difference does not explain it**: the local
+checkout at `~/mojaloop/quoting-service` (`v17.14.5`) carries the identical code at the identical line
+numbers (133, 138, 358) as the deployed pod (`17.14.3`), so both copies contain it and neither supports
+the original claim. Worth stating explicitly so this isn't re-investigated as a version mismatch. Two things follow:
+
+1. The header is only *rebuilt* when `fspiop-source` is the Hub. For a DFSP-originated request being
+   forwarded onward, the caller's own `accept`/`content-type` are **passed through verbatim**.
+2. quoting-service accepts **both** wire formats inbound — `resolveOpenApiSpecPath(isIsoApi)` (`:350`)
+   picks `QuotingService-swagger_iso20022.yaml` or `QuotingService-swagger.yaml` per request, from that
+   same content-type.
+
+**What actually happened in §9.11/§9.13** is therefore: that request carried a *plain-FSPIOP*
+content-type, quoting-service validated it against the plain spec, accepted it, and faithfully relayed
+the plain media type to an FXP running `API_TYPE: iso20022` — which correctly rejected it.
+
+**There is still a real interop finding here, but it is a different and narrower one**: this switch does
+not translate media types between a plain-FSPIOP DFSP and an ISO 20022 DFSP. A scheme running mixed-mode
+participants will see quote forwarding fail, and — because of §9.13(b), which is unchanged — the payer
+will be told `"Network error"` rather than the destination's real reason. That framing is what should go
+to COMESA, not the original one.
+
+### 9.16 A fourth hidden onboarding prerequisite, and a silently dead simulator backend
+
+**Funding.** §9.9's onboarding registered participants, positions, NDC limits and endpoints — but never
+recorded any funds in. The NDC was a healthy `1000000`, yet **every** transfer prepare failed
+`4001 "Payer FSP insufficient liquidity"`, because available liquidity is bounded by the SETTLEMENT
+account balance, which was `0`. The fix is a `POST /participants/{name}/accounts/{settlementAccountId}`
+with `action: recordFundsIn` per participant per currency (`s_fund.js`). After that the very same
+prepare reserved cleanly (payer position `0 → 10`) and a full prepare→fulfil→COMMITTED round trip
+worked. **This is a fourth prerequisite alongside §9.9's three, and without it nothing on the transfer
+leg can ever succeed.**
+
+Two smaller API details found the same way: `PUT /participants/{name}/limits` rejects a body without
+`limit.alarmPercentage` (`3101`), and a credit to a SETTLEMENT account shows as a **negative** value.
+
+**The FXP simulator's backend has been dead since deploy, and the pod reports healthy.**
+`moja-e2e-sim-fxp1-sdk` forwards inbound FX quotes to its backend at
+`http://moja-e2e-sim-ttk-backend:4040/fxQuotes` and gets `ECONNREFUSED`, so it returns
+`2001 "Internal server error"` to every FX quote that reaches it. Cause, from
+`moja-e2e-sim-ttk-backend-0`'s own startup log:
+```
+2026-09-09T09:50:25.706Z - info: Toolkit Initialization started...
+2026-09-09T09:50:26.176Z - info: API Server started on port 5050
+2026-09-09T09:50:26.547Z - error: uncaughtException: Error downloading
+  https://raw.githubusercontent.com/mojaloop/api-snippets/refs/tags/v17.10.2/docs/sdk-scheme-adapter-outbound-v2_1_0-openapi3-snippets.yaml
+  HTTP ERROR 503
+```
+The **SPEC_API on 4040 never started** — it fetches OpenAPI specs from GitHub at boot and that fetch
+failed. The ADMIN_API on 5050 did start, the pod is `1/1 Running`, and nothing surfaces the partial
+failure. Confirmed directly: from inside that pod, `127.0.0.1:5050` answers and `127.0.0.1:4040` is
+`ECONNREFUSED`.
+
+Two consequences worth carrying forward:
+- **The FX happy path cannot complete in this deployment** until that is fixed — independent of, and in
+  addition to, the `{$prev}` chaining gap in §9.10.
+- **Restarting the pod will not currently fix it**: neither the pod nor the host can reach
+  `raw.githubusercontent.com` at all right now (`ETIMEDOUT` from both). The chart's runtime dependency
+  on fetching specs from GitHub is itself a fragility worth flagging — it makes the simulators
+  unbootable on an air-gapped or egress-restricted network, and it fails *silently*.
+
+The edge-case work in §9.17 was unaffected, because those scenarios drive **both** sides by hand —
+acting as payer, payee and FXP directly — rather than relying on the simulators to respond.
+
+### 9.17 §10's remaining edge cases — all captured
+
+Driven with the §9.14 harness against the real switch; every outcome verified against participant
+positions *and* the delivered FSPIOP error callback, not just the synchronous response. Captures in
+[`topic-event-audit-edge-case-captures/`](topic-event-audit-edge-case-captures/).
+
+**Baseline first** (so the edge cases mean something): prepare → fulfil → COMMITTED works. Payer
+position `10 → 20` on prepare, payee `0 → -10` on commit, `PUT /transfers/{ID}` → `200`. This is the
+first complete end-to-end transfer in this deployment.
+
+| Scenario | What was done | Result |
+|---|---|---|
+| ILP condition mismatch | Fulfil with a random 32-byte fulfilment that doesn't hash to the condition | Reservation released (payer `30 → 20`), payee **not** credited, `3100` delivered |
+| Payee abort | Payee sends `PUT /transfers/{ID}/error` with `5000` | Reservation released, `5000` propagated to the payer **verbatim, including the description** |
+| NDC breach | NDC lowered to just above the current position, then exceeded | Prepare rejected, position **unchanged**, `4200 "Payer limit error"` |
+| Insufficient liquidity | Prepare against an unfunded settlement account (§9.16) | Prepare rejected, `4001 "Payer FSP insufficient liquidity"` |
+| Transfer timeout | 30s expiry, never fulfilled | Swept ~12s after expiring, reservation released, `3303 "Transfer expired"` delivered to **both** parties |
+| FX quote expiry | See §9.18 — not enforced at all | Not enforceable |
+
+**Two findings from these worth carrying beyond this plan:**
+
+**(1) The ILP mismatch reason is genericised on the wire.** central-ledger's fulfil handler knows
+exactly what went wrong — its own log says so:
+```
+error: countFspiopError (processFulfilMessage.):  invalid fulfilment - {"apiErrorCode":{"code":"3100", ...
+error: error in FulfilHandler: invalid fulfilment
+```
+— but it classifies it as `3100 VALIDATION_ERROR`, so the payer receives `"Generic validation error"`,
+not the FSPIOP-specified `5104`. The specific reason exists only server-side, in logs. This is the same
+shape of problem as §9.13(b)'s `"Network error"` masking, on a different leg, and it means an integrator
+cannot distinguish a wrong fulfilment from any other validation failure.
+
+**(2) `4001` and `4200` are genuinely different conditions and should not be conflated.** An unfunded
+settlement account gives `4001`; a funded participant exceeding its net debit cap gives `4200`. Both
+arrive after an apparently-normal `202`, and — see the captures README — **neither is distinguishable
+by `operation` tag**, only by the error payload on the egress record.
+
+### 9.18 FX quote expiry is not enforced at all — a clean negative result
+
+§10's "FX quote expiry" row cannot be triggered, and the reason is worth stating plainly because it
+changes what can be expected on `topic-event-audit`.
+
+**Source evidence.** Across the whole of quoting-service's `src/`, there is not one reference to
+`expired`, `EXPIRED` or `isExpired`. `expiration` appears only twice, both in `src/model/quotes.js`
+(`:308`, `:598`), and both merely persist the value to the database. `src/model/fxQuotes.js` contains no
+expiration handling whatsoever — not even persistence.
+
+**Confirmed empirically, both legs:**
+- `POST /fxQuotes` with an expiration 60 seconds **in the past** → `202 Accepted`, and quoting-service
+  proceeded to forward it to the FXP as normal.
+- `PUT /fxQuotes/{ID}` delivered **40 seconds past** the quote's own expiration → `200 OK`. Notably this
+  was accepted even though the quote had *already* been terminated with an error callback 40s earlier —
+  so neither expiry nor prior termination causes a quote response to be refused.
+
+**What this means for item 3.5**: no "expired quote" record will ever appear on `topic-event-audit` from
+quoting-service. Expiry is enforced **only** on the transfer leg, by central-ledger's timeout handler
+(`HANDLERS.TIMEOUT.TIMEXP`, a 15-second cron), and surfaces as `operation: timeoutReserved` with
+`3303 "Transfer expired"`. Any FRMS-side expiry monitoring must key off the transfer leg.
+
+
 ## 10. Edge-case matrix — this is what answers handover item 3.5
 
 Golden path alone isn't the goal. Work through each of these against the FX corridor, capturing the
@@ -988,23 +1192,32 @@ resulting `topic-event-audit` records for each:
 
 | Scenario | How to trigger | Status |
 |---|---|---|
-| FX quote rejected by FXP | Manual TTK request with a currency pair the FXP sim isn't configured for, or a rules-engine intercept | **Done (§9.11 Finding 2)** — real, complete capture: `POST /fxQuotes` → validation rejects the currency → real `PUT .../error` callback delivered |
-| FX quote expiry | Delay the response leg past `expirationDate` before sending `PUT /fxQuotes/{ID}` | Not started |
-| Transfer/FX-transfer abort | Payee (or FXP leg) sends `PUT .../error` instead of fulfilling | Not started — the "network error" finding in §9.11 Finding 3 produced an error callback, but not this specific scenario |
-| Transfer timeout | Don't fulfil at all; let the timeout handler sweep it | Not started |
-| FXP insufficient liquidity / NDC breach | Set a low NDC on the FXP participant, send an amount that exceeds it | Not started |
-| Duplicate/resend | Replay the identical `POST /fxQuotes` or `POST /fxTransfers` body with the same ID | **Partially explored (§9.11 Finding 1)** — no distinct rejection at the HTTP layer; whether/how the async pipeline actually flags it is still open |
-| ILP condition mismatch on the FX leg | Manually corrupt the fulfilment condition sent back | Not started |
+| FX quote rejected by FXP | Manual request with a currency pair the FXP sim isn't configured for | **Done (§9.11 Finding 2)** — real, complete capture: `POST /fxQuotes` → validation rejects the currency → real `PUT .../error` callback delivered |
+| FX quote expiry | Delay the response leg past `expirationDate` before sending `PUT /fxQuotes/{ID}` | **Done — negative result (§9.18)**. Not triggerable: quoting-service has *no* expiry enforcement anywhere in `src/`. An already-expired `POST /fxQuotes` is accepted `202`; a `PUT /fxQuotes/{ID}` delivered 40s past expiry is accepted `200`. Captures `07_`/`08_` |
+| Transfer/FX-transfer abort | Payee (or FXP leg) sends `PUT .../error` instead of fulfilling | **Done (§9.17)** — payee `PUT /transfers/{ID}/error`; reservation released, `5000` propagated verbatim to the payer. Capture `04_` |
+| Transfer timeout | Don't fulfil at all; let the timeout handler sweep it | **Done (§9.17)** — 30s expiry, swept ~12s after expiring (`HANDLERS.TIMEOUT.TIMEXP` is a 15s cron). `3303` "Transfer expired" delivered to **both** payer and payee. Capture `06_` |
+| FXP insufficient liquidity / NDC breach | Set a low NDC on the participant, send an amount that exceeds it | **Done (§9.17)** — two *distinct* outcomes, worth separating: unfunded settlement account → `4001` "Payer FSP insufficient liquidity"; funded but cap exceeded → `4200` "Payer limit error". Captures `01_` and `05_` |
+| Duplicate/resend | Replay the identical `POST /fxQuotes` or `POST /fxTransfers` body with the same ID | **Partially explored (§9.11 Finding 1)** — no distinct rejection at the HTTP layer; whether/how the async pipeline flags it is still open |
+| ILP condition mismatch on the FX leg | Manually corrupt the fulfilment condition sent back | **Done (§9.17)** — fulfil with a non-matching fulfilment; reservation released, payee not credited. Delivered as `3100` "Generic validation error", **not** the specific `5104` — see §9.17. Capture `03_` |
 
-Also newly found, not originally in this matrix, and now fully root-caused (§9.13): **quoting-service has
-a real bug (not a config or deployment issue) when forwarding FX quotes/quotes/bulk quotes to a
-destination running in ISO20022 mode** — its outbound header builder
-(`src/lib/util.js`'s `generateRequestHeaders`/`headersMappingDto`) has no ISO20022 awareness at all and
-always sends the plain-FSPIOP media type, which a correctly-configured ISO20022 destination rejects; and
-separately, its shared HTTP-forwarding helper (`src/lib/http.js`'s `httpRequest`) collapses *any* non-2xx
-response other than a bare 404 into a generic `"Network error"`, discarding the destination's real,
-specific error reason. Worth surfacing to Mojaloop/COMESA as-is — it's reproducible, source-confirmed on
-both ends, and not specific to anything this deployment did.
+All captures live in
+[`topic-event-audit-edge-case-captures/`](topic-event-audit-edge-case-captures/) (one directory per
+scenario, `raw_messages.json`, mirroring the DRPP pack layout), and the scripts that produced them in
+[`fx-edge-case-scripts/`](fx-edge-case-scripts/). Both directories have their own README.
+
+**Item 3.5 is now answerable.** Six `operation` tag values appear in these captures that appear nowhere
+in the five golden-path DRPP reference transactions: `abortTransfer`, `abortTransferValidation`,
+`timeoutReserved`, `putFxQuotesErrorByID`, `getTransferByID`, and error-callback egress records carrying
+no `operation` tag at all.
+
+Also newly found, not originally in this matrix: **quoting-service does not translate media types
+between a plain-FSPIOP caller and an ISO 20022 destination — it passes the caller's own media type
+straight through** (§9.15, which corrects the earlier and wrong §9.13 account of this), and separately
+its shared HTTP-forwarding helper (`src/lib/http.js`'s `httpRequest`) collapses *any* non-2xx response
+other than a bare 404 into a generic `"Network error"`, discarding the destination's real, specific
+error reason (§9.13 finding (b), re-verified against the deployed pod and unchanged). The second of
+these has a close cousin on the transfer leg: an ILP fulfilment mismatch is logged internally as
+`invalid fulfilment` but delivered to the payer as a generic `3100` (§9.17).
 
 For each: capture the `topic-event-audit` record(s), check the shape against what
 `docs/docs-poc-mla-ppa/MLA-PPA-Technical-Design.md` and `rejected-events.md` already assume from the

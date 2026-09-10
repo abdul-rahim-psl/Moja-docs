@@ -1,0 +1,330 @@
+[
+  {
+    "content": {
+      "dataUri": "data:application/vnd.interoperability.iso20022.transfers+json;version=2.0;base64,eyJHcnBIZHIiOnsiTXNnSWQiOiIwMU0yNUgwRVJZRFpRNDlISzQ2WVZFS0FSSCIsIkNyZUR0VG0iOiIyMDI2LTA5LTEwVDExOjI0OjUxLjg3MVoiLCJOYk9mVHhzIjoiMSIsIlN0dGxtSW5mIjp7IlN0dGxtTXRkIjoiQ0xSRyJ9LCJQbXRJbnN0clhwcnlEdFRtIjoiMjAyNi0wOS0xMFQxMTozNDo1MS44NDRaIn0sIkNkdFRyZlR4SW5mIjp7IlBtdElkIjp7IlR4SWQiOiIwMU0yNUgwRVIxM0hUNjRBMjM1RENOREM2UiJ9LCJDaHJnQnIiOiJTSEFSIiwiQ2R0ciI6eyJJZCI6eyJPcmdJZCI6eyJPdGhyIjp7IklkIjoiZTJlLXNpbTIifX19fSwiRGJ0ciI6eyJJZCI6eyJPcmdJZCI6eyJPdGhyIjp7IklkIjoiZTJlLXNpbTEifX19fSwiQ2R0ckFndCI6eyJGaW5JbnN0bklkIjp7Ik90aHIiOnsiSWQiOiJlMmUtc2ltMiJ9fX0sIkRidHJBZ3QiOnsiRmluSW5zdG5JZCI6eyJPdGhyIjp7IklkIjoiZTJlLXNpbTEifX19LCJJbnRyQmtTdHRsbUFtdCI6eyJDY3kiOiJYWFgiLCJBY3RpdmVDdXJyZW5jeUFuZEFtb3VudCI6IjEwIn0sIlZyZmN0bk9mVGVybXMiOnsiSWxwVjRQcmVwUGFja2V0IjoiRElJQ3BRQUFBQUFBQVlhZ01qQXlOakE1TVRBeE1UTTBOVEU0TkRSX0hKWEEya3lORF9oQlhOWllWbC1INFZxSlkyQTFEdUJta2NkelJMdEJ2QXBuTG0xdmFtRnNiMjl3Z2dKZVpYbEtNR050Um5Wak1rWnFaRWRzZG1KcmJHdEphbTlwVFVSR1RrMXFWa2xOUlZaVFRWUk9TVlpFV1RCUlZFbDZUbFZTUkZSclVrUk9iRWxwVEVOS2VHUlhPVEJhVld4clNXcHZhVTFFUms1TmFsWkpUVVZXVTA1RVNrdE5WVTVGVWpBeFNFOVdSbGxWVkVGNlRVUmphVXhEU25kWldHeHNXbE5KTm1WNVNuZFpXRW93WlZWc2ExTlhOVzFpZVVrMlpYbEtkMWxZU2pCbFZXeHJWa2hzZDFwVFNUWkphekZVVTFaT1JWUnBTWE5KYmtKb1kyNVNOVk5YVW14aWJsSndXbTFzYkdOcFNUWkphbXMxVDFSQmQwMUVTWGROUkVWcFRFTktiV016UWtwYVEwazJTVzFWZVZwVE1YcGhWekI1U1c0eE9VeERTbmRaV0d4c1kybEpObVY1U25kWldFb3daVlZzYTFOWE5XMWllVWsyWlhsS2QxbFlTakJsVld4clZraHNkMXBUU1RaSmF6RlVVMVpPUlZScFNYTkpia0pvWTI1U05WTlhVbXhpYmxKd1dtMXNiR05wU1RaSmFtczFUMVJCZDAxRVJYZE5SRVZwVEVOS2JXTXpRa3BhUTBrMlNXMVZlVnBUTVhwaFZ6QjRTVzR4T1V4RFNtaGlWemt4WW01UmFVOXVjMmxaTTFaNVkyMVdkVmt6YTJsUGFVcFpWMFpuYVV4RFNtaGlWemt4WW01UmFVOXBTWGhOUTBvNVRFTktNR050Um5Wak1rWnFaRWRzZG1Kc1VqVmpSMVZwVDI1emFXTXlUbXhpYlVaNVlWYzRhVTlwU2xWVmEwWlBWVEJhUmxWcFNYTkpiV3gxWVZoU2NGbFlVblpqYVVrMlNXeENRbGRWVmxOSmFYZHBZVmMxY0dSSGJHaGtSemw1Vmtoc2QxcFRTVFpKYTA1UVZHeE9WbFJWVmxOSmJqQnpTVzFXTkdOSGJIbFpXRkp3WWpJMGFVOXBTWGxOUkVreVRGUkJOVXhVUlhkV1JFVjRUMnBOTUU5cVZYaE1hbWN3VGtadmFXWlIifX19",
+      "headers": {
+        "accept": "application/vnd.interoperability.iso20022.transfers+json;version=2.0",
+        "connection": "keep-alive",
+        "content-length": "1470",
+        "content-type": "application/vnd.interoperability.iso20022.transfers+json;version=2.0",
+        "date": "Thu, 10 Sep 2026 11:24:51 GMT",
+        "fspiop-destination": "e2e-sim2",
+        "fspiop-source": "e2e-sim1",
+        "host": "moja-ml-api-adapter-service"
+      },
+      "payload": {
+        "amount": {
+          "amount": "10",
+          "currency": "XXX"
+        },
+        "condition": "fxyVwNpMjQ_4QVzWWFZfh-FaiWNgNQ7gZpHHc0S7Qbw",
+        "expiration": "2026-09-10T11:34:51.844Z",
+        "ilpPacket": "DIICpQAAAAAAAYagMjAyNjA5MTAxMTM0NTE4NDR_HJXA2kyND_hBXNZYVl-H4VqJY2A1DuBmkcdzRLtBvApnLm1vamFsb29wggJeZXlKMGNtRnVjMkZqZEdsdmJrbGtJam9pTURGTk1qVklNRVZTTVROSVZEWTBRVEl6TlVSRFRrUkRObElpTENKeGRXOTBaVWxrSWpvaU1ERk5NalZJTUVWU05ESktNVU5FUjAxSE9WRllVVEF6TURjaUxDSndZWGxsWlNJNmV5SndZWEowZVVsa1NXNW1ieUk2ZXlKd1lYSjBlVWxrVkhsd1pTSTZJazFUU1ZORVRpSXNJbkJoY25SNVNXUmxiblJwWm1sbGNpSTZJams1T1RBd01ESXdNREVpTENKbWMzQkpaQ0k2SW1VeVpTMXphVzB5SW4xOUxDSndZWGxsY2lJNmV5SndZWEowZVVsa1NXNW1ieUk2ZXlKd1lYSjBlVWxrVkhsd1pTSTZJazFUU1ZORVRpSXNJbkJoY25SNVNXUmxiblJwWm1sbGNpSTZJams1T1RBd01ERXdNREVpTENKbWMzQkpaQ0k2SW1VeVpTMXphVzB4SW4xOUxDSmhiVzkxYm5RaU9uc2lZM1Z5Y21WdVkza2lPaUpZV0ZnaUxDSmhiVzkxYm5RaU9pSXhNQ0o5TENKMGNtRnVjMkZqZEdsdmJsUjVjR1VpT25zaWMyTmxibUZ5YVc4aU9pSlVVa0ZPVTBaRlVpSXNJbWx1YVhScFlYUnZjaUk2SWxCQldVVlNJaXdpYVc1cGRHbGhkRzl5Vkhsd1pTSTZJa05QVGxOVlRVVlNJbjBzSW1WNGNHbHlZWFJwYjI0aU9pSXlNREkyTFRBNUxURXdWREV4T2pNME9qVXhMamcwTkZvaWZR",
+        "payeeFsp": "e2e-sim2",
+        "payerFsp": "e2e-sim1",
+        "transferId": "01M25H0ER13HT64A235DCNDC6R"
+      }
+    },
+    "id": "153b5789-6b0c-4a6c-a3ac-550c40f73c12",
+    "metadata": {
+      "event": {
+        "action": "start",
+        "createdAt": "2026-09-10T11:24:51.911Z",
+        "id": "a6915614-9619-4022-85d4-1314837e170c",
+        "state": {
+          "status": "success"
+        },
+        "type": "audit"
+      },
+      "protocol.createdAt": 1789039491911,
+      "trace": {
+        "service": "transfers",
+        "spanId": "b7890d0abde2111c",
+        "startTimestamp": "2026-09-10T11:24:51.900Z",
+        "tags": {
+          "auditType": "transactionFlow",
+          "contentType": "httpRequest",
+          "destination": "e2e-sim2",
+          "httpMethod": "post",
+          "operation": "prepareTransfer",
+          "serviceName": "ml-api-adapter-service",
+          "source": "e2e-sim1",
+          "tracestate": "mojaloop=eyJzcGFuSWQiOiJiNzg5MGQwYWJkZTIxMTFjIiwidGltZUFwaVByZXBhcmUiOiIxNzg5MDM5NDkxOTEwIn0=",
+          "transactionAction": "prepare",
+          "transactionId": "01M25H0ER13HT64A235DCNDC6R",
+          "transactionType": "transfer",
+          "transferId": "01M25H0ER13HT64A235DCNDC6R"
+        },
+        "traceId": "8e77977076870dae59f0c0237b6c7bfb",
+        "tracestates": {
+          "mojaloop": {
+            "spanId": "b7890d0abde2111c",
+            "timeApiPrepare": "1789039491910"
+          }
+        }
+      }
+    },
+    "type": "application/json"
+  },
+  {
+    "content": {
+      "headers": {
+        "accept": "application/vnd.interoperability.iso20022.transfers+json;version=2.0",
+        "connection": "keep-alive",
+        "content-type": "application/vnd.interoperability.iso20022.transfers+json;version=2.0",
+        "date": "Thu, 10 Sep 2026 11:24:51 GMT",
+        "fspiop-destination": "e2e-sim2",
+        "fspiop-http-method": "POST",
+        "fspiop-source": "e2e-sim1",
+        "fspiop-uri": "/transfers",
+        "traceparent": "00-8e77977076870dae59f0c0237b6c7bfb-4a337863aaca3981-00",
+        "tracestate": "mojaloop=eyJzcGFuSWQiOiI0YTMzNzg2M2FhY2EzOTgxIiwidGltZUFwaVByZXBhcmUiOiIxNzg5MDM5NDkxOTEwIn0="
+      },
+      "method": "POST",
+      "payload": {
+        "CdtTrfTxInf": {
+          "Cdtr": {
+            "Id": {
+              "OrgId": {
+                "Othr": {
+                  "Id": "e2e-sim2"
+                }
+              }
+            }
+          },
+          "CdtrAgt": {
+            "FinInstnId": {
+              "Othr": {
+                "Id": "e2e-sim2"
+              }
+            }
+          },
+          "ChrgBr": "SHAR",
+          "Dbtr": {
+            "Id": {
+              "OrgId": {
+                "Othr": {
+                  "Id": "e2e-sim1"
+                }
+              }
+            }
+          },
+          "DbtrAgt": {
+            "FinInstnId": {
+              "Othr": {
+                "Id": "e2e-sim1"
+              }
+            }
+          },
+          "IntrBkSttlmAmt": {
+            "ActiveCurrencyAndAmount": "10",
+            "Ccy": "XXX"
+          },
+          "PmtId": {
+            "TxId": "01M25H0ER13HT64A235DCNDC6R"
+          },
+          "VrfctnOfTerms": {
+            "IlpV4PrepPacket": "DIICpQAAAAAAAYagMjAyNjA5MTAxMTM0NTE4NDR_HJXA2kyND_hBXNZYVl-H4VqJY2A1DuBmkcdzRLtBvApnLm1vamFsb29wggJeZXlKMGNtRnVjMkZqZEdsdmJrbGtJam9pTURGTk1qVklNRVZTTVROSVZEWTBRVEl6TlVSRFRrUkRObElpTENKeGRXOTBaVWxrSWpvaU1ERk5NalZJTUVWU05ESktNVU5FUjAxSE9WRllVVEF6TURjaUxDSndZWGxsWlNJNmV5SndZWEowZVVsa1NXNW1ieUk2ZXlKd1lYSjBlVWxrVkhsd1pTSTZJazFUU1ZORVRpSXNJbkJoY25SNVNXUmxiblJwWm1sbGNpSTZJams1T1RBd01ESXdNREVpTENKbWMzQkpaQ0k2SW1VeVpTMXphVzB5SW4xOUxDSndZWGxsY2lJNmV5SndZWEowZVVsa1NXNW1ieUk2ZXlKd1lYSjBlVWxrVkhsd1pTSTZJazFUU1ZORVRpSXNJbkJoY25SNVNXUmxiblJwWm1sbGNpSTZJams1T1RBd01ERXdNREVpTENKbWMzQkpaQ0k2SW1VeVpTMXphVzB4SW4xOUxDSmhiVzkxYm5RaU9uc2lZM1Z5Y21WdVkza2lPaUpZV0ZnaUxDSmhiVzkxYm5RaU9pSXhNQ0o5TENKMGNtRnVjMkZqZEdsdmJsUjVjR1VpT25zaWMyTmxibUZ5YVc4aU9pSlVVa0ZPVTBaRlVpSXNJbWx1YVhScFlYUnZjaUk2SWxCQldVVlNJaXdpYVc1cGRHbGhkRzl5Vkhsd1pTSTZJa05QVGxOVlRVVlNJbjBzSW1WNGNHbHlZWFJwYjI0aU9pSXlNREkyTFRBNUxURXdWREV4T2pNME9qVXhMamcwTkZvaWZR"
+          }
+        },
+        "GrpHdr": {
+          "CreDtTm": "2026-09-10T11:24:51.871Z",
+          "MsgId": "01M25H0ERYDZQ49HK46YVEKARH",
+          "NbOfTxs": "1",
+          "PmtInstrXpryDtTm": "2026-09-10T11:34:51.844Z",
+          "SttlmInf": {
+            "SttlmMtd": "CLRG"
+          }
+        }
+      },
+      "responseType": "json",
+      "timeout": 20000,
+      "url": "http://moja-e2e-sim2-sdk:4000/transfers"
+    },
+    "id": "a67c223a-99d5-46b7-b66d-74683f89142d",
+    "metadata": {
+      "event": {
+        "action": "egress",
+        "createdAt": "2026-09-10T11:24:52.082Z",
+        "id": "8bc365ab-001b-4ac6-8728-22162028da69",
+        "state": {
+          "status": "success"
+        },
+        "type": "audit"
+      },
+      "protocol.createdAt": 1789039492085,
+      "trace": {
+        "parentSpanId": "e85b96160a2cfa2e",
+        "service": "ml_notification_event",
+        "spanId": "4a337863aaca3981",
+        "startTimestamp": "2026-09-10T11:24:52.076Z",
+        "tags": {
+          "auditType": "transactionFlow",
+          "binId": "2-2",
+          "contentType": "httpRequest",
+          "destination": "e2e-sim2",
+          "httpMethod": "POST",
+          "httpUrl": "http://moja-e2e-sim2-sdk:4000/transfers",
+          "operation": "prepareTransfer",
+          "processedAsBatch": true,
+          "serviceName": "ml-notification-handler",
+          "source": "e2e-sim1",
+          "tracestate": "mojaloop=eyJzcGFuSWQiOiI0YTMzNzg2M2FhY2EzOTgxIiwidGltZUFwaVByZXBhcmUiOiIxNzg5MDM5NDkxOTEwIn0=",
+          "transactionAction": "prepare",
+          "transactionId": "01M25H0ER13HT64A235DCNDC6R",
+          "transactionType": "transfer",
+          "transferId": "01M25H0ER13HT64A235DCNDC6R"
+        },
+        "traceId": "8e77977076870dae59f0c0237b6c7bfb",
+        "tracestates": {
+          "mojaloop": {
+            "spanId": "4a337863aaca3981",
+            "timeApiPrepare": "1789039491910"
+          }
+        }
+      }
+    },
+    "type": "application/json"
+  },
+  {
+    "content": {
+      "dataUri": "data:application/vnd.interoperability.iso20022.transfers+json;version=2.0;base64,eyJHcnBIZHIiOnsiTXNnSWQiOiIwMU0yNUgwSlJSSjRWWjNXOUpUOFRTU0VHVCIsIkNyZUR0VG0iOiIyMDI2LTA5LTEwVDExOjI0OjU1Ljk2MFoifSwiVHhJbmZBbmRTdHMiOnsiRXhjdG5Db25mIjoiaVBJaXlKeVZhcGVzX0JTWU00eVhDRDJZRmp1UUx6aWtXcEZ4ZE9wYzJRVSIsIlByY2dEdCI6eyJEdFRtIjoiMjAyNi0wOS0xMFQxMToyNDo1NS45NTlaIn0sIlR4U3RzIjoiQ09NTSJ9fQ==",
+      "headers": {
+        "accept": "application/vnd.interoperability.iso20022.transfers+json;version=2.0",
+        "connection": "keep-alive",
+        "content-length": "220",
+        "content-type": "application/vnd.interoperability.iso20022.transfers+json;version=2.0",
+        "date": "Thu, 10 Sep 2026 11:24:55 GMT",
+        "fspiop-destination": "e2e-sim1",
+        "fspiop-source": "e2e-sim2",
+        "host": "moja-ml-api-adapter-service"
+      },
+      "params": {
+        "ID": "01M25H0ER13HT64A235DCNDC6R"
+      },
+      "payload": {
+        "completedTimestamp": "2026-09-10T11:24:55.959Z",
+        "fulfilment": "iPIiyJyVapes_BSYM4yXCD2YFjuQLzikWpFxdOpc2QU",
+        "transferState": "COMMITTED"
+      }
+    },
+    "id": "e6007b6e-d874-4c36-82f4-243e6b06788f",
+    "metadata": {
+      "event": {
+        "action": "start",
+        "createdAt": "2026-09-10T11:24:55.982Z",
+        "id": "259888c8-4757-4dac-9868-9ab9aafd35f8",
+        "state": {
+          "status": "success"
+        },
+        "type": "audit"
+      },
+      "protocol.createdAt": 1789039495982,
+      "trace": {
+        "service": "TransfersByIDPut",
+        "spanId": "3263763046c820ec",
+        "startTimestamp": "2026-09-10T11:24:55.965Z",
+        "tags": {
+          "auditType": "transactionFlow",
+          "contentType": "httpRequest",
+          "destination": "e2e-sim1",
+          "httpMethod": "put",
+          "httpPath": "/transfers/01M25H0ER13HT64A235DCNDC6R",
+          "operation": "fulfilTransfer",
+          "serviceName": "ml-api-adapter-service",
+          "source": "e2e-sim2",
+          "tracestate": "mojaloop=eyJzcGFuSWQiOiIzMjYzNzYzMDQ2YzgyMGVjIiwidGltZUFwaUZ1bGZpbCI6IjE3ODkwMzk0OTU5ODEifQ==",
+          "transactionAction": "fulfil",
+          "transactionId": "01M25H0ER13HT64A235DCNDC6R",
+          "transactionType": "transfer",
+          "transferId": "01M25H0ER13HT64A235DCNDC6R"
+        },
+        "traceId": "fec4bcb52923018b68d60506ab787a8f",
+        "tracestates": {
+          "mojaloop": {
+            "spanId": "3263763046c820ec",
+            "timeApiFulfil": "1789039495981"
+          }
+        }
+      }
+    },
+    "type": "application/json"
+  },
+  {
+    "content": {
+      "headers": {
+        "connection": "keep-alive",
+        "content-type": "application/vnd.interoperability.iso20022.transfers+json;version=2.0",
+        "date": "Thu, 10 Sep 2026 11:24:55 GMT",
+        "fspiop-destination": "e2e-sim1",
+        "fspiop-http-method": "PUT",
+        "fspiop-source": "e2e-sim2",
+        "fspiop-uri": "/transfers/01M25H0ER13HT64A235DCNDC6R",
+        "traceparent": "00-fec4bcb52923018b68d60506ab787a8f-47732b1361509aa0-00",
+        "tracestate": "mojaloop=eyJzcGFuSWQiOiI0NzczMmIxMzYxNTA5YWEwIiwidGltZUFwaUZ1bGZpbCI6IjE3ODkwMzk0OTU5ODEifQ=="
+      },
+      "method": "PUT",
+      "payload": {
+        "GrpHdr": {
+          "CreDtTm": "2026-09-10T11:24:55.960Z",
+          "MsgId": "01M25H0JRRJ4VZ3W9JT8TSSEGT"
+        },
+        "TxInfAndSts": {
+          "ExctnConf": "iPIiyJyVapes_BSYM4yXCD2YFjuQLzikWpFxdOpc2QU",
+          "PrcgDt": {
+            "DtTm": "2026-09-10T11:24:55.959Z"
+          },
+          "TxSts": "COMM"
+        }
+      },
+      "responseType": "json",
+      "timeout": 20000,
+      "url": "http://moja-e2e-sim1-sdk:4000/transfers/01M25H0ER13HT64A235DCNDC6R"
+    },
+    "id": "900afb21-85e5-43ce-8592-8d9bb63799a4",
+    "metadata": {
+      "event": {
+        "action": "egress",
+        "createdAt": "2026-09-10T11:24:56.204Z",
+        "id": "e00182e0-cc4a-4e3e-acab-c6de032a4fce",
+        "state": {
+          "status": "success"
+        },
+        "type": "audit"
+      },
+      "protocol.createdAt": 1789039496206,
+      "trace": {
+        "parentSpanId": "d439ead0c3a2d55c",
+        "service": "ml_notification_event",
+        "spanId": "47732b1361509aa0",
+        "startTimestamp": "2026-09-10T11:24:56.199Z",
+        "tags": {
+          "auditType": "transactionFlow",
+          "binId": "3-3",
+          "contentType": "httpRequest",
+          "destination": "e2e-sim1",
+          "httpMethod": "PUT",
+          "httpPath": "/transfers/01M25H0ER13HT64A235DCNDC6R",
+          "httpUrl": "http://moja-e2e-sim1-sdk:4000/transfers/01M25H0ER13HT64A235DCNDC6R",
+          "operation": "commitTransfer",
+          "processedAsBatch": true,
+          "serviceName": "ml-notification-handler",
+          "source": "e2e-sim2",
+          "tracestate": "mojaloop=eyJzcGFuSWQiOiI0NzczMmIxMzYxNTA5YWEwIiwidGltZUFwaUZ1bGZpbCI6IjE3ODkwMzk0OTU5ODEifQ==",
+          "transactionAction": "fulfil",
+          "transactionId": "01M25H0ER13HT64A235DCNDC6R",
+          "transactionType": "transfer",
+          "transferId": "01M25H0ER13HT64A235DCNDC6R"
+        },
+        "traceId": "fec4bcb52923018b68d60506ab787a8f",
+        "tracestates": {
+          "mojaloop": {
+            "spanId": "47732b1361509aa0",
+            "timeApiFulfil": "1789039495981"
+          }
+        }
+      }
+    },
+    "type": "application/json"
+  }
+]
