@@ -80,10 +80,19 @@ just a guess.
 
 ## 4. Getting onto the external machine
 
-Working method agreed with you: since this coding session can't directly reach `10.0.150.69`, you run
-each command yourself on that machine and paste the output back — I read it and give you the next step.
-Slower than automated execution, but it's the only way that actually works here, and it means every step
-is visually confirmed rather than assumed.
+Working method agreed with you originally: since this coding session couldn't directly reach
+`10.0.150.69`, you ran each command yourself on that machine and pasted the output back — slower than
+automated execution, but it's what worked, and every step was visually confirmed rather than assumed.
+
+**Updated, 10 September**: that "no network path" assumption turned out to be wrong. A quick SSH probe
+(`ssh -o BatchMode=yes`, no password involved) reached as far as "permission denied" rather than timing
+out — meaning the TCP path was there all along, it just needed credentials. Rather than have this session
+ever handle your account's real password directly (the harness itself refuses that, by design), the fix
+was proper key-based auth: a dedicated keypair generated in this session, its public half appended to
+your account on the host (the one and only time the password was used, done by you), and from then on
+this session logs in with the private key, no password ever involved again. You explicitly chose to have
+this session run commands directly over that connection from here on — still one command at a time with
+full output shown before the next step, just without you needing to copy-paste every line yourself.
 
 What we learned about the machine as we went:
 
@@ -205,12 +214,17 @@ tool's word: 51 running, 1 completed setup job, zero pods in any other state. No
 through the switch yet — no quote, no transfer, no FX corridor traffic — so `topic-event-audit` doesn't
 currently hold any real data.
 
-**What's blocking the next step, specifically**: driving any traffic through the built-in test tool
-needs knowing the right named test collection for the FX+ISO20022 corridor *inside this particular
-packaging* — confirmed not to be the same label set the old test-harness used. That's the very first
-thing to resolve next; the detailed plan's "Current status — resume here" section has the exact command
-to try first, plus one more thing that hasn't happened yet either: pointing a browser at the built-in
-test tool's web UI needs a small one-line networking step that also hasn't been run.
+The right built-in test collection for the FX+ISO20022 corridor has since been found and inspected
+(`dfsp/p2p_fx_happy_path.json` — party lookup → FX quote → quote → FX transfer → transfer), and it can be
+triggered without ever needing a browser, straight through the test tool's own backend API.
+
+**What's actually blocking traffic now is bigger than a naming question, and more fundamental**: this
+deployment has **no DFSPs registered with the switch at all** — standing up the Helm chart brings up the
+switch's infrastructure, but onboarding the test participants (the payer, the payee, and the FX provider)
+turned out to be a separate step nobody had done yet, confirmed by asking the switch directly for its
+list of known participants and getting back just the Hub itself. That onboarding — registering each
+participant, their callback addresses, and one test customer for the payee to receive money as — is the
+current focus; the detailed plan's "Current status" section carries the concrete steps in progress.
 
 This document and the detailed plan are fully in sync as of this point — a new session should read this
 one for the why, then go straight to the plan's resume section to continue.

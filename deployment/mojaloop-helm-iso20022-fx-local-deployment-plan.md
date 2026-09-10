@@ -4,45 +4,103 @@
 to — changed after §3 below made clear the laptop's desktop session, not the Tazama stack, was the real
 RAM constraint; moving to a dedicated machine sidesteps that entirely rather than working around it).
 
-**Working method**: this session has no network path to `10.0.150.69` (confirmed in §3 — it's not
-reachable from this sandbox, regardless of whether it's reachable from you). So execution is manual and
-one step at a time: I give you the next single command to run, with a short plain-language note on what
-it actually does and why, you run it wherever it needs to run (directly on the box, or from your own
-machine against it) and paste back the output, I read that output before deciding the next command
-rather than handing over a whole block to run unattended. This applies from §4 onward — nothing here
-gets batch-executed.
+**Working method — updated**: earlier sessions assumed this sandbox had no network path to
+`10.0.150.69` at all, so execution was fully manual (you ran every command, pasted back output). That
+assumption turned out to be wrong: a plain `ssh -o BatchMode=yes` probe got as far as
+`Permission denied (publickey,password)` — i.e. the TCP path exists, it just needed credentials. A
+dedicated, passphrase-less key was generated in this sandbox
+(`~/.ssh/mojaloop_fx_10_0_150_69`, public half ends `claude-code-mojaloop-fx-deployment`) and appended to
+`abdul.rahim`'s `~/.ssh/authorized_keys` on the host (the one time the password itself was used, run
+manually by you — the harness's own permission classifier blocks this session from ever entering a raw
+password itself, by design). Key-based login now works cleanly and non-interactively:
+```bash
+ssh -i ~/.ssh/mojaloop_fx_10_0_150_69 -o IdentitiesOnly=yes abdul.rahim@10.0.150.69 "<command>"
+```
+**Confirmed by explicit user choice** (asked directly rather than assumed): this session now runs
+commands itself over that SSH connection, still one command per turn with the exact command and its full
+output shown before deciding the next step — same cautious pace as before, just no more copy-paste. This
+applies for the rest of this effort unless you say otherwise.
+
+**Root access, resolved cleanly**: `abdul.rahim`'s `sudo` is password-gated (per §3), which blocks
+non-interactive use over this SSH connection. Rather than have this session ever handle that sudo
+password either, the same public key was appended directly to `/root/.ssh/authorized_keys` (again, the
+one interactive step done by the user). This session now logs in as **root** directly:
+```bash
+ssh -i ~/.ssh/mojaloop_fx_10_0_150_69 -o IdentitiesOnly=yes root@10.0.150.69 "<command>"
+```
+No `sudo` needed anywhere from here on. **Heads-up carried over from the user, applies to every future
+session**: reaching `10.0.150.69` at all depends on a VPN connection on the user's end, which can drop.
+If SSH commands start failing with connection errors (timeouts, "no route to host") rather than command
+errors, that's the most likely cause — say so plainly and wait; the user handles reconnecting and will
+say when it's back, rather than this being a sign of something wrong with the deployment itself.
 
 ## Current status — resume here
 
 **§§1-8 are done and independently verified — not just "attempted."** A healthy Mojoloop switch, in
 ISO20022+FX+audit-topic configuration, is running right now on `10.0.150.69`: kind cluster `mojaloop-fx`,
-namespace `demo`, 51 pods `Running` + 1 `Completed`, zero pods in any other state (last confirmed at the
-end of §7). `topic-event-audit` is confirmed to exist and auto-populate on first real use (§8) — it's
-currently empty because no real switch traffic has been driven through it yet.
+namespace `demo`, 51 pods `Running` + 1 `Completed`, zero pods in any other state (last confirmed after a
+42-hour idle gap, at the top of §9 below). `topic-event-audit` is confirmed to exist and auto-populate on
+first real use (§8) — it's currently empty because no real switch traffic has landed yet (one attempt so
+far failed before reaching the switch — see below).
 
 **Facts a fresh session needs immediately, without re-deriving them:**
-- Everything runs as **root** via `sudo -i` on `10.0.150.69` (no `docker` group on that host — see §3).
+- Everything on the box runs as **root** via `sudo -i` (no `docker` group on that host — see §3). SSH
+  access (see "Working method" above) logs in as `abdul.rahim`, a separate, non-root account — use `sudo`
+  from there for anything `kubectl`/`helm`/`docker` related that needs root.
 - Chart source: `~/mojaloop-helm` (cloned at tag `v17.2.0`). Deploy orchestration:
   `~/mojaloop-helm/local-deployment-methods/helmfile/` (`helmfile.yaml`, plus our two custom values
   files, `values-mojaloop-iso20022-fx-lean.yaml` and `values-backend-fx-lean.yaml`).
 - Kafka pod is `kafka-controller-0` (a StatefulSet — not a Deployment, and not named `backend-*`).
-- This session has no network path to `10.0.150.69` — see "Working method" above. That constraint
-  applies to every future session too, not just this one.
 - **Before doing anything else, re-verify health** (cluster may have sat idle since last touched —
   same check used after the overnight gap in §5, and again at the end of §7):
   ```bash
   kubectl get nodes && kubectl get pods -n demo --no-headers | awk '{print $3}' | sort | uniq -c
   ```
+  (Already re-run once this way — 42h idle, node still `Ready`, still 51 `Running` + 1 `Completed`, zero
+  drift.)
 
-**The literal next action** is §9 — drive the FX golden path — and it's currently blocked on one open
-question (§13): the exact TTK test-collection name for the FX+ISO20022 corridor *in this chart's bundled
-test cases* hasn't been confirmed yet (CTH's equivalent was `--labels std,fx,fx-sdk`, but this is a
-different packaging and that label set isn't confirmed to carry over). First command for a new session
-to run is finding that — e.g. `kubectl exec -n demo moja-ml-testing-toolkit-backend-0 -- ls
-/opt/mojaloop-testing-toolkit/collections` (or equivalent mounted path — not yet confirmed) — then §9's
-two paths (automated collection vs. manual TTK-UI-driven requests) follow from whatever that turns up.
-Second still-open item, needed before the TTK UI can be driven from a browser at all: the `/etc/hosts` +
-ingress-reachability step described at the end of §7 hasn't been executed yet.
+**The literal next action is still §9** — drive the FX golden path — and it's grown into a bigger
+sub-project than originally scoped: **this deployment has zero DFSP participants registered at all.**
+Confirmed directly (`GET /participants` against central-ledger returns only `"Hub"`) — the Helm/helmfile
+deploy stands up the switch's infrastructure but does not onboard any DFSPs; that's a separate step this
+plan now has to do itself before any traffic (golden path or edge case) can flow. Full detail, findings,
+and the emerging onboarding plan are in §9 — summary:
+- Bundled TTK collections live at `/opt/app/examples/collections`. `dfsp/p2p_fx_happy_path.json` is the
+  right golden-path one (5 requests: party lookup → FX quote → quote → FX transfer → transfer), triggered
+  headlessly via `POST /api/outbound/template/:traceID?sync=true` on the TTK backend's port **5050**.
+- That collection is parameterized (14 `{$inputs.*}` keys, no bundled schema/defaults) and a companion
+  file, `/opt/app/examples/environments/hub-k8s-default-environment.json`, supplies real values for the
+  generic ones (`e2e-sim1`/`e2e-sim2`/`e2e-sim-fxp1` names, callback URLs, a candidate payee MSISDN
+  `9990002001`) — **but its FX-specific block (`FX_PAYER_DFSP_ID: ttkfxpayer`, `XDR`/`XTS` currencies)
+  targets a different, larger simulator roster this deployment doesn't have** (we only kept
+  `e2e-sim1/2/3` + `e2e-sim-fxp1` per the lean values file) — don't reuse that block.
+- Real, deployment-confirmed facts to build `inputValues` from: `fromFspId: "e2e-sim1"`,
+  payee `DFSP_ID: "e2e-sim2"`, FXP `DFSP_ID: "e2e-sim-fxp1"`. Both `e2e-sim1` and `e2e-sim2` report
+  `SUPPORTED_CURRENCIES=XXX` only; the FXP reports `SUPPORTED_CURRENCIES=XXX,XTS` — so the only currency
+  pair this specific FXP can actually bridge, with these specific sims, is **XXX → XTS**, not a real ISO
+  currency pair. (`XXX` = ISO 4217 "no currency"; `XTS` = "reserved for testing" — both are intentional
+  placeholders, not a bug.)
+- **A real remaining wrinkle**: the collection's last two requests need a valid ILP `condition` (and, per
+  standard Interledger, the SHA-256 of some real 32-byte fulfilment preimage) — `{$inputs.condition}` is
+  just a raw placeholder, no `{$function...}` auto-generation in this particular file. Plan: generate a
+  valid-format condition/fulfilment pair ourselves (Node `crypto`, straightforward), accepting that if it
+  doesn't thread all the way to a real fulfil, that's not wasted — an unfulfilled/mismatched-condition
+  transfer is itself one of §10's required edge captures (timeout / ILP mismatch), just not the golden
+  path itself.
+
+**Onboarding sequence now planned (not yet executed):**
+1. Register `e2e-sim1`, `e2e-sim2`, `e2e-sim-fxp1` as central-ledger participants (currency `XXX` for the
+   sims, both `XXX` and `XTS` for the FXP), with initial position/limits and the callback endpoint types
+   actually needed for this corridor (not necessarily all 26 the bundled provisioning collection
+   registers — still confirming which FX-specific callback `type` values central-ledger's API accepts).
+2. Register a test party (MSISDN, e.g. `9990002001`) under `e2e-sim2` directly against
+   `moja-account-lookup-service`'s public API (`POST /participants/{Type}/{ID}`) — no bundled collection
+   covers ALS party registration, confirmed by searching the whole `examples/` tree.
+3. Re-attempt the golden path (§9.3's trigger command) with a complete `inputValues` object.
+4. Confirm via Kafka (`topic-event-audit` populating from real traffic, not a manual test message).
+
+Second, independent still-open item, needed only for the manual/browser-UI path (§9's other option): the
+`/etc/hosts` + ingress-reachability step described at the end of §7 hasn't been executed yet.
 
 ## 0. Why this exists
 
@@ -462,14 +520,198 @@ the fact.
 The TTK-driven simulators (`e2e-sim1` = payer, `e2e-sim2` = payee, `e2e-sim-fxp1` = FXP) are already
 configured for `API_TYPE: iso20022`, `ILP_VERSION: "4"` in the values file. Two ways to run scenarios:
 
-- **Automated**: trigger the ISO20022 golden-path TTK collection the same way CTH's
-  `ttk-fx-sdk-tests` profile does (`--labels std,fx,fx-sdk`) — via `helm -n demo test` or the TTK CLI
-  against `testing-toolkit.local`, once the exact collection name in this chart's TTK test-case bundle
-  is confirmed (check `ml-testing-toolkit`'s mounted collections in the deployed pod).
+- **Automated**: trigger the ISO20022 golden-path TTK collection headlessly via the TTK backend's own
+  admin API (below) — this is the path actually being pursued, and is documented in detail as it's
+  worked through.
 - **Manual, for edge cases**: keep the TTK UI reachable and drive individual requests by hand — this is
   why TTK-UI stays enabled here (unlike the general resource-trim advice from the deployment guide) —
   manual control over a single request is what makes injecting a specific edge case possible, rather
   than only replaying a pre-scripted collection.
+
+### 9.1 Re-verified health after a 42h idle gap
+
+Same check as §5/§7 — cluster untouched, still clean:
+```bash
+kubectl get nodes && kubectl get pods -n demo --no-headers | awk '{print $3}' | sort | uniq -c
+```
+Result: node `Ready`, 51 `Running` + 1 `Completed`, zero drift.
+
+### 9.2 Finding the right TTK collection
+
+The plan originally guessed the bundled collections lived at
+`/opt/mojaloop-testing-toolkit/collections` inside `moja-ml-testing-toolkit-backend-0` — wrong path.
+Found the real one via `find / -maxdepth 6 -iname '*collection*' -type d`:
+**`/opt/app/examples/collections`**. Listing it (`find ... -maxdepth 2`) shows:
+```
+dfsp/p2p_fx_happy_path.json          <-- the one we want
+dfsp/p2p_happy_path*.json, transaction_request_service.json, sample.json, ...
+fxp/FXP.json, SDK_backend.json, SDK_outbound.json
+hub/hub_01..13_*.json (hub-side scenario collections)
+iso20022/self_referencing_iso20022.json   (unrelated to FX)
+provisioning/testingtoolkitdfsp.json
+```
+Inspected `dfsp/p2p_fx_happy_path.json` with Node (no `jq` in the container):
+```bash
+kubectl exec -n demo moja-ml-testing-toolkit-backend-0 -- node -e "
+const c = require('/opt/app/examples/collections/dfsp/p2p_fx_happy_path.json');
+console.log(c.name, c.test_cases.length);
+c.test_cases.forEach(tc => console.log(tc.name, (tc.requests||[]).map(r => r.id+':'+r.description)));
+"
+```
+Confirmed: `collections_dfsp_p2p_fx_happy_path`, one test case "P2P FX Transfer Happy Path", 5 requests —
+`Get party information → Fx Quotes → Send quote → Fx Transfers → Send transfer` — exactly the corridor
+this whole build exists to exercise.
+
+### 9.3 Finding how to trigger it headlessly
+
+No `curl`/`jq`/`wget` in the TTK backend container — it's BusyBox + Node.js only, so everything below uses
+`node -e '...'` with the built-in `http` module instead of `curl`.
+
+Traced the actual trigger route by reading source, not guessing:
+- `src/lib/api-routes/outbound.js`, mounted at `/api/outbound` (`src/lib/api-server.js:68`) — route
+  `POST /template/:traceID` takes the whole collection JSON as the body, `?sync=true` waits for the full
+  result instead of fire-and-forget.
+- Two ports on the `moja-ml-testing-toolkit-backend` Service: **5050** (labelled `ADMIN_API` per the env
+  var `..._SERVICE_PORT_ADMIN_API=5050` — this is where `/api/outbound` actually lives, confirmed via
+  `apiServer.startServer(5050)` in `src/index.js`) and 4040 (a separate `SPEC_API`, not the one we need).
+- Auth (`verifyUser()` in `api-server.js`) only activates if `Config.getSystemConfig().OAUTH.AUTH_ENABLED`
+  — no `AUTH_ENABLED` env var is set in this deployment, so it's off; the endpoint accepts plain
+  unauthenticated requests.
+
+Trigger command (run from inside the pod, since the collection file is already there and there's no
+`curl`):
+```bash
+kubectl exec -n demo moja-ml-testing-toolkit-backend-0 -- node -e '
+const http = require("http");
+const fs = require("fs");
+const body = fs.readFileSync("/opt/app/examples/collections/dfsp/p2p_fx_happy_path.json");
+const req = http.request({
+  hostname: "localhost", port: 5050,
+  path: "/api/outbound/template/fx-golden-path-01?sync=true",
+  method: "POST",
+  headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body) }
+}, (res) => {
+  console.log("HTTP_STATUS:" + res.statusCode);
+  let data = ""; res.on("data", c => data += c); res.on("end", () => console.log(data));
+});
+req.on("error", e => console.error("REQUEST ERROR:", e.message));
+req.write(body); req.end();
+'
+```
+
+### 9.4 First attempt: crashed, but the crash was informative
+
+Result: `HTTP_STATUS:200` but an **empty** response body — suspicious for a synchronous run that should
+return full results. Cross-checked against Kafka directly (`kafka-topics.sh --list` filtered to
+transfer/quote/audit topics) — no new activity, `topic-event-audit` still absent — so nothing actually
+reached the switch. TTK backend logs (`kubectl logs -n demo moja-ml-testing-toolkit-backend-0 -c
+ml-testing-toolkit-backend --tail=100`) showed the real error, timestamped exactly when the request ran:
+```
+info: isParallelRun: false — {"context":"TestCaseRunner"}
+error in OutboundSend: TypeError: Cannot read properties of undefined (reading 'accept')
+    at /opt/app/src/lib/test-outbound/outbound-initiator.js:957:26
+    at replaceVariables (.../outbound-initiator.js:926:18)
+    at processTestCase (.../outbound-initiator.js:301:24)
+    at async TestCaseRunner.runPromiseListSequentially (TestCaseRunner.js:149:20)
+```
+Root cause, confirmed by reading the actual source (`outbound-initiator.js` and `TestCaseRunner.js`):
+- The collection is parameterized — it references `{$inputs.fromFspId}`, `{$inputs.toIdType}`,
+  `{$inputs.toIdValue}`, `{$inputs.amount}`, `{$inputs.currency}`, `{$inputs.accept}`,
+  `{$inputs.contentType}`, `{$inputs.condition}`, `{$inputs.fromIdType/fromIdValue}`,
+  `{$inputs.fromFirstName/fromLastName/fromDOB}`, `{$inputs.note}` — 14 distinct keys, throughout all 5
+  requests.
+- `TestCaseRunner.runAll()` (line 54) passes `inputTemplate.inputValues` straight through to
+  `processTestCase` → `replaceVariables` with **no existence check**. The bundled collection file itself
+  has no top-level `inputs` or `inputValues` key at all (confirmed: `Object.keys(collection)` is just
+  `['options', 'name', 'test_cases']`), so it arrives as `undefined`, and `replaceVariables`'s
+  `{$inputs...}` branch (`if (inputValues[temp])`) throws on the very first such reference it hits.
+- This is exactly what the TTK web UI's "Run Collection" dialog exists to fill in — POSTing the raw file
+  directly (as done here, to reach it headlessly) skips that step, so we have to supply the equivalent
+  `inputValues` object ourselves in the request body.
+
+### 9.5 Building the real `inputValues` — DFSP IDs confirmed
+
+Confirmed so far, straight from the running pods (not guessed from naming convention):
+```bash
+kubectl exec -n demo moja-e2e-sim1-sdk-<pod> -- env | grep DFSP_ID       # => DFSP_ID=e2e-sim1      (payer)
+kubectl exec -n demo moja-e2e-sim2-sdk-<pod> -- env | grep DFSP_ID       # => DFSP_ID=e2e-sim2      (payee)
+kubectl exec -n demo moja-e2e-sim-fxp1-sdk-<pod> -- env | grep DFSP_ID   # => DFSP_ID=e2e-sim-fxp1  (FXP)
+```
+So `fromFspId: "e2e-sim1"` is confirmed, plus the payee's and FXP's own DFSP IDs.
+
+**Currency confirmed too** — both sims report a single `SUPPORTED_CURRENCIES=XXX`; the FXP reports
+`SUPPORTED_CURRENCIES=XXX,XTS`. `XXX` and `XTS` are both real, intentional ISO 4217 placeholder codes
+("no currency" / "reserved for testing") — this deployment's FX corridor is `XXX → XTS`, not a real
+currency pair, and that's expected for a generic local demo, not a mistake to fix.
+
+### 9.6 Discovered: zero DFSP participants are actually registered
+
+Before going further on `inputValues`, checked what the switch itself currently knows about, directly:
+```bash
+kubectl exec -n demo moja-ml-testing-toolkit-backend-0 -- node -e '
+const http = require("http");
+http.get({ hostname: "moja-centralledger-service", port: 80, path: "/participants", headers: {Accept:"application/json"} }, res => {
+  let data=""; res.on("data",c=>data+=c); res.on("end",()=>console.log(data));
+});
+'
+```
+Result: `[{"name":"Hub", ...}]` — **only the Hub itself**. None of `e2e-sim1`, `e2e-sim2`, `e2e-sim-fxp1`
+(or any other sim) exist as central-ledger participants. Checked for a deploy-time provisioning Job that
+might have done this and self-deleted — the only `Completed` pod in the namespace is
+`moja-centralledger-service-migration-td68b`, a DB schema migration, not participant seeding. **The
+Helm/helmfile deploy stands up switch infrastructure only; DFSP onboarding is a separate, manual step
+this plan now has to perform itself.** This explains the empty response body from the first golden-path
+attempt in §9.4 independent of the `inputValues` crash — even with a perfect `inputValues` object, party
+lookup for `e2e-sim2` would fail since it isn't a known participant at all.
+
+### 9.7 What's available to help with onboarding, and what isn't
+
+- `examples/collections/provisioning/testingtoolkitdfsp.json` — registers one DFSP as a central-ledger
+  participant: `POST /participants` (name+currency), `POST /participants/{name}/initialPositionAndLimits`,
+  then 24 separate `POST /participants/{name}/endpoints` calls covering essentially every FSPIOP callback
+  type (participant PUT/error, parties GET/PUT/error, quotes PUT, transfers POST/PUT/error, sub-ID
+  variants, bulk, NDC-breach email, etc.) — **no FX-specific callback types appear in this list at all**
+  (no `FX_QUOTES`/`FX_TRANSFERS` entries), which is either because central-ledger doesn't need
+  DFSP-specific callback registration for FX legs, or because this bundled example simply predates FX
+  support being added — not yet confirmed which. Same parameterization problem as the golden-path
+  collection (no `inputs`/`inputValues` schema of its own).
+- `examples/environments/hub-k8s-default-environment.json` — a large (36KB) pre-built `inputValues` set
+  clearly built for **this exact chart's k8s service-naming scheme** (`moja-e2e-sim1-sdk`,
+  `moja-account-lookup-service`, etc. all appear verbatim). Directly useful pieces confirmed matching our
+  deployment: `E2ESIM1_NAME: "e2e-sim1"`, `E2ESIM2_NAME: "e2e-sim2"`, `E2ESIM2_MSISDN_1: "9990002001"`
+  (candidate payee party ID), `E2ESIM1_CALLBACK_URL`/`E2ESIM2_CALLBACK_URL`/`E2ESIMFXP1_CALLBACK_URL`
+  (all `http://moja-<sim>-sdk:4000`, matching each sim's confirmed `INBOUND_LISTEN_PORT=4000`).
+  **Do not reuse its dedicated FX block** (`FX_PAYER_DFSP_ID: "ttkfxpayer"`, `FX_PAYEE_DFSP_ID:
+  "ttkfxpayee"`, `FX_TESTFXP1_ID: "ttkfxp1"`, `FX_SOURCE_CURRENCY: "XDR"`, etc.) — those names belong to a
+  larger simulator roster (`ttkfxpayer`/`ttkfxpayee`/`ttkfxp1`/`ttkfxp2`) that this specific lean
+  deployment does not run at all; using them would reference non-existent participants.
+- **No ALS party-registration collection exists anywhere in `examples/`** (confirmed via `find
+  /opt/app/examples -iname '*onboard*' -o -iname '*oracle*' -o -iname '*provision*' -o -iname '*setup*'
+  -o -iname '*participant*'` — only the one central-ledger provisioning file turned up). Registering
+  `9990002001` under `e2e-sim2` will need a direct `POST /participants/{Type}/{ID}` call against
+  `moja-account-lookup-service`'s public API (not the separate `-admin` service, which manages oracle
+  infrastructure, not individual parties) — not yet attempted.
+- Checked whether ALS could be configured to skip per-party registration entirely via a rule-based
+  "static oracle" (`values-als-static-oracle.yaml`, bundled alongside the other values files — routes
+  MSISDN patterns to a fixed `dfspId` with no real party records needed at all). **Not used**: our
+  deployed values file has no such rules layered in, and switching to it now would mean a Helm upgrade
+  (a bigger, riskier change) rather than the one-off API call real registration needs — noted here as a
+  known alternative if per-party registration turns out to be troublesome.
+
+### 9.8 Next concrete steps (not yet executed)
+
+1. Register `e2e-sim1` (currency `XXX`), `e2e-sim2` (currency `XXX`), and `e2e-sim-fxp1` (currencies
+   `XXX` and `XTS` — needs a position in both, since it's the one converting between them) as
+   central-ledger participants, with initial position/limits and callback endpoints. Confirm the exact
+   set of callback `type` values actually required for this corridor before registering all 24+ blindly.
+2. `POST /participants/MSISDN/9990002001` (or similar) against `moja-account-lookup-service`, body
+   `{"fspId": "e2e-sim2"}` (exact shape to be confirmed against the service's OpenAPI spec/errors) —
+   registers the payee's test party.
+3. Generate a valid-format ILP `condition`/fulfilment pair (Node `crypto`: random 32-byte fulfilment,
+   `condition = base64url(SHA256(fulfilment))`) for the `{$inputs.condition}` placeholder.
+4. Assemble the full `inputValues` object and re-run §9.3's trigger command.
+5. Confirm via Kafka (`topic-event-audit` populating from real traffic) as the actual success signal —
+   same discipline as §8, not trusting the TTK API's own response alone.
 
 ## 10. Edge-case matrix — this is what answers handover item 3.5
 
