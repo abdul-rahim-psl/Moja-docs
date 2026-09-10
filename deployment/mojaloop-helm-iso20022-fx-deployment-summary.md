@@ -206,25 +206,71 @@ noise when the real captures are later compared against it.
 **This is the answer to the open question flagged all the way back in §3** — the mechanism is real, it's
 present in this deployment exactly as predicted, and it needs zero special provisioning.
 
-## 10. Where we are right now
+## 10. Onboarding the test participants — three hidden prerequisites
 
-The cluster, the full Mojoloop switch (in ISO20022+FX+audit-topic configuration), and the audit-topic
-mechanism are all confirmed working end to end — verified pod-by-pod, not just taken on the deploy
-tool's word: 51 running, 1 completed setup job, zero pods in any other state. Nothing has been driven
-through the switch yet — no quote, no transfer, no FX corridor traffic — so `topic-event-audit` doesn't
-currently hold any real data.
+Standing up the Helm chart brings up the switch's infrastructure only — it does not register any DFSPs.
+Confirmed by asking the switch directly for its list of known participants and getting back just the Hub
+itself. So before any traffic could flow, the payer, payee, and FX provider all had to be registered by
+hand, and that turned out to need three things nowhere written down together, found only by trying each
+step and reading the actual rejection:
 
-The right built-in test collection for the FX+ISO20022 corridor has since been found and inspected
-(`dfsp/p2p_fx_happy_path.json` — party lookup → FX quote → quote → FX transfer → transfer), and it can be
-triggered without ever needing a browser, straight through the test tool's own backend API.
+1. The Hub itself needs a "reconciliation account" set up for a currency before any DFSP can use that
+   currency at all — a one-time bootstrap step.
+2. A "Settlement Model" (the rule set governing how money movement between participants gets settled)
+   has to exist before a participant can hold a balance in a currency — none did. The right values were
+   found in the chart's own source code, in a seed file deliberately kept around but switched off,
+   specifically for situations like this one.
+3. Registering a test customer (a phone number) for the payee with the lookup service needed a very
+   specific header format — the deployment runs in ISO 20022 mode, and that service silently expects a
+   different technical label on its requests than the plain version most documentation assumes.
 
-**What's actually blocking traffic now is bigger than a naming question, and more fundamental**: this
-deployment has **no DFSPs registered with the switch at all** — standing up the Helm chart brings up the
-switch's infrastructure, but onboarding the test participants (the payer, the payee, and the FX provider)
-turned out to be a separate step nobody had done yet, confirmed by asking the switch directly for its
-list of known participants and getting back just the Hub itself. That onboarding — registering each
-participant, their callback addresses, and one test customer for the payee to receive money as — is the
-current focus; the detailed plan's "Current status" section carries the concrete steps in progress.
+All three are done now, verified directly against the switch, not just taken on faith.
+
+## 11. Driving the FX golden path — real traffic, most of the way through
+
+With onboarding done, the built-in test collection for this corridor (party lookup → FX quote → quote →
+FX transfer → transfer) was triggered directly against the switch's real services. Two more real
+wrinkles surfaced and got fixed along the way (a header-formatting conflict with the test tool's own
+automatic message-format conversion, and the fact that this deployment has no single front door — each
+switch component has its own separate address, so each step had to be pointed at the right one
+individually).
+
+**Result: 3 of the 5 steps — the party lookup, the FX quote, and the FX transfer — were genuinely
+accepted by the real switch.** The other two (the plain quote and the plain transfer) failed for a
+understood, specific reason: they need to know something from the switch's response to an earlier step,
+and since nothing was set up to actually listen for and hand back that response, they got sent
+incomplete.
+
+**The actual point of this whole exercise is confirmed either way: `topic-event-audit` now exists and
+holds real records from this real traffic** — visible on Kafka directly, not a manual placeholder message
+like the earlier proof-of-concept check. That's the direct, positive answer to the question this build
+was launched to answer, back in §3.
+
+Asked the user directly rather than deciding alone: keep chasing a fully clean 5-step run, or move on to
+the error/reject/timeout scenarios the handover document actually needs. **Chose to move on** — several
+of those scenarios don't need a fully successful transfer anyway, and they more directly serve what item
+3.5 is actually asking for.
+
+## 12. First edge-case captures — one clean, one new puzzle
+
+Rather than keep fighting the test tool's own collection format (which is what was blocking the last two
+golden-path steps), edge-case testing switched to sending individual requests by hand, the same way the
+onboarding itself was done. Three things came out of this:
+
+- **Resending an identical request** didn't produce a distinct "duplicate" rejection at the immediate
+  response level — consistent with how Mojaloop generally works (an initial "got it" response, with the
+  real processing, including duplicate checks, happening a layer deeper). Whether the deeper layer
+  actually caught the duplicate wasn't fully traced yet.
+- **A genuine, complete "quote rejected" capture** — sending an FX quote in a currency pair the FX
+  provider isn't actually configured for produced a full, real round trip: the switch accepted the
+  request, rejected it internally for the right reason, and delivered a real rejection message back to
+  the sender — exactly the kind of error-case evidence item 3.5 is asking for, captured cleanly.
+- **A new, separate puzzle**: retrying with the *correct* currency got past that rejection and the switch
+  genuinely tried to forward the request to the real FX provider simulator — but that specific attempt
+  failed in an unusual way (looked like a dropped connection rather than a normal error response), while
+  a manually reconstructed version of the same request to the same simulator got back an ordinary error
+  message instead. Something subtle differs between what the switch actually sends and what was
+  reconstructed by hand — worth its own focused look later rather than guessing further right now.
 
 This document and the detailed plan are fully in sync as of this point — a new session should read this
 one for the why, then go straight to the plan's resume section to continue.

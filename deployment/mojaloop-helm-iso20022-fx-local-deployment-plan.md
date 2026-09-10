@@ -59,45 +59,40 @@ far failed before reaching the switch — see below).
   (Already re-run once this way — 42h idle, node still `Ready`, still 51 `Running` + 1 `Completed`, zero
   drift.)
 
-**The literal next action is still §9** — drive the FX golden path — and it's grown into a bigger
-sub-project than originally scoped: **this deployment has zero DFSP participants registered at all.**
-Confirmed directly (`GET /participants` against central-ledger returns only `"Hub"`) — the Helm/helmfile
-deploy stands up the switch's infrastructure but does not onboard any DFSPs; that's a separate step this
-plan now has to do itself before any traffic (golden path or edge case) can flow. Full detail, findings,
-and the emerging onboarding plan are in §9 — summary:
-- Bundled TTK collections live at `/opt/app/examples/collections`. `dfsp/p2p_fx_happy_path.json` is the
-  right golden-path one (5 requests: party lookup → FX quote → quote → FX transfer → transfer), triggered
-  headlessly via `POST /api/outbound/template/:traceID?sync=true` on the TTK backend's port **5050**.
-- That collection is parameterized (14 `{$inputs.*}` keys, no bundled schema/defaults) and a companion
-  file, `/opt/app/examples/environments/hub-k8s-default-environment.json`, supplies real values for the
-  generic ones (`e2e-sim1`/`e2e-sim2`/`e2e-sim-fxp1` names, callback URLs, a candidate payee MSISDN
-  `9990002001`) — **but its FX-specific block (`FX_PAYER_DFSP_ID: ttkfxpayer`, `XDR`/`XTS` currencies)
-  targets a different, larger simulator roster this deployment doesn't have** (we only kept
-  `e2e-sim1/2/3` + `e2e-sim-fxp1` per the lean values file) — don't reuse that block.
-- Real, deployment-confirmed facts to build `inputValues` from: `fromFspId: "e2e-sim1"`,
-  payee `DFSP_ID: "e2e-sim2"`, FXP `DFSP_ID: "e2e-sim-fxp1"`. Both `e2e-sim1` and `e2e-sim2` report
-  `SUPPORTED_CURRENCIES=XXX` only; the FXP reports `SUPPORTED_CURRENCIES=XXX,XTS` — so the only currency
-  pair this specific FXP can actually bridge, with these specific sims, is **XXX → XTS**, not a real ISO
-  currency pair. (`XXX` = ISO 4217 "no currency"; `XTS` = "reserved for testing" — both are intentional
-  placeholders, not a bug.)
-- **A real remaining wrinkle**: the collection's last two requests need a valid ILP `condition` (and, per
-  standard Interledger, the SHA-256 of some real 32-byte fulfilment preimage) — `{$inputs.condition}` is
-  just a raw placeholder, no `{$function...}` auto-generation in this particular file. Plan: generate a
-  valid-format condition/fulfilment pair ourselves (Node `crypto`, straightforward), accepting that if it
-  doesn't thread all the way to a real fulfil, that's not wasted — an unfulfilled/mismatched-condition
-  transfer is itself one of §10's required edge captures (timeout / ILP mismatch), just not the golden
-  path itself.
+**Major update**: onboarding is fully done (§9.9) and `topic-event-audit` **now holds real records from
+real switch traffic** — confirmed on Kafka directly, not a manual test message (§9.10). This is the
+direct answer to §3's original open question. The full 5-request golden path isn't 100% clean yet: 3 of 5
+requests (party lookup, FX quote, FX transfer) get genuine `202 Accepted` from the real switch; the other
+2 (quote, transfer) get `400`s from an unresolved-template-variable issue tied to this collection needing
+a live callback listener to chain requests together (§9.10 has the full root-cause and the open question
+of whether to invest further in a fully clean run vs. move to §10's edge cases, several of which don't
+need the happy path to fully resolve anyway).
 
-**Onboarding sequence now planned (not yet executed):**
-1. Register `e2e-sim1`, `e2e-sim2`, `e2e-sim-fxp1` as central-ledger participants (currency `XXX` for the
-   sims, both `XXX` and `XTS` for the FXP), with initial position/limits and the callback endpoint types
-   actually needed for this corridor (not necessarily all 26 the bundled provisioning collection
-   registers — still confirming which FX-specific callback `type` values central-ledger's API accepts).
-2. Register a test party (MSISDN, e.g. `9990002001`) under `e2e-sim2` directly against
-   `moja-account-lookup-service`'s public API (`POST /participants/{Type}/{ID}`) — no bundled collection
-   covers ALS party registration, confirmed by searching the whole `examples/` tree.
-3. Re-attempt the golden path (§9.3's trigger command) with a complete `inputValues` object.
-4. Confirm via Kafka (`topic-event-audit` populating from real traffic, not a manual test message).
+**What it took to get here (all in §9, in order): the deployment has zero DFSP participants registered by
+default** — the Helm/helmfile deploy stands up switch infrastructure only; onboarding DFSPs is a separate
+manual step this plan had to do itself, needing three real prerequisites found only by attempting each
+step (§9.9): Hub currency reconciliation accounts, a Settlement Model (none existed by default), and
+ISO20022-specific FSPIOP headers for ALS's party-registration API. Then driving the golden path itself
+needed two more real fixes (§9.10): the collection's own request-transformation feature
+(`fspiopToISO20022`) means headers must stay plain-FSPIOP, not be manually rewritten to ISO20022 form; and
+since this deployment has no unified hub gateway (confirmed via `kubectl get ingress` — every service has
+its own separate host), each request's destination has to be set explicitly per-service rather than
+relying on the TTK's single global (and wrongly-defaulted) callback-endpoint config.
+
+**Facts confirmed along the way, useful for any further work here:**
+- Bundled TTK collections live at `/opt/app/examples/collections` inside
+  `moja-ml-testing-toolkit-backend-0`. `dfsp/p2p_fx_happy_path.json` is the golden-path one (5 requests:
+  party lookup → FX quote → quote → FX transfer → transfer), triggered headlessly via `POST
+  /api/outbound/template/:traceID?sync=true` on port **5050** (not 4040).
+- Real DFSP IDs: payer `e2e-sim1`, payee `e2e-sim2`, FXP `e2e-sim-fxp1`. Currencies: both sims support
+  only `XXX`; the FXP supports `XXX,XTS` — so the corridor here is `XXX → XTS` (both intentional ISO 4217
+  placeholder codes, not real currencies — expected for a generic local demo).
+- A companion file, `/opt/app/examples/environments/hub-k8s-default-environment.json`, matches this
+  chart's exact k8s service names and supplied the payee's test MSISDN (`9990002001`) — but its dedicated
+  FX block (`ttkfxpayer`/`ttkfxpayee`/`XDR` currency) targets a larger simulator roster this lean
+  deployment doesn't run; don't reuse that part.
+- The onboarding (`onboard.js`) and golden-path trigger (`run_golden_path.js`) scripts are both in this
+  session's scratchpad only, not yet committed to the repo — worth relocating if this plan is revisited.
 
 Second, independent still-open item, needed only for the manual/browser-UI path (§9's other option): the
 `/etc/hosts` + ingress-reachability step described at the end of §7 hasn't been executed yet.
@@ -698,35 +693,203 @@ lookup for `e2e-sim2` would fail since it isn't a known participant at all.
   (a bigger, riskier change) rather than the one-off API call real registration needs — noted here as a
   known alternative if per-party registration turns out to be troublesome.
 
-### 9.8 Next concrete steps (not yet executed)
+### 9.8 Onboarding script — first run, two real findings, fix in progress
 
-1. Register `e2e-sim1` (currency `XXX`), `e2e-sim2` (currency `XXX`), and `e2e-sim-fxp1` (currencies
-   `XXX` and `XTS` — needs a position in both, since it's the one converting between them) as
-   central-ledger participants, with initial position/limits and callback endpoints. Confirm the exact
-   set of callback `type` values actually required for this corridor before registering all 24+ blindly.
-2. `POST /participants/MSISDN/9990002001` (or similar) against `moja-account-lookup-service`, body
-   `{"fspId": "e2e-sim2"}` (exact shape to be confirmed against the service's OpenAPI spec/errors) —
-   registers the payee's test party.
-3. Generate a valid-format ILP `condition`/fulfilment pair (Node `crypto`: random 32-byte fulfilment,
-   `condition = base64url(SHA256(fulfilment))`) for the `{$inputs.condition}` placeholder.
-4. Assemble the full `inputValues` object and re-run §9.3's trigger command.
-5. Confirm via Kafka (`topic-event-audit` populating from real traffic) as the actual success signal —
-   same discipline as §8, not trusting the TTK API's own response alone.
+Wrote a Node script (`onboard.js`, kept in this session's scratchpad, transferred via `scp` since the TTK
+pod's own filesystem is read-only — copy it to `/root/onboard.js` on the host, then pipe into the pod:
+`cat /root/onboard.js | kubectl exec -i -n demo moja-ml-testing-toolkit-backend-0 -- node -`) that calls
+central-ledger and ALS directly (`http` module, same pattern as §9.3) to register participants, position
+limits, callbacks, and the ALS test party in one pass, rather than fighting the TTK's own `inputValues`
+templating for a 26-request bundled collection.
+
+**First run failed on two things, both understood and fixable:**
+1. **Every participant registration failed**: `400 — "Hub reconciliation account for the specified
+   currency does not exist"`. Traced to source
+   (`domain/participant/index.js`'s `validateHubAccounts`): central-ledger requires the **Hub itself**
+   to have both a `HUB_RECONCILIATION` and a `HUB_MULTILATERAL_SETTLEMENT` account for a currency before
+   *any* DFSP can be registered in that currency — a one-time bootstrap step this deployment never had
+   done (matches §9.6's finding that nothing was ever onboarded). Route confirmed by reading
+   `api/participants/routes.js`: `POST /participants/Hub/accounts`, body `{currency, type}`. Fix added to
+   the script: create both account types for both `XXX` and `XTS` before touching any participant.
+   (Every other failure in that first run — position/limits, all callback registrations — was a
+   downstream cascade of participants never having been created; not a separate bug.)
+2. **ALS party registration failed**: `400 — "Malformed syntax - Invalid accept header"` from
+   `POST /participants/MSISDN/9990002001` with a plain `Accept: application/json`. Checked ALS's own
+   OpenAPI spec (`api-swagger-iso20022-parties.yaml`) — the `Accept`/`Content-Type` parameters are typed
+   as bare strings there (no regex), so the rejection is coming from application-level FSPIOP
+   header-format validation, not the spec itself. Not yet fixed — next step is retrying with a proper
+   FSPIOP media-type header (`application/vnd.interoperability.participants+json;version=1.0` is the
+   likely correct value, unconfirmed) plus `Content-Type`/`Date`/`FSPIOP-Source` headers, since the ALS
+   party-registration endpoint likely needs the same FSPIOP header set the hub-facing APIs generally
+   require.
+
+**Not yet done**: re-running the fixed script (Hub bootstrap added; ALS headers still need the fix in
+point 2 before this will fully succeed).
+
+### 9.9 Onboarding completed — full sequence, real fixes, all verified
+
+Re-ran the fixed `onboard.js` (added a default Settlement Model step, §9.8 point 1) — **completed clean**.
+Verified via `GET /participants`: all four show up (`Hub`, `e2e-sim1`, `e2e-sim2`, `e2e-sim-fxp1`), each
+with real `POSITION`+`SETTLEMENT` currency accounts (`e2e-sim-fxp1` has both `XXX` and `XTS`), and all 36
+callback endpoints (12 per participant — the essential FSPIOP + FX-specific types, not the bundled
+collection's full 26, most of which are for bulk/sub-ID/thirdparty flows out of scope here) registered
+`201`. Three real prerequisites were needed in total, found only by attempting each step and reading the
+actual error (not discoverable from documentation alone):
+1. **Hub currency accounts** (§9.8) — `POST /participants/Hub/accounts`, `{currency, type}` for both
+   `HUB_RECONCILIATION` and `HUB_MULTILATERAL_SETTLEMENT`, per currency (`XXX`, `XTS`).
+2. **A Settlement Model** — central-ledger refuses to create a participant's currency position without
+   one matching (or a default). None existed. Found the exact schema by reading a *disabled* reference
+   seed (`seeds/z1000_settlementModel-deprecated.js-`, kept in-repo intentionally per its own comment,
+   for exactly this kind of manual setup) — created one named `DEFAULTNET` (API requires alphanumeric
+   `name`, so no underscore, unlike the seed's `DEFERRED_NET`) with `currency` omitted so it applies to
+   every currency: `settlementGranularity: NET, settlementInterchange: MULTILATERAL, settlementDelay:
+   DEFERRED, ledgerAccountType: POSITION, settlementAccountType: SETTLEMENT`.
+3. **ALS party registration needs ISO20022-specific FSPIOP headers**, not plain ones — confirmed by
+   reading ALS's own config (`API_TYPE: "iso20022"` — set via `config/default.json`, *not* an env var,
+   which is why an earlier `env | grep API_TYPE` check missed it) and the actual header-validation regex
+   in `@mojaloop/central-services-shared`'s `util/headerValidation/index.js`
+   (`application/vnd.interoperability.iso20022.<resource>+json;version=X.X` — the literal string
+   `iso20022` is `ISO_HEADER_PART`, inserted only when `apiType === 'iso20022'`). Fixed:
+   `application/vnd.interoperability.iso20022.participants+json;version=2.0` for both `Accept` and
+   `Content-Type`, plus `Date` and `FSPIOP-Source: e2e-sim2` headers. Result: `202` — the payee's test
+   party (`MSISDN 9990002001` → `e2e-sim2`) is registered.
+
+Onboarding script kept in this session's scratchpad as `onboard.js` (not yet committed anywhere in the
+repo — worth relocating into `docs/deployment/` or similar if this plan is revisited, so a fresh session
+doesn't have to re-derive it).
+
+### 9.10 First full golden-path attempt — 3 of 5 requests hit real services; two real, understood bugs
+
+Built `run_golden_path.js` (scratchpad): loads the bundled collection, fills in `inputValues` (confirmed
+DFSP IDs/currencies from §9.5, the payee MSISDN, a freshly generated ILP `condition` — Node `crypto`:
+random 32-byte fulfilment, `condition = base64url(SHA256(fulfilment))`), and POSTs it to
+`/api/outbound/template/:traceID?sync=true` per §9.3.
+
+**Attempt 1 — every request failed with HTTP 500.** Root cause, found in the *transformed* request the
+TTK actually sent (not the input): headers showed
+`application/vnd.interoperability.iso20022.iso20022.parties+json` — **doubled** `iso20022.iso20022`. The
+collection's own `options.transformerName: "fspiopToISO20022"` means **the TTK backend already
+auto-transforms plain-FSPIOP-shaped requests into real ISO 20022 wire format itself** (confirmed: the
+`transformedRequest` bodies are genuine ISO 20022 `pain.001`-style structures — `GrpHdr`, `CdtTrfTxInf`,
+etc.). Manually rewriting the headers to ISO20022 format (as ALS's *direct* API needed in §9.9) made the
+transformer double-apply its own prefix. Fix: leave request 2-5's already-hardcoded plain-FSPIOP headers
+untouched; only request 1's generic `{$inputs.accept}`/`{$inputs.contentType}` needed filling in, also in
+plain-FSPIOP form (`application/vnd.interoperability.parties+json;version=1.0`) — the transformer adds
+`.iso20022.` itself.
+
+**Attempt 2 — still every request failed (500), but the real bug was different**: none of the 5 requests
+have a `url` field set in the bundled collection, so `outbound-initiator.js`'s `sendRequest()` falls back
+to the TTK's single global `CALLBACK_ENDPOINT` config value — confirmed (`spec_files/user_config.json`
+inside the pod) to default to `http://localhost:4000`, which is nothing inside this pod. This deployment
+also has **no unified hub gateway/ingress** — confirmed via `kubectl get ingress -n demo`: every service
+(`account-lookup-service.local`, `quoting-service.local`, `ml-api-adapter.local`, ...) has its own
+separate ingress host, unlike a real production setup where a DFSP hits one hub URL and a gateway
+path-routes internally. Fix: since this all runs from inside the cluster anyway, set each request's own
+`url` field directly to the correct backend Service, bypassing ingress and the broken default entirely:
+```
+request 1 (GET /parties)      -> http://moja-account-lookup-service
+request 4 (POST /fxQuotes)    -> http://moja-quoting-service
+request 2 (POST /quotes)      -> http://moja-quoting-service
+request 5 (POST /fxTransfers) -> http://moja-ml-api-adapter-service
+request 3 (POST /transfers)   -> http://moja-ml-api-adapter-service
+```
+(Confirmed safe by reading the code first: `sendRequest` destructures `url` straight from the request
+object and prefers it over the config default when present.)
+
+**Attempt 3 — real progress: 3 of 5 requests got genuine `202 Accepted` from the actual switch:**
+- Request 1 (party lookup, → ALS): `202`
+- Request 4 (FX quote, → quoting-service): `202`
+- Request 5 (FX transfer, → ml-api-adapter): `202`
+- Request 2 (quote, → quoting-service): `400` — `"must NOT have more than 35 characters"` on the
+  ISO20022-mapped payee-FSP field.
+- Request 3 (transfer, → ml-api-adapter): `400` — `"must match pattern"` on the expiration date field.
+
+**Both 400s trace to the same root cause**: these two requests reference `{$prev.1.callback...}` /
+`{$prev.2.callback...}` — the *previous* request's asynchronous callback response — to fill in fields
+like the payee's real FSP ID and the quote's real expiration. Since nothing is listening for those
+callbacks (they're addressed, correctly, to the real `e2e-sim1-sdk`/`e2e-sim2-sdk` pods per the callback
+URLs registered in §9.9 — not to whatever is driving this script), `{$prev...}` never resolves, and the
+raw placeholder string gets sent as literal data instead — hence "too many characters" and "bad date
+pattern" (the literal template text failing those fields' own format checks). This is a structural gap
+between "drive a collection headlessly, synchronously, in one shot" and "the collection's own design,
+which assumes the caller also receives and correlates real async callbacks" — not a bug in the onboarding
+or a wrong header/URL.
+
+**`topic-event-audit` now exists and holds real records** — confirmed directly on Kafka
+(`kafka-topics.sh --list` and `kafka-console-consumer.sh --from-beginning`), populated by this real
+traffic (our own ALS registration call and the party-lookup request are both visible, with full FSPIOP
+headers, trace IDs, and `auditType`/`transactionType` tags) — **not** the throwaway manual test message
+from §8, which was deleted. This is the direct, positive answer to §3's original open question and a big
+chunk of goal #2/#3 — achieved even though the full 5-step chain isn't 100% clean yet.
+
+**Decision (asked the user rather than assumed)**: don't invest further right now in making `{$prev}`
+chaining work for a fully clean golden-path run — move to capturing §10's edge cases instead, several of
+which don't need a fully-resolved happy path anyway and more directly serve handover item 3.5 (which
+explicitly wants error/abort/reject/timeout captures, not another golden-path proof).
+
+### 9.11 Edge-case exploration — first real captures, and a new open finding
+
+Since the bundled collection's own request/response machinery is built around synchronous `{$prev}`
+chaining (§9.10's blocker), edge-case work switched to sending individual, hand-built ISO20022-shaped
+requests directly to each service (same pattern as the onboarding script) rather than fighting the
+collection format further. `topic-event-audit` remains the source of truth for what actually happened —
+every attempt below was checked against it directly, not just the synchronous HTTP response.
+
+**Finding 1 — real duplicate/resend behavior confirmed**: replayed the exact same FX-quote request body
+(same `conversionRequestId`/`conversionId`/`determiningTransferId`, correct headers) a second time.
+**No distinct "duplicate" rejection at the HTTP level** — the second attempt got `202 Accepted` again,
+same as the first, consistent with Mojaloop's fire-and-forget POST design (duplicate detection lives
+deeper in the async pipeline, not the immediate synchronous response). Not fully explored further —
+whether/how the async layer actually flags the duplicate (a distinct `topic-event-audit` tag, a
+notification, a silent no-op) is still open, and would be the next thing to check if this scenario is
+revisited.
+
+**Finding 2 — "FX quote rejected" edge case fully captured, real and complete**: the bundled collection's
+FX-quote request hardcodes currency `AED` — which neither `e2e-sim1`/`e2e-sim2` (only support `XXX`) nor
+`e2e-sim-fxp1` (`XXX`,`XTS`) actually support. Sending it produced a genuine, complete round trip:
+`POST /fxQuotes` (`202`) → quoting-service's own validation rejects the FXP for that currency
+(`"Unsupported participant 'e2e-sim-fxp1'"`, error code `3100`) → a real `PUT /fxQuotes/{id}/error`
+callback **actually delivered** to `http://moja-e2e-sim1-sdk:4000/fxQuotes/{id}/error` (confirmed via the
+`egress` audit record, JWS-signed, `fspiop-source: Hub`). This is a genuine, real capture directly
+matching §10's first edge case ("FX quote rejected by FXP... currency pair the FXP sim isn't configured
+for") — the "wrong currency" wasn't a mistake to fix, it's the edge case itself, already exercised.
+
+**Finding 3 — confirmed the currency mismatch (not participant setup) was the actual cause, and found a
+new distinct bug**: resent the same request with the *correct* currency pair (`XXX`→`XTS`) and the real
+FXP ID. This time quoting-service's own validation passed and it genuinely attempted to forward the
+request on to the real FXP: `POST http://moja-e2e-sim-fxp1-sdk:4000/fxQuotes` — but that forward itself
+failed with `errorCode: 1001, "Destination communication error - Network error"`, delivered back to
+`e2e-sim1-sdk` via another real error callback. Checked whether the FXP pod itself was actually reachable
+(directly `GET /health` against it — got a clean `404 Unknown URI`, i.e. it's up and responding, not a
+network-level failure) and then directly replicated quoting-service's exact forwarded payload by hand
+against the same pod — got a clean `400 Malformed syntax` response, not a connection failure. **This is a
+new, real, unexplained finding**: quoting-service's own outgoing request to the FXP sim causes something
+closer to a connection-level failure, while a near-identical hand-built request gets a normal HTTP error
+response instead. Not yet root-caused — possibly a subtle payload difference (a header, encoding, or
+body-shape detail this reconstruction didn't capture exactly) causing the FXP sim's HTTP server to reset
+the connection rather than respond. Worth a focused follow-up session on its own, comparing the two
+requests byte-for-byte (e.g. via a packet/traffic capture or by adding temporary logging to the FXP sim),
+rather than guessing further.
 
 ## 10. Edge-case matrix — this is what answers handover item 3.5
 
 Golden path alone isn't the goal. Work through each of these against the FX corridor, capturing the
 resulting `topic-event-audit` records for each:
 
-| Scenario | How to trigger |
-|---|---|
-| FX quote rejected by FXP | Manual TTK request with a currency pair the FXP sim isn't configured for, or a rules-engine intercept |
-| FX quote expiry | Delay the response leg past `expirationDate` before sending `PUT /fxQuotes/{ID}` |
-| Transfer/FX-transfer abort | Payee (or FXP leg) sends `PUT .../error` instead of fulfilling |
-| Transfer timeout | Don't fulfil at all; let the timeout handler sweep it |
-| FXP insufficient liquidity / NDC breach | Set a low NDC on the FXP participant, send an amount that exceeds it |
-| Duplicate/resend | Replay the identical `POST /fxQuotes` or `POST /fxTransfers` body with the same ID |
-| ILP condition mismatch on the FX leg | Manually corrupt the fulfilment condition sent back |
+| Scenario | How to trigger | Status |
+|---|---|---|
+| FX quote rejected by FXP | Manual TTK request with a currency pair the FXP sim isn't configured for, or a rules-engine intercept | **Done (§9.11 Finding 2)** — real, complete capture: `POST /fxQuotes` → validation rejects the currency → real `PUT .../error` callback delivered |
+| FX quote expiry | Delay the response leg past `expirationDate` before sending `PUT /fxQuotes/{ID}` | Not started |
+| Transfer/FX-transfer abort | Payee (or FXP leg) sends `PUT .../error` instead of fulfilling | Not started — the "network error" finding in §9.11 Finding 3 produced an error callback, but not this specific scenario |
+| Transfer timeout | Don't fulfil at all; let the timeout handler sweep it | Not started |
+| FXP insufficient liquidity / NDC breach | Set a low NDC on the FXP participant, send an amount that exceeds it | Not started |
+| Duplicate/resend | Replay the identical `POST /fxQuotes` or `POST /fxTransfers` body with the same ID | **Partially explored (§9.11 Finding 1)** — no distinct rejection at the HTTP layer; whether/how the async pipeline actually flags it is still open |
+| ILP condition mismatch on the FX leg | Manually corrupt the fulfilment condition sent back | Not started |
+
+Also newly found, not originally in this matrix: **quoting-service's own forward-to-FXP request causes a
+"Network error" against `e2e-sim-fxp1-sdk` that a hand-built equivalent request doesn't reproduce**
+(§9.11 Finding 3) — a real, distinct technical issue worth its own investigation, separate from the
+edge-case matrix itself.
 
 For each: capture the `topic-event-audit` record(s), check the shape against what
 `docs/docs-poc-mla-ppa/MLA-PPA-Technical-Design.md` and `rejected-events.md` already assume from the
