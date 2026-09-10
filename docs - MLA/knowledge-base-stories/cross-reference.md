@@ -473,7 +473,7 @@ A pure gap, known and deliberate. Two things the POC contributes:
 - 🔵 **FSD Open Item #3 is resolved** (F8) — real signatures are present on every canonical record, so the story is unblocked.
 - 🔵 Signature presence **corroborates the canonical-record table** independently: every canonical record carries one, every non-canonical counterpart does not. That is a useful cross-check to keep as a test assertion.
 
-Still unresolved on both sides: how MLA sources DFSP public keys, and how a key-source outage is distinguished from a genuine signature failure.
+Still unresolved on both sides: how MLA sources DFSP public keys. **[2026-09-09 meeting]** — Sam confirmed Mojaloop Connection Manager (MCM) handles DFSP key distribution at onboarding; MLA should interface with MCM rather than hold its own key store (`core-knowledge.md` §13.3). How a key-source outage is distinguished from a genuine signature failure was resolved independently in Phase 3, which built a distinct `key-source-unavailable` outcome.
 
 ### 9.3 🟡 Transport
 
