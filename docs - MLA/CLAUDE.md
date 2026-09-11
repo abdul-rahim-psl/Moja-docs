@@ -1,14 +1,14 @@
 # CLAUDE.md — cch-mla
 
-Working rules for any session in this repository. (update: updated location for this file is /home/abdul-rahim/mojaloop/cch-mla, previous location was /home/abdul-rahim/mojaloop/cch-mla)
+Working rules for any session on the `cch-mla` work. **This file moved from `cch-mla/CLAUDE.md` to its current location, `docs/docs - MLA/CLAUDE.md`, on 2026-09-11.** `cch-mla/` — the separate repository holding the actual TypeScript + Fastify implementation — carries no documentation of its own and, since this move, no `CLAUDE.md` either. A session that opens directly in `cch-mla/` will not auto-load this file; point it here explicitly, or start from `docs/docs - MLA/` instead.
 
 ## Docs location
 
-The documentation set covered by this file no longer lives under `cch-mla/`. It moved from `cch-mla/docs` to [`/home/abdul-rahim/mojaloop/docs/docs - MLA`](../docs/docs%20-%20MLA) (the top-level `mojaloop/docs` folder was renamed to `docs - MLA`). Every `docs/...` reference below is relative to that new location, i.e. `docs/strategy.md` now means `../docs/docs - MLA/strategy.md` from this file. Nothing else about how these documents are read, written, or governed has changed.
+This file now lives alongside every document it governs, under [`/home/abdul-rahim/mojaloop/docs/docs - MLA`](.) — `strategy.md`, `plan.md`, `engineering-rules.md`, `environment-simulation.md`, `knowledge-base-stories/`, `user stories/`, `EPICS/` and `continue/` are all in this same directory or a subdirectory of it. Every relative path in this file is relative to here, not to `cch-mla/`. Nothing about how these documents are read, written, or governed has changed — only where this file itself sits.
 
 ## Start here
 
-Read [strategy.md](../docs/docs%20-%20MLA/strategy.md) first. It maps every document, gives a reading route per task, and records the precedence rules. Follow its routing table rather than reading the whole documentation set.
+Read [strategy.md](strategy.md) first. It maps every document, gives a reading route per task, and records the precedence rules. Follow its routing table rather than reading the whole documentation set.
 
 The six documents that govern this work:
 
@@ -21,7 +21,7 @@ The six documents that govern this work:
 | `plan.md` | **Sequencing, what is blocked, and §16's progress log** — what gets built when, and what has actually been done |
 | `environment-simulation.md` | **The local test harness** — how we verify without a DRPP environment, and the limits of what that proves |
 
-(All paths in this table are relative to `docs/docs - MLA/`.)
+(All paths in this table are relative to this file's own directory, `docs/docs - MLA/`.)
 
 `user stories/` holds the five source user-story documents (`cch-crosscutting-user-stories.md` — audit, monitoring, performance, mTLS — added [2026-09-07]). They remain the requirements authority; `core-knowledge.md` is a synthesis of them, not a replacement. `EPICS/` re-splits the MLA and PII material one folder per epic, one file per story — the working unit for build work; PPA's and the crosscutting document's stories are not yet broken out there, since PPA implementation has not started.
 
@@ -35,7 +35,7 @@ The four-layer structure — `interfaces/`, `services/`, `clients/`, composition
 
 We go one story at a time. A story is not started until the previous one is done by the §13 definition.
 
-1. **Pick the story** — from `EPICS/`, in the order [plan.md](../docs/docs%20-%20MLA/plan.md) §15 sequences. Its `Acceptance Criteria`, `Method` and `Todos` are the spec; the `Todos` list doubles as the test checklist.
+1. **Pick the story** — from `EPICS/`, in the order [plan.md](plan.md) §15 sequences. Its `Acceptance Criteria`, `Method` and `Todos` are the spec; the `Todos` list doubles as the test checklist.
 2. **Read its route** — `strategy.md` §3 has a row for it. Read that, not the whole set.
 3. **Build it with its tests**, not after them. Every table row, failure path, ordering constraint and race in `engineering-rules.md` §10.2 that the story implies gets a test.
 4. **Verify it live** — against the harness, real captures, a real dependency. `engineering-rules.md` §11 governs how the result is stated.
@@ -62,7 +62,7 @@ We go one story at a time. A story is not started until the previous one is done
 
 Both are written **as the work closes, from the session that did it** — not reconstructed later by someone reading the code. A story whose two documents are missing is in the same state as one with no `plan.md` §16 entry: not done.
 
-**Worked example:** [`EPICS/EPIC-0-Scaffolding/`](../docs/docs%20-%20MLA/EPICS/EPIC-0-Scaffolding/). It is also the one exception to the shape above — Phase 0 precedes the first story, so it holds no `story.md` and its two documents sit at the epic level with no story folder beneath them.
+**Worked example:** [`EPICS/EPIC-0-Scaffolding/`](EPICS/EPIC-0-Scaffolding/). It is also the one exception to the shape above — Phase 0 precedes the first story, so it holds no `story.md` and its two documents sit at the epic level with no story folder beneath them.
 
 **On the indexing rule.** These files are covered collectively by `strategy.md` §2.4's `EPICS/` entry and its §3 routing rows, which describe the convention once. Do not add a §2 entry per story document — that would bury the register it exists to keep readable. A *new kind* of document under `EPICS/`, or a change to this convention, is registered normally.
 
@@ -75,7 +75,7 @@ Both are written **as the work closes, from the session that did it** — not re
 A recurring shape in this project: a question surfaces that is not engineering's to answer — a CCH call, CCH Legal, COMESA, a named business owner — but the code it touches can still be built. Two different bars apply, and conflating them is the mistake to avoid:
 
 - **Can the mechanism be built and live-verified?** Usually yes, even with the decision open. Build against a stated, reversible default — a config flag, not a hardcoded choice — the same way Phase 3 built against its own recommended default for D3, and Phase 4 builds fail-closed by default while CCH's PII fail-mode answer is pending.
-- **Can the phase/story be called done** (the `plan.md` §16 definition, the epic docs)? Not if the open decision changes what "done" can honestly claim — see [`plan.md`](../docs/docs%20-%20MLA/plan.md) §7.1/§7.2 for the worked example. Record the work as "built and verified against the recommended default, decision pending X," never as silently complete and never as the decision silently resolved one way.
+- **Can the phase/story be called done** (the `plan.md` §16 definition, the epic docs)? Not if the open decision changes what "done" can honestly claim — see [`plan.md`](plan.md) §7.1/§7.2 for the worked example. Record the work as "built and verified against the recommended default, decision pending X," never as silently complete and never as the decision silently resolved one way.
 
 **Surface every one of these to the user as they're found — do not resolve them quietly and keep going.** The moment a decision turns out not to be engineering's to make, say so explicitly, in the session, right then: name the decision, who it belongs to, whether it blocks starting/continuing the build or only blocks formally closing it, and the recommended default being built against in the meantime. This applies equally whether the decision was already on record (the PII fail-mode) or is newly discovered mid-implementation — flag it either way, rather than letting it pass unremarked because the build itself isn't blocked.
 

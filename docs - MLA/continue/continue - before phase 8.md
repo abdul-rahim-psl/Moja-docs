@@ -38,7 +38,7 @@ What exists now, on top of Phases 0–6's ingestion, envelope construction, JWS 
 
 Read in this order:
 
-1. [`cch-mla/CLAUDE.md`](../../../cch-mla/CLAUDE.md) — if this is a new session.
+1. [`CLAUDE.md`](../CLAUDE.md) — if this is a new session. **Moved here from `cch-mla/CLAUDE.md` on 2026-09-11** — `cch-mla/` (the code repository) now carries no `CLAUDE.md` of its own.
 2. **§2 below** — the one piece of work that can actually be done now.
 3. [`../strategy.md`](../strategy.md) — the map. Follow its routing table; do not read the whole knowledge base.
 4. [`../plan.md`](../plan.md) §11 (the Phase 8 checklist), §13 (blocked work) and §14 (the open questions for COMESA).
