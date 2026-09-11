@@ -95,6 +95,15 @@ Written at milestones, each superseding its predecessor for **"what's next"** wh
 | **`continue - before phase 7.md`** | **Superseded for "what's next" — but still current for one thing.** Written when Phase 6 was complete and Phase 7's hardening/validation checklist (`plan.md` §10) was the next work. All six of that checklist's bullets were met live and recorded in `plan.md` §16 on 2026-09-09; read that entry and [`docs - MLA/EPICS/PHASE-7-Hardening-Validation/`](EPICS/PHASE-7-Hardening-Validation/) for what actually happened, not this file. **Its §7 remains the fullest statement of the one clause still open** — "in CI", blocked on the GitLab runner being a `shell` executor on a Node < 16 host — which `continue - before phase 8.md` §2 now carries forward as the immediate work. |
 | **`continue - before phase 8.md`** | **Current.** Written at the point where Phase 7's engineering is complete and live-verified in full — load, concurrency and chaos all proven against a real broker, and all fifteen named scenarios passing unattended from a cold start via `npm run scenario:all`. **Unlike every previous `continue -` document it hands you no phase you can begin**, and says so up front: Phase 7 is not closed (its "in CI" clause is blocked on infrastructure — §2, the only work available today), and Phase 8 is blocked in its entirety until COMESA provisions an environment (`plan.md` §11's own opening sentence). Scopes Phase 8 so it is ready the day the environment arrives, and carries the three open external items — gate item #2 (PII rotation trigger), R-10 (the TPS baseline), R-37 (alert routing), all with COMESA/CCH — so none is lost. **§8's traps are the ones that cost real time in Phase 7**, including process identification on a machine running ~41 unrelated `build/index.js` processes. |
 
+### 2.6 Review findings — `docs - MLA/bugs/`
+
+Independent QA review of the `cch-mla` codebase, written as two paired documents: what is wrong, and what to do about it. Read the findings before starting any new story that touches the consumer, the JWS path, the key store, or configuration — several findings are pinned as *correct* by existing tests, so the suite being green is not evidence they are absent.
+
+| File | Significance |
+| --- | --- |
+| **`qa-review-findings.md`** | **The defect register from the 2026-09-11 QA review of `cch-mla/src/`** — 22 numbered findings (F-01 … F-22) across Critical/High/Medium/Low, each with file:line, the failure scenario, why it matters against the rules, and how it was verified (runtime probe, capture scan, or library source). Three Critical: a key-store outage permanently discards events with the offset advanced (F-01), the `httpPath` id fallback fabricates `id: "quotes"` (F-02), security-relevant config silently defaults to repo test material (F-03). Closes with the test-suite gaps that let each finding through, and a one-line index. Sections to read first: the Critical block and the **Test-suite gaps** table. ~280 lines. |
+| **`qa-review-remediation.md`** | **One proposed fix per finding, same numbering.** For each: the change, why that change over the obvious alternatives, the failing test to write first, what to live-verify against the harness, and any decision that belongs to CCH rather than engineering (F-14 mTLS rotation mechanism; F-15 the 4xx-log/N7 conflict). Every library call proposed was checked against the installed dependency (kafkajs 2.2.4 event names, `partitionsConsumedConcurrently`, the `heartbeat` callback passed into `eachMessage`; Node 22 `https.Agent`). Opens with a suggested order and closes with the table of documents that must change alongside each fix. ~600 lines. |
+
 ---
 
 ## 3. Reading routes by task
@@ -131,6 +140,8 @@ Match the task to a route. Reading beyond the route is usually wasted context.
 | **Picking up the next story** | `plan.md` §15 (sequencing) → §16 (what is already done) → that story's `docs - MLA/EPICS/…/story.md` |
 | **Starting a session with no idea where things stand** | `docs - MLA/continue/` — read the **newest** file only |
 | **Finding out what has actually been built** | `plan.md` §16 (progress log) — what closed, what was proven live versus assumed |
+| **Picking up a QA finding to fix, or reviewing the consumer/JWS/key-store/config code** | `bugs/qa-review-findings.md` (the numbered finding) → `bugs/qa-review-remediation.md` (same number) → the source story → `engineering-rules.md` §10.3 (failing test first) |
+| **Judging what the green test suite does and does not prove** | `bugs/qa-review-findings.md` "Test-suite gaps" |
 | **Adding a document to this knowledge base** | §5 below, then match the register of the closest existing document |
 
 ---
@@ -177,7 +188,7 @@ Then add it to **§3's routing table** against whatever task it serves. A docume
 
 The same rule applies to `docs - MLA/user stories/`: a new source document is registered in §2.2 with its epic/story range and its findings, in the commit that adds it.
 
-**This rule is mirrored in `CLAUDE.md` at the repository root**, so it applies automatically to any session working here.
+**This rule is mirrored in `CLAUDE.md`** (§6 below), so it applies automatically to any session working here.
 
 ---
 
@@ -185,7 +196,7 @@ The same rule applies to `docs - MLA/user stories/`: a new source document is re
 
 | Resource | Where | Significance |
 | --- | --- | --- |
-| **`CLAUDE.md`** | repository root | Working rules for any agent session in this repo, including the indexing rule above. |
+| **`CLAUDE.md`** | `docs - MLA/CLAUDE.md` (moved here from `cch-mla/CLAUDE.md` on 2026-09-11; `cch-mla/` now carries no `CLAUDE.md` of its own) | Working rules for any agent session on this work, including the indexing rule above. |
 | **The FSD** | external — `CCH_FSD_MessageIngestion` | Component-level authority on business logic. **Not in this repository.** Every FSD claim in the knowledge base is a *reported* claim. |
 | **The IID / IDD** | external | Cross-boundary contracts. Carries the consumer-group warning (§5.1) and the envelope-versioning contract (§5.2). **Not in this repository.** |
 | **`DRPP_Kafka_E2E_Pack`** | external | Five corridor captures plus an interleaved partition slice from `topic-event-audit`. **Ground truth for the topic model.** Not in this repository — obtain it before writing any fixture. |
