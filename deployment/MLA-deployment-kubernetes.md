@@ -11,6 +11,23 @@ will contain, with a worked skeleton, but real values (broker address, consumer 
 PPA URL, registry location) are named as open in §8 rather than guessed. This is `plan.md`'s Phase 8
 "Kubernetes manifests" checklist bullet, being scoped ahead of the rest of that phase — see §10.
 
+**Update, 14 September 2026 — the mechanism has been dry-run end to end.** Before any of this goes to
+Oscar's team, we ran it ourselves: MLA + a real mTLS-authenticated PPA stand-in, deployed via real
+Kubernetes manifests, consuming from a real Mojaloop switch's Kafka broker, delivering real re-signed DRPP
+transactions through JWS verification and PII tokenization to a genuine downstream. Full account in
+[`local-deployment.md`](local-deployment.md). Two real bugs surfaced and were fixed at the source, not
+worked around — both now already applied, not new open items:
+- `cch-mla` could not consume **LZ4-compressed** Kafka messages at all (a hard crash, not a skip) —
+  `kafkajs` ships no compression codecs beyond GZIP by design, and this cluster's switch (very plausibly
+  also CCH's) compresses with LZ4. Fixed: a real codec dependency now registered in
+  `src/clients/kafka.client.ts`.
+- `ppa-stub`'s own control-port env var name collided with Kubernetes' automatic Service-discovery
+  injection — relevant to anyone else standing this stub up as a K8s Service, not this deployment's own
+  manifests.
+Every other §4/§8 behavior this document describes (readiness never gating on PPA, per-partition
+pause-and-recover on a PPA outage, no restart required to resume) was independently observed live, not
+just read off the code.
+
 - [1. The ask, as received](#1-the-ask-as-received)
 - [2. Architecture — where MLA actually sits](#2-architecture--where-mla-actually-sits)
 - [3. What ships unconditionally vs. what only CCH can supply](#3-what-ships-unconditionally-vs-what-only-cch-can-supply)
