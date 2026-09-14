@@ -248,30 +248,32 @@ The suite's 100% line coverage coexists with every finding above because the fol
 
 ## Findings index
 
-| # | Severity | One line |
-| --- | --- | --- |
-| F-01 | Critical | Key-store outage → every event permanently dropped, offset advanced, no alert |
-| F-02 | Critical | `httpPath` fallback generates `id: "quotes"`/`"fxQuotes"`/`"error"` |
-| F-03 | Critical | Security-relevant config defaults to repo test keys/secret/certs |
-| F-04 | High | JWS protected-header claims (source/destination/URI/method) never checked |
-| F-05 | High | PPA (and PII) breaker trip has no behavioural effect; no health probe |
-| F-06 | High | Key-store hot reload reads partial/absent files → permanent `invalid-signature` |
-| F-07 | High | Numeric config accepts 0, negatives, and session-timeout-exceeding bursts |
-| F-08 | High | Retry bursts block all partitions (`partitionsConsumedConcurrently` = 1) |
-| F-09 | High | `uncaughtException` swallowed; process continues in undefined state |
-| F-10 | High | Reprobe chain can die silently; partition paused forever; stale load-bearing comment |
-| F-11 | Medium | Park timers survive shutdown; shutdown exits 0 on error |
-| F-12 | Medium | `isConnected()` never flips on broker disconnect; readiness lies |
-| F-13 | Medium | `PPA_BASE_URL` path prefix dropped |
-| F-14 | Medium | No explicit TLS min version / `rejectUnauthorized` / keep-alive agent; certs not reloadable |
-| F-15 | Medium | 4xx log writes cleartext ILP/PII (story AC vs N7 — CCH decision) |
-| F-16 | Medium | Alert webhook fan-out unbounded |
-| F-17 | Medium | Commit failure after successful reprobe re-POSTs the envelope |
-| F-18 | Medium | Unbounded response buffer; 3xx retried forever with no distinct signal |
-| F-19 | Low | Prototype-chain table lookups (`constructor`, `toString`, `in`) |
-| F-20 | Low | Backoff floor is 0 ms |
-| F-21 | Low | `mla_consumer_lag` help text wrong |
-| F-22 | Low | Tokenization-failure alert severity |
+**The checkbox is crossed only when a finding is both fixed *and* live-verified** (`engineering-rules.md` §11 — a passing unit suite alone does not earn the check). A finding that is fixed and unit-tested but not yet live-verified stays unchecked, with its state noted in the "Status" column rather than implied by the box.
+
+| # | Done | Severity | One line | Status |
+| --- | --- | --- | --- | --- |
+| F-01 | [ ] | Critical | Key-store outage → every event permanently dropped, offset advanced, no alert | In progress — retry/park/breaker mechanism built and unit-tested (391 tests green); live verification (real, unmocked `FilePublicKeyStoreClient`) surfaced a real follow-on bug: a key directory missing at process start never recovers via `fs.watch`, so a park from that specific state loops forever. Fix agreed: retry attaching the watch on an interval. Not yet implemented. |
+| F-02 | [x] | Critical | `httpPath` fallback generates `id: "quotes"`/`"fxQuotes"`/`"error"` | Fixed. Live-verified: the real `extractId` re-run against all 116 canonical, classified records in `raw_export_500.json` — zero regressions — plus `npm run golden:ingestion:all` unaffected. |
+| F-03 | [ ] | Critical | Security-relevant config defaults to repo test keys/secret/certs | Fixed and unit-tested (100% coverage on `config.service.ts`). Not yet live-verified — a real boot check (refuses to start with no env; starts cleanly with `.env`) was started and interrupted, not completed. |
+| F-04 | [ ] | High | JWS protected-header claims (source/destination/URI/method) never checked | Not started |
+| F-05 | [ ] | High | PPA (and PII) breaker trip has no behavioural effect; no health probe | Not started |
+| F-06 | [ ] | High | Key-store hot reload reads partial/absent files → permanent `invalid-signature` | Not started |
+| F-07 | [ ] | High | Numeric config accepts 0, negatives, and session-timeout-exceeding bursts | Not started |
+| F-08 | [ ] | High | Retry bursts block all partitions (`partitionsConsumedConcurrently` = 1) | Not started |
+| F-09 | [ ] | High | `uncaughtException` swallowed; process continues in undefined state | Not started |
+| F-10 | [ ] | High | Reprobe chain can die silently; partition paused forever; stale load-bearing comment | Not started |
+| F-11 | [ ] | Medium | Park timers survive shutdown; shutdown exits 0 on error | Not started |
+| F-12 | [ ] | Medium | `isConnected()` never flips on broker disconnect; readiness lies | Not started |
+| F-13 | [ ] | Medium | `PPA_BASE_URL` path prefix dropped | Not started |
+| F-14 | [ ] | Medium | No explicit TLS min version / `rejectUnauthorized` / keep-alive agent; certs not reloadable | Not started |
+| F-15 | [ ] | Medium | 4xx log writes cleartext ILP/PII (story AC vs N7 — CCH decision) | Not started |
+| F-16 | [ ] | Medium | Alert webhook fan-out unbounded | Not started |
+| F-17 | [ ] | Medium | Commit failure after successful reprobe re-POSTs the envelope | Not started |
+| F-18 | [ ] | Medium | Unbounded response buffer; 3xx retried forever with no distinct signal | Not started |
+| F-19 | [ ] | Low | Prototype-chain table lookups (`constructor`, `toString`, `in`) | Not started |
+| F-20 | [ ] | Low | Backoff floor is 0 ms | Not started |
+| F-21 | [ ] | Low | `mla_consumer_lag` help text wrong | Not started |
+| F-22 | [ ] | Low | Tokenization-failure alert severity | Not started |
 
 ---
 
