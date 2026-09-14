@@ -43,6 +43,13 @@ now holds real traffic from every scenario below.
 
 **§10's edge-case matrix is complete. Handover items 3.4 and 3.5 both have evidence-backed answers.**
 
+**The FX happy path now runs end to end, for real (§9.21, done 14 September).** The dead shared TTK
+simulator backend is fixed (live `kubectl patch`, not yet persisted into chart values — see §9.21's last
+paragraph). All three sims (`e2e-sim1`, `e2e-sim2`, `e2e-sim-fxp1`) now auto-answer real requests via
+their own SDK+backend, with zero manually crafted responses on the FX-specific legs. Full 10-stage
+corridor captured as `09_fx_corridor_happy_path`. Two real SDK/protocol findings surfaced and are
+documented in §9.21 and in the captures README — worth reading before driving another FX corridor test.
+
 **Facts a fresh session needs immediately, without re-deriving them:**
 - SSH is direct, as **root**, key at `~/.ssh/mojaloop_fx_10_0_150_69` (see "Working method" above).
   Reaching the host depends on the user's VPN — connection-level failures mean the VPN, not the
@@ -84,6 +91,11 @@ now holds real traffic from every scenario below.
 5. **Every remaining §10 row captured** (§9.17, §9.18) — plus the first complete end-to-end
    prepare→fulfil→COMMITTED transfer in this deployment. Captures in
    [`topic-event-audit-edge-case-captures/`](topic-event-audit-edge-case-captures/).
+6. **The dead simulator backend fixed, and the FX happy path completed end to end** (§9.21, 14
+   September). Live ConfigMap patch, not yet persisted to chart values. Two new SDK/protocol findings
+   (fxTransfer `commitRequestId` correlation; a payee condition-cache mismatch on transfer-leg reuse of a
+   real quote's `transactionId`) — both documented in §9.21 and in the `09_fx_corridor_happy_path`
+   capture's README section.
 
 **Genuinely useful next steps, in rough priority order:**
 
@@ -94,16 +106,19 @@ now holds real traffic from every scenario below.
    captures README are the substantive output: liquidity/limit failures are not distinguishable by
    `operation`; FX-quote error egress records carry no correlation identifiers at all; and no expiry
    event is ever emitted on the quoting leg.
-3. **Complete the FX happy path — §9.20 has the ordered steps.** Root cause is fully traced (§9.19):
-   the chart ships three config entries as bare GitHub URLs, the host has no egress, and the resulting
-   uncaughtException stops the simulators' shared backend from binding port 4040. All three files are
-   fetched and committed at [`ttk-sim-offline-specs/`](ttk-sim-offline-specs/). One fix revives all
-   three sims at once, which also removes §9.10's `{$prev}` callback blocker. It is the only route to
-   `prepareFxTransfer`/`fulfilFxTransfer`/`reserveFxTransfer`/`notifyFxTransfer` records — four
-   operations present in the DRPP reference pack that none of our current captures contain.
-4. Still open and unchanged: the duplicate/resend async behaviour (§9.11 Finding 1); the full Kafka
+3. ~~Complete the FX happy path~~ — **done, §9.21.**
+4. **Persist the ConfigMap fix into chart values** (§9.20 step 4, deferred in §9.21) — non-trivial, since
+   the chart template runs `config_files` values through `toPrettyJson`; needs the ~280KB of OpenAPI YAML
+   re-expressed as native nested Helm values, not a plain string. Until done, a future `helmfile apply`
+   will silently regress the fix.
+5. **Deploy MLA on this same machine** — the user's stated next phase once the FX corridor works, which
+   it now does.
+6. Still open and unchanged: the duplicate/resend async behaviour (§9.11 Finding 1); the full Kafka
    envelope comparison against the DRPP pack (§9.12's caveat); the `/etc/hosts` + ingress step for the
-   browser TTK UI (end of §7).
+   browser TTK UI (end of §7); the live party-lookup `3003` error found in §9.21 (pre-existing, not
+   investigated further); the two SDK/protocol findings from §9.21 (fxTransfer `commitRequestId`
+   correlation now worked around correctly; the payee condition-cache mismatch not yet root-caused past
+   "somewhere in ml-api-adapter's ISO↔FSPIOP round-trip").
 
 ## 0. Why this exists
 
@@ -1305,6 +1320,74 @@ pack that **none** of our current captures contain. Add it to
   to the condition in the packet. That is the sim's own job and should work, but it has never run here.
 - Steps 1–4 change a running deployment. They are confined to one simulator's ConfigMap and are
   reversible by re-running `helmfile apply`, but they are not read-only.
+
+### 9.21 Steps 1–3, 5–7 done — the FX happy path runs end to end for real
+
+Done 14 September 2026. None of §9.20's stated risks materialized as feared — the FXP had a working
+`XXX → XTS` rule and both sims answer for real — but two *different*, previously-unknown protocol
+issues turned up in their place. In order:
+
+**Steps 1–3 (fix + restart), exactly as planned.** Copied the three files, patched the ConfigMap's three
+bad keys with `kubectl patch --type merge` (chosen over a full `create --dry-run | apply` specifically to
+avoid disturbing Helm's `app.kubernetes.io/managed-by`/`meta.helm.sh/*` tracking metadata), restarted the
+pod. Confirmed both `API Server started on port 5050` and `Toolkit Server running on
+http://moja-e2e-sim-ttk-backend-0:4040` — no fetch exception, both spec files initialized from the local
+mounted copies. This alone was already the headline win: a live, direct `POST /fxQuotes` immediately got
+back a real conversion (`100 XXX → 200 XTS`), not `2001`.
+
+**Step 5, and further: the automation goes well beyond a single quote.** Rather than only re-testing the
+one quote scenario, probed whether the sims' own SDK+backend pairing now auto-answers requests for real,
+with zero manually crafted responses (unlike every §9.11–§9.18 capture, which manually impersonated the
+counterparty). It does, for both FX-specific legs:
+- `POST /fxQuotes` (payer → FXP): quoting-service forwards it to `e2e-sim-fxp1-sdk`'s real inbound API,
+  which calls its now-healthy backend and returns genuine conversion terms **and** a real ILP v4
+  condition — all on the wire, visible on `topic-event-audit`.
+- `POST /quotes` (payer → payee, in `XXX` — payee has no `XTS` account, confirmed via a `3201 Unsupported
+  participant` probe first): `e2e-sim2-sdk` auto-answers with a genuine ILP v4 packet, decodable with the
+  `ilp-packet` npm package (`deserializeIlpPrepare`) to recover the embedded `executionCondition`.
+
+**Step 6, the real corridor — and the two findings.** Skipped live party lookup (`GET /parties` against
+ALS returns FSPIOP error `3003` for this deployment's test party — a separate, pre-existing issue, not
+touched by this session's fix, and not blocking since every other script already works from the known
+static DFSP roster). Driving `fxTransfers` and the final `transfers` leg for real surfaced two distinct
+SDK/protocol issues, both root-caused by reading the SDK's own source inside the pod rather than guessing:
+
+1. `POST /fxTransfers`'s `commitRequestId` **must equal** the accepted fxQuote's `conversionId`. The FXP
+   SDK's `InboundTransfersModel.postFxTransfers()` (`/opt/app/modules/api-svc/src/lib/model/
+   InboundTransfersModel.js`) loads its cached fxQuote state via `loadFxState(body.commitRequestId)`,
+   keyed on `conversionId` — its own comment reads "todo: assume commitRequestId from fxTransfer should
+   be same as conversionTerms.conversionId from fxQuotes". A fresh, unrelated `commitRequestId` (the
+   first attempt here) misses the cache entirely (`fxState is loaded from cache — data: null`) and the
+   FXP aborts with a bare `2001`, no hint of the real cause anywhere in the FSPIOP response. Fixed by
+   setting `commitRequestId = conversionId`; the FXP then genuinely reserves and fulfils
+   (`reserveFxTransfer` → `fulfilFxTransfer`), moving the payer's real ledger position.
+2. Once a payee's SDK has cached a **real** `PUT /quotes` response for a `transactionId`, a later
+   `POST /transfers` reusing that `transactionId` is compared against the payee's own cached
+   `quote.mojaloopResponse.condition` (`InboundTransfersModel.js` line ~444) and aborted (again a bare
+   `2001`) on any mismatch. Re-deriving that condition independently from the payee's own ISO-wire
+   `IlpV4PrepPacket` (decoded correctly — byte-identical `ilpPacket` confirmed on the wire) and resending
+   it through `ml-schema-transformer-lib`'s `TransformFacades.FSPIOP.transfers.post()` still produced a
+   *different* wire `condition` — traced as far as somewhere in ml-api-adapter's own ISO↔FSPIOP
+   round-trip, not confirmed further. **Not fixed, and not blocking**: worked around by giving the final
+   transfer leg a **fresh** `transferId` with no prior quote cached against it (exactly the mechanism the
+   existing P2P baseline `s_xfer_happy.js` already uses), which takes the SDK's no-cached-quote branch
+   and derives its condition purely from the packet supplied — fully self-consistent, and it settles
+   (`COMMITTED`) cleanly. Worth a closer look if a future test genuinely needs one `transactionId` to
+   carry through quote and transfer both.
+
+**Step 7, captured.** `topic-event-audit-edge-case-captures/09_fx_corridor_happy_path/` — 16 records, the
+full 10-stage lifecycle (`postFxQuotes` → `putFxQuotesByID` → `postQuotes` → `putQuotesByID` →
+`prepareFxTransfer`/`reserveFxTransfer` → `fulfilFxTransfer` → `prepareTransfer` →
+`fulfilTransfer`/`commitTransfer`), matching the DRPP reference pack's own stage table exactly. Confirmed
+via real ledger position movement at every leg, not just HTTP status codes. Scripts kept as
+`fx-edge-case-scripts/s_fx_corridor_step{1,2,3}.js` (see that folder's README for the manual
+extract-and-rerun cycle these need, since no Kafka client is available inside the pod to automate it).
+
+**Not done, separately outstanding**: persisting the ConfigMap fix into chart values (§9.20 step 4) —
+turns out non-trivial, since the chart's own template runs every `config_files` value through
+`toPrettyJson`, so a plain multi-line string doesn't round-trip as a usable file; doing it properly means
+re-expressing the ~280KB of OpenAPI YAML as native nested Helm values. Deferred — the live ConfigMap patch
+holds until the next `helmfile apply`, which is not expected before this is picked up.
 
 
 ## 10. Edge-case matrix — this is what answers handover item 3.5

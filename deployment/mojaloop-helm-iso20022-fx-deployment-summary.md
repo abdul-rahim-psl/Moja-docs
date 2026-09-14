@@ -423,19 +423,75 @@ Alongside that, the good news: the transfer-stage records match the real product
 field for field. That extends the earlier check (§12), which had only compared the lookup and
 quoting stages, and it means this local deployment remains a valid stand-in for the real thing.
 
-## 18. Where things stand
+## 18. Where things stood before the cross-border fix
 
 - **Item 3.4** (validate broker config against our own instance): done and unchanged.
 - **Item 3.5** (error/abort/reject/timeout captures): **done.** Eight captured scenarios, stored
   alongside the plan in the same layout as the real reference pack, with a README explaining what each
   one shows and what it means for the mapping work.
 
-Two things are genuinely outstanding:
+Two things were genuinely outstanding at that point:
 
-- **The correction described in §14** — the COMESA write-up needs reviewing before it's sent.
-- **The full currency-conversion happy path**, which is now an understood, bounded piece of work rather
-  than an unknown. Root cause is traced, the missing files are in hand, and the ordered steps are in the
-  plan at §9.20. Completing it would also close the last gap in the shape comparison against the real
-  production records — the four currency-conversion event types we've never been able to produce.
+- **The correction described in §14** — the COMESA write-up needs reviewing before it's sent. Still
+  outstanding.
+- **The full currency-conversion happy path**, which was an understood, bounded piece of work rather
+  than an unknown. Root cause was traced, the missing files were in hand, and the ordered steps were in
+  the plan at §9.20. This is what §19 completes.
+
+## 19. The cross-border FX flow, working end to end for real
+
+Picking the plan back up: apply the fix, watch what the simulators actually do once they can, fix what
+that reveals. What it revealed was more interesting than "the FXP answers now."
+
+**The fix itself** was exactly as scoped: patch the ConfigMap's three broken keys with the real spec
+files instead of dead GitHub URLs, restart the pod, confirm the backend's second port (the one that had
+never bound) comes up clean. It did. A direct FX quote immediately got back real conversion terms
+instead of the generic error every capture in §16 was built around.
+
+**Then the real payoff showed up.** These simulators aren't just HTTP stubs that happen to answer one
+scripted quote — each one runs its own SDK scheme adapter, and that adapter's whole job is to call this
+exact backend to decide how to answer *any* real request it receives from the switch. Fixing the backend
+didn't just unblock one test call; it turned the FXP and payee simulators back into working automated
+counterparties. Sending a real quote request through the actual switch — no scripted reply, no
+pretending to be the other side — now gets a real, automatically generated answer back, exactly the way
+a live participant would behave. That's a materially different, stronger result than "we can now produce
+one more error code": it means the corridor's automation is genuinely alive, not merely reachable.
+
+Chasing that further — driving the whole five-step corridor for real, letting the simulators answer
+every leg themselves — surfaced two specific behaviors that would have looked like unexplained failures
+without reading the simulators' own source rather than guessing from the error message. Both errors were
+the same generic "internal server error" on the surface; both had a specific, traceable cause underneath.
+One is a small correlation rule to follow, now understood and used correctly. The other is a genuine open
+question about how the underlying platform round-trips a value between two message formats — noted,
+worked around cleanly, and left as a specific, well-described lead rather than a vague "something didn't
+work." Full detail on both is in the plan's §9.21 and in the new capture's own write-up, since the how
+matters more there than it does here.
+
+**The outcome**: a real, complete five-step cross-border transaction — party discovery, currency
+conversion quote, local quote, currency conversion transfer, and settlement — went through the actual
+switch components end to end, with the simulators answering for themselves at every step, and settled
+successfully. It's captured on `topic-event-audit` in the same shape as the real DRPP production
+records, closing the last gap in that comparison: the four currency-conversion event types this
+deployment had never been able to produce before are now all present, from a real run rather than a
+manually assembled one.
+
+## 20. Where things stand now
+
+- **Item 3.4**: done and unchanged.
+- **Item 3.5**: done and unchanged.
+- **The cross-border FX flow**: **done.** Runs end to end against the real switch, settles, and is
+  captured for the FRMS mapping work alongside the other nine scenarios.
+
+Genuinely outstanding:
+
+- **The COMESA write-up correction (§14)** — still not sent with the correction applied.
+- **Persisting the backend fix into the chart's own values** rather than leaving it as a live patch a
+  future redeploy could quietly undo. Turned out to be more involved than a text edit — the chart
+  renders these values through a JSON-serialization step that doesn't tolerate a plain multi-line string
+  — so it's deferred rather than rushed. Detail in plan §9.21's last paragraph.
+- **The ml-api-adapter condition round-trip finding** from §19 — a real, specific lead, not chased to a
+  root cause. Worth a look if a future test needs a transfer to reuse a real quote's own transaction id.
+- **Deploying MLA on this same machine** — the next phase, now that its precondition (a working
+  cross-border FX flow) is met.
 
 Both documents are fully in sync as of this point.

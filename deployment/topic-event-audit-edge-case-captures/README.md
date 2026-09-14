@@ -26,6 +26,7 @@ comparable.
 | `06_transfer_timeout_3303` | Prepared, never fulfilled, swept by the timeout handler | `3303` Transfer expired |
 | `07_fx_quote_expired_request_accepted` | `POST /fxQuotes` with an already-past expiration | none for expiry — **accepted `202`** |
 | `08_fx_quote_late_response_accepted` | `PUT /fxQuotes/{ID}` 40s past expiration | none for expiry — **accepted `200`** |
+| `09_fx_corridor_happy_path` | Full 10-stage FX corridor: party lookup → fxQuote → quote → fxTransfer → transfer, `XXX → XTS` | — (success, real automated corridor) |
 
 ## Operations these add over the DRPP golden-path pack
 
@@ -67,3 +68,40 @@ The transfer-leg records match the DRPP reference **key for key**:
 
 Both are identical to the corresponding DRPP records. This extends plan §9.12's finding (which
 compared a `postFxQuotes` and a `getPartiesByTypeAndID` record) to the transfer legs.
+
+## `09_fx_corridor_happy_path` — the full corridor, real and automatic
+
+Captured 14 September 2026, after fixing the dead shared TTK simulator backend (plan §9.19/§9.20).
+Every leg here is a real request against the real switch (ALS/quoting-service/ml-api-adapter), and the
+FX-specific legs are answered **automatically** by `e2e-sim-fxp1`'s own SDK+backend — no manually
+crafted callback, unlike scenarios 07/08 above.
+
+16 records, 8 operations, matching the DRPP pack's own stage table exactly: `postFxQuotes` →
+`putFxQuotesByID` → `postQuotes` → `putQuotesByID` → `prepareFxTransfer`/`reserveFxTransfer` →
+`fulfilFxTransfer` → `prepareTransfer` → `fulfilTransfer`/`commitTransfer`. Real conversion terms
+(`100 XXX → 200 XTS`), a real ILP v4 packet from the payee's own SDK, and a real settled transfer —
+confirmed via participant positions moving correctly at every leg (payer position +100 per FX leg,
+payee position -10 on the final transfer's own amount).
+
+Two protocol-level findings surfaced building this, both worth carrying into any real FX-corridor
+integration work (not artifacts of the local deployment):
+
+1. **`commitRequestId` on `POST /fxTransfers` must equal the accepted fxQuote's `conversionId`.** The
+   FXP-side SDK's `InboundTransfersModel.postFxTransfers()` looks up its cached quote state via
+   `loadFxState(body.commitRequestId)`, keyed on `conversionId` — its own source carries the comment
+   "todo: assume commitRequestId from fxTransfer should be same as conversionTerms.conversionId from
+   fxQuotes". A fresh, unrelated `commitRequestId` misses that cache and the FXP aborts with a generic
+   `2001 Internal server error`, with no indication in the FSPIOP error response of the real cause —
+   only visible in the FXP SDK pod's own logs (`fxState is loaded from cache — data: null`).
+2. **Once a payee's SDK has cached a real `PUT /quotes` response for a `transactionId`, a subsequent
+   `POST /transfers` reusing that `transactionId` must carry the *exact* condition the payee cached
+   (`quote.mojaloopResponse.condition`), or it aborts — again generically, as `2001`.** In this
+   deployment, re-deriving that condition from the payee's own ISO-wire `IlpV4PrepPacket` (decoded
+   correctly, byte-identical to the cached value) and resending it through
+   `ml-schema-transformer-lib`'s `TransformFacades.FSPIOP.transfers.post()` still produced a
+   *different* wire condition — traced as far as ml-api-adapter's own ISO↔FSPIOP round-trip, not
+   confirmed further. Not blocking here: this capture's final transfer leg uses a **fresh**
+   `transferId` with no prior quote instead (the same mechanism `02_transfer_committed_happy_path`
+   already uses), which takes the SDK's no-cached-quote branch and derives its condition from
+   whatever packet is supplied — fully self-consistent. Worth a closer look if a future corridor test
+   needs the quote and transfer legs to share one `transactionId` throughout.

@@ -53,6 +53,14 @@ unified hub gateway — each switch component has its own Service (plan §9.10).
 | `s_fxquote_expiry.js` | FX quote expiry (request leg) | Already-expired `POST /fxQuotes` → accepted `202`. |
 | `s_fxquote_expiry_put.js` | FX quote expiry (response leg) | `PUT /fxQuotes/{ID}` 40s past expiry → accepted `200`. |
 | `s_transfer_base.js` | — | Bare prepare, kept as the minimal reproducer. |
+| `s_fx_corridor_step1.js` | §10 row 9 (corridor) | Real `POST /fxQuotes` + `POST /quotes`, both auto-answered by the sims' own SDKs. |
+| `s_fx_corridor_step2.js` | §10 row 9 (corridor) | Real `POST /fxTransfers`, `commitRequestId = ` the fxQuote's `conversionId` — auto-fulfilled by the FXP. |
+| `s_fx_corridor_step3.js` | §10 row 9 (corridor) | Final `transfers` leg, fresh `transferId` (proven baseline pattern) → `COMMITTED`. |
+| `s_probe_fxp_auto.js`, `s_probe_payee_auto.js`, `s_probe_party_lookup.js` | — | One-off probes that established the sims auto-answer for real once the shared backend is fixed (see plan §9.20/§9.21). |
 
 Scenarios are self-contained and re-runnable: each does its own prepare, so none depends on state
-left by another.
+left by another. **Exception**: `s_fx_corridor_step1/2/3.js` are a deliberate three-part sequence —
+step 2 and step 3 need real ids captured off `topic-event-audit` after step 1 runs (no Kafka client is
+available inside the pod, so this is a manual copy-paste-and-rerun cycle, not automated chaining). The
+committed versions hold one specific past run's ids as a worked example; a fresh run needs its own ids
+re-extracted the same way (see plan §9.21 for the full worked walkthrough).
