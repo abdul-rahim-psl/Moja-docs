@@ -1996,3 +1996,58 @@ which answered most of that document's §11 open questions live.
                 §11 Q1 (plain manifests vs. Helm) was never explicitly answered by CCH; proceeding on the
                 plain-manifests assumption. No CI job pushes the image automatically yet — today's push was
                 manual, matching `local-deployment.md`'s own proven fully-manual mechanism.
+
+### Phase 8 (partial) — George's reply, JWS_VALIDATION_DISABLED, ConfigMap split, digest pinning   [2026-09-15]
+
+Same day, continuing the entry above. George Murage (CCH) replied in writing to
+`MLA-deployment-kubernetes.md` §11's open questions plus two attached documents (source preserved:
+`docs/deployment/george-reply-2026-09-15.md`, `connectivity-options.md`, `certificate-setup-proposal.md`).
+Four decisions resulted — full detail in `MLA-deployment-kubernetes.md`'s own 15 September update, not
+repeated here.
+
+**Built**       `JWS_VALIDATION_DISABLED` (`src/interfaces/config.interface.ts`,
+                `src/services/config.service.ts`, default `false`) — a testing-only bypass George proposed
+                as a permanent removal of MLA's own signature verification; **not accepted as permanent**
+                (engineering-rules.md's non-negotiables, and F-04 specifically hardened bound-claims
+                checking), built instead as a scoped, reversible, loudly-observable default per
+                `CLAUDE.md`'s external-decisions rule. `envelope-pipeline.service.ts` skips `verifyJws`
+                entirely when set; a new `mla_jws_validation_bypassed` gauge
+                (`metrics.interface.ts`/`metrics.client.ts`) and a boot-time `WARN` log
+                (`src/index.ts`) make it impossible to run silently. `.env.template` documents it with a
+                loud comment. Separately: the real Kubernetes ConfigMap is now split —
+                `cch-mla/deploy/kubernetes/01-configmap.yaml` (static, Paysys-owned) and a new
+                `02-env-configmap.yaml` (environment-specific, CCH-owned — `KAFKA_BROKERS`/`PPA_BASE_URL`
+                only) — per George's own proposed delivery mechanism. The Deployment
+                (`03-mla-deployment.yaml`, renumbered) now references both ConfigMaps via two `envFrom`
+                entries, and pins the image by immutable digest
+                (`sha256:1e995f6de223a58257f623b96792e15eef56d06f1f73e9e71c49b6d65fbe868b`) rather than the
+                mutable `:a0437cd` tag, per George's own recommendation (point 4).
+
+**Tests**       9 new/changed: 3 in `config.service.test.ts` (default false, explicit true, folded into
+                the existing full-snapshot and supplied-values tests), 1 in `envelope-pipeline.service.test.ts`
+                (a record with no signature at all still forwards when the bypass is set), 1 in
+                `metrics.client.test.ts` (the new gauge, default 0, set to 1). The remaining changes are
+                mechanical dependency-threading across `ingestion-consumer.service.test.ts` (36 call
+                sites) and five other test files' `Metrics` mocks, not new behavior under test. Full suite:
+                487 tests, 100%/97.86%/100%/100% against the 96% gate, zero lint errors, `npx tsc --noEmit`
+                clean on both the root and `tools/tsconfig.json`.
+
+**Verified**    `live` — booted the real process twice, no harness needed (boot-time config/metrics
+                behavior, not Kafka-dependent). `JWS_VALIDATION_DISABLED=true`: boot log carried the exact
+                designed `WARN` line, `/metrics` showed `mla_jws_validation_bypassed 1`. Default
+                (unset): no warning logged, `/metrics` showed `mla_jws_validation_bypassed 0`,
+                `/health/ready` stayed `UP`. **Not verified**: the bypass's effect on a real Kafka-consumed,
+                genuinely-unsigned record end to end through the full consumer loop — the unit test above
+                covers the pipeline function directly; a full-harness run (Redpanda + `ppa-stub`) was not
+                repeated for this specific change. The ConfigMap split and digest pin have not been
+                `kubectl apply`'d anywhere, same open item as the parent entry above.
+
+**Diverged**    None from §12's register.
+
+**Left open**   Same items as the parent entry above (`KAFKA_BROKERS`, `PPA_BASE_URL`, JWS keys, PII
+                secret, PPA-side CA trust), plus: the ingress-gateway architecture accepted from George's
+                proposal is new Paysys-side infrastructure, not yet built — the interim CA remains in use
+                until it lands. `JWS_VALIDATION_DISABLED` must be confirmed off (`false`) before any real
+                traffic is trusted; nothing in this repo enforces that beyond the default itself and the
+                loud observability built around it. A reply to George confirming all four decisions has
+                not yet been sent.

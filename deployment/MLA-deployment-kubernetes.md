@@ -42,6 +42,44 @@ directly, never committed to this repo. An interim MLA→PPA mTLS CA and client 
 generated as the stated default while George's shared cert-manager investigation continues — reversible,
 per `CLAUDE.md`'s external-decisions rule.
 
+**Update, 15 September 2026 — George's written reply, and the resulting decisions.** George Murage (CCH)
+replied in writing, covering four points. Full source: [`george-reply-2026-09-15.md`](george-reply-2026-09-15.md).
+Outcomes:
+
+1. **Config delivery.** George proposed externalising `KAFKA_BROKERS`/`PPA_BASE_URL` (and secrets) into a
+   ConfigMap CCH creates, rather than editing placeholders in a file Paysys ships. **Adopted** — the
+   ConfigMap is now split: `cch-mla/deploy/kubernetes/01-configmap.yaml` (static, Paysys-owned) and
+   `02-env-configmap.yaml` (environment-specific, CCH-owned — `KAFKA_BROKERS`/`PPA_BASE_URL` only).
+   George also asked whether to use IP allow-listing instead of an IPsec VPN — see point 3, the two
+   questions turned out to be one architectural decision.
+2. **JWS signature validation.** George proposed disabling MLA's own signature verification entirely,
+   reasoning the hub already validates every message. **Not accepted as a permanent change** — this
+   removes a security control `engineering-rules.md` treats as non-negotiable, and F-04 of this QA
+   workstream specifically hardened it (bound-claims checking). **Accepted only as a scoped, reversible,
+   loudly-observable testing default**: `JWS_VALIDATION_DISABLED` (env var, default `false`), built
+   2026-09-15, live-verified (boot-time `WARN` log + `mla_jws_validation_bypassed` metric, both confirmed
+   against a running process). Must never run `true` outside an explicitly agreed testing window; the
+   real fix is still real DFSP keys landing, not a permanent bypass.
+3. **Connectivity + mTLS — one combined decision, accepted.** Two documents George shared
+   ([`connectivity-options.md`](connectivity-options.md); [`certificate-setup-proposal.md`](certificate-setup-proposal.md))
+   describe a single architecture: a public endpoint on the Paysys side, IP allow-listed (not an IPsec
+   VPN), with a
+   dedicated mTLS-terminating ingress gateway (Envoy/Nginx/Istio) in front of PPA, under a Paysys-operated
+   **Interconnect CA** used for nothing but this link — separate from both the DRPP mesh CA and the
+   TAZAMA mesh CA, so PPA's own trust store is never touched. Both sides get SAN-pinned certificates from
+   that one CA; MLA holds its own client key (matching what was already built). **Accepted as the target
+   architecture.** This is new infrastructure on the Paysys side (the ingress gateway does not exist
+   yet) — §8 below and `cch-mla/deploy/kubernetes/README.md`'s "Certificate Provisioning" section record
+   the interim bridge (the CA/client cert already generated 2026-09-15) that stays in place until the
+   gateway is stood up, at which point MLA is reissued under the gateway's own authority.
+4. **Registry/GitHub access.** George's team read an earlier ask as requesting access to *their* GitHub —
+   a miscommunication. **Resolved**: CCH pulls the already-pushed image from Paysys's own GitLab registry
+   (already built, per the update above); CCH will separately mirror MLA's *source* to their own GitHub
+   once the build stabilizes — a later, deferred step, not an open item now. George also recommended
+   pinning by immutable digest rather than a mutable tag, since the image will keep changing during
+   testing — **adopted**: `03-mla-deployment.yaml` now references the image by `sha256:` digest, with the
+   tag kept only as a human-readable comment.
+
 - [1. The ask, as received](#1-the-ask-as-received)
 - [2. Architecture — where MLA actually sits](#2-architecture--where-mla-actually-sits)
 - [3. What ships unconditionally vs. what only CCH can supply](#3-what-ships-unconditionally-vs-what-only-cch-can-supply)
@@ -89,15 +127,19 @@ Two things in this email need resolving before anything is built against it, not
 
 This matches a sketch already in this folder
 ([`deployment pattern for mojaloop x tazama.jpeg`](deployment%20pattern%20for%20mojaloop%20x%20tazama.jpeg)),
-labeled "(as) formal ask," and confirms `strategy.md` §1's boundary statement empirically:
+labeled "(as) formal ask," and confirms `strategy.md` §1's boundary statement empirically. That original
+sketch showed a point-to-point VPN for the MLA→PPA hop; **as of 2026-09-15 the agreed connectivity is a
+public, IP allow-listed endpoint with a dedicated mTLS ingress gateway instead** — see the 15 September
+update above and [`connectivity-options.md`](connectivity-options.md). The diagram below reflects the
+current design:
 
 ```
 ┌─────────────────────────────────────┐         ┌──────────────────────────────────┐
 │   CCH DRPP (COMESA's cluster)        │         │  Multi-tenant (our cluster)       │
-│                                       │         │                                    │
-│   Kafka (topic-event-audit)          │   P2P   │   PPA ──ISO 20022──▶ Tazama TMS    │
-│        │                             │  VPN    │    ▲                              │
-│        ▼                             │ ══════▶ │    │ mTLS                          │
+│                                       │  Public │                                    │
+│   Kafka (topic-event-audit)          │   IP,   │   Ingress gateway (mTLS) ──▶ PPA   │
+│        │                             │ allow-  │    ▲                    ──ISO 20022──▶ Tazama TMS
+│        ▼                             │ listed  │    │                              │
 │   MLA (cross-border flow)  ──────────┼─────────┼────┘                              │
 │                                       │         │                                    │
 └─────────────────────────────────────┘         └──────────────────────────────────┘
@@ -109,10 +151,11 @@ labeled "(as) formal ask," and confirms `strategy.md` §1's boundary statement e
 - **PPA and Tazama are deployed in our (Paysyslabs) cluster** — separately being stood up right now,
   moving off the Core Test Harness (`plan.md` §11's own note on the 2026-09-09 meeting). This is *not*
   CCH's environment and is not part of what gets handed to Oscar's team.
-- **The only boundary crossing is MLA → PPA, over mTLS, via a point-to-point VPN.** Kafka reachability is
-  entirely internal to CCH's own cluster/network — CCH does not need external connectivity for that half.
-  The VPN is what makes `PPA_BASE_URL` resolvable and reachable from inside CCH's cluster at all; without
-  it, no manifest value we hand over will connect to anything.
+- **The only boundary crossing is MLA → PPA, over mTLS, via a public, IP allow-listed endpoint** in front
+  of a dedicated ingress gateway on the Paysys side (not a VPN tunnel — see the 15 September update).
+  Kafka reachability is entirely internal to CCH's own cluster/network — CCH does not need external
+  connectivity for that half. The gateway's address is what makes `PPA_BASE_URL` resolvable and reachable
+  from inside CCH's cluster at all; without it, no manifest value we hand over will connect to anything.
 
 ---
 
@@ -240,15 +283,18 @@ blocker for this handoff.
 
 - **MLA → Kafka: in-cluster only.** No egress rule beyond CCH's own cluster networking is implied — this
   is the half of the topology that does *not* cross an organizational boundary.
-- **MLA → PPA: the one boundary crossing**, over the P2P VPN in §2's diagram, authenticated by mTLS on
-  both sides. This is a `NetworkPolicy` egress rule (allow the VPN-side CIDR/host, port from `PPA_TIMEOUT_MS`'s
-  own endpoint on `PPA_BASE_URL`) rather than a public endpoint — the sketch this document is built from
-  explicitly shows a point-to-point VPN, not an internet-facing PPA. If that assumption is wrong, §11 Q4
-  needs re-asking before an egress policy is written.
+- **MLA → PPA: the one boundary crossing.** **Updated 2026-09-15** — §2's diagram showed a point-to-point
+  VPN; that is now superseded. The agreed target is a public, IP allow-listed endpoint on the Paysys side
+  (not a VPN tunnel), terminating at a dedicated mTLS ingress gateway in front of PPA — see
+  [`connectivity-options.md`](connectivity-options.md) and [`certificate-setup-proposal.md`](certificate-setup-proposal.md).
+  This is still a `NetworkPolicy` egress rule on MLA's side (allow the gateway's address, port from
+  `PPA_TIMEOUT_MS`'s own endpoint on `PPA_BASE_URL`), but the far side is a reachable public address
+  behind an allow-list and SAN-pinned mTLS, not a private tunnel endpoint. Real addresses are still
+  pending (§11 Q4).
 - **No inbound Ingress for MLA.** All payment traffic arrives over Kafka; the only HTTP surface is
   `/health/*` and `/metrics`, consumed from inside the cluster (a kubelet probe, and whichever Prometheus
-  scrapes it). Whether that is CCH's own observability stack or something reaching back across the VPN is
-  itself an open question — see §11 Q6.
+  scrapes it). Deliberately deferred per the 2026-09-14 meeting: deploy first, confirm the pod's
+  reachable, revisit monitoring after — see §11 Q6.
 
 ---
 
@@ -259,9 +305,12 @@ Three genuinely different secrets, each with its own open provisioning question:
 1. **MLA's mTLS client identity (for the PPA hop).** Needs a CA, a way to issue MLA's client cert/key
    pair, and PPA's CA cert for MLA to validate the far side. **Update 2026-09-14/15:** the meeting
    surfaced the real problem — two separate trust boundaries (DRPP, Paysyslabs), so neither side's
-   cert-manager trusts the other's certificates. George proposed a neutral, shared cert-manager both
-   sides handshake to, and is investigating. **Interim default built in the meantime** (reversible once
-   that lands): a dedicated CA plus MLA's client identity, generated 2026-09-15 —
+   cert-manager trusts the other's certificates. **Resolved 2026-09-15**: George's proposal is accepted as
+   the target architecture — a dedicated Paysys-operated Interconnect CA, terminating at a new mTLS
+   ingress gateway in front of PPA, never touching PPA's own mesh trust store
+   ([`certificate-setup-proposal.md`](certificate-setup-proposal.md)). That gateway is new infrastructure
+   and does not exist yet. **Interim default built in the meantime** (reversible once the gateway lands):
+   a dedicated CA plus MLA's client identity, generated 2026-09-15 —
    `cch-mla/deploy/kubernetes/README.md` has the details. PPA's side still needs to be configured to
    trust this interim CA before the hop actually works end to end against the real PPA.
 2. **DFSP JWS public keys (`JWS_PUBLIC_KEY_DIR`).** The current mechanism is a watched directory of
@@ -284,7 +333,10 @@ Three genuinely different secrets, each with its own open provisioning question:
 ## 9. A worked manifest skeleton
 
 Illustrative only — every `<ANGLE-BRACKET>` value is one of §5's open items and must be filled in before
-this is real. Shown to make §4's description concrete, not as something to apply as-is.
+this is real. Shown to make §4's description concrete, not as something to apply as-is. **Superseded by
+the real manifests at `cch-mla/deploy/kubernetes/`** (§10 below) — that set splits the ConfigMap in two
+(Paysys-owned static config, CCH-owned environment config) and pins the image by digest; this section is
+kept only as the original illustration, not updated to match.
 
 ```yaml
 apiVersion: v1
@@ -422,12 +474,14 @@ Consolidated from every "Open" row above. Six were asked; the 2026-09-14 meeting
    him); we owed him the variable name (`KAFKA_BROKERS`), now shared. Consumer group ID resolved —
    `paysys_cch_mla`, confirmed clash-free (R-18). `topic-event-audit`'s partition count/retention
    confirmation is still outstanding.
-4. **The PPA endpoint — mechanism agreed, addresses outstanding.** Site-to-site VPN confirmed as the
-   path; only IP addresses on both sides need defining (no TCP/UDP scoping needed) — but those IPs
-   haven't been exchanged yet.
-5. **mTLS provisioning — still open.** Two separate trust boundaries (DRPP and Paysyslabs) means neither
-   side's cert-manager trusts the other's certificates today. Proposed: a neutral, shared cert-manager
-   both sides handshake to — George investigating and following up. Built against an interim, reversible
+4. **The PPA endpoint — architecture resolved 2026-09-15, addresses outstanding.** Superseding the
+   original VPN sketch: a public, IP allow-listed endpoint with a dedicated ingress gateway, per
+   [`connectivity-options.md`](connectivity-options.md) — accepted. The real address is still outstanding.
+5. **mTLS provisioning — architecture resolved 2026-09-15, gateway not yet built.** Two separate trust
+   boundaries (DRPP and Paysyslabs) means neither side's cert-manager trusts the other's certificates
+   today. George's proposal — a dedicated Interconnect CA terminating at a new ingress gateway in front of
+   PPA, per [`certificate-setup-proposal.md`](certificate-setup-proposal.md) — is accepted as the target.
+   That gateway is new Paysys-side infrastructure, not yet built. Built against an interim, reversible
    default in the meantime (`cch-mla/deploy/kubernetes/README.md`).
 6. **Metrics/health scraping — deliberately deferred.** DRPP has its own Prometheus/Grafana/Loki stack,
    but MLA-only metrics are limited in isolation; George suggested Paysyslabs scrape MLA's metrics
@@ -447,10 +501,16 @@ items already being tracked, not new asks created by this deployment work.
    manifest files... under a new `cch-mla/deploy/kubernetes/`~~ — **done 2026-09-15**, manually (image
    built/pushed by hand, matching `local-deployment.md`'s own fully-manual mechanism); the CI job itself
    is still a follow-up, not a blocker.
-3. Replace the remaining `<ANGLE-BRACKET>` placeholders in `cch-mla/deploy/kubernetes/01-configmap.yaml`
-   (`KAFKA_BROKERS`, `PPA_BASE_URL`) once the VPN IP exchange lands, and create `cch-mla-jws-keys` /
-   `cch-mla-pii-secret` once CCH/Infotex delivers real keys and the PII rotation answer resolves.
-4. Live-verify against CCH's actual cluster before calling any of this done, per `engineering-rules.md`
+3. Replace the remaining `<ANGLE-BRACKET>` placeholders in `cch-mla/deploy/kubernetes/02-env-configmap.yaml`
+   (`KAFKA_BROKERS`, `PPA_BASE_URL`) once the allow-listed endpoint's address exchange lands, and create
+   `cch-mla-jws-keys` / `cch-mla-pii-secret` once CCH/Infotex delivers real keys and the PII rotation
+   answer resolves.
+4. Stand up the agreed ingress-gateway architecture on the Paysys side
+   ([`certificate-setup-proposal.md`](certificate-setup-proposal.md)) and reissue MLA's client certificate
+   under the gateway's own Interconnect CA, retiring the interim CA once that's live.
+5. Reply to George confirming the four decisions recorded in the 15 September update above, and send the
+   registry URL + deploy token, `KAFKA_BROKERS`'s variable name, and the digest-pinning acknowledgement.
+6. Live-verify against CCH's actual cluster before calling any of this done, per `engineering-rules.md`
    §11 — a manifest that has only been read, never applied, is a design, not a deployment. Nothing in
    this update was applied to CCH's cluster; only the mechanism (image, registry, manifests, interim
-   mTLS) was produced and pushed to the registry.
+   mTLS, the JWS bypass flag) was produced, pushed, and locally live-verified.
