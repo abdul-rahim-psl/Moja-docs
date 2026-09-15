@@ -3,7 +3,12 @@
 **Context.** Drafted in response to the email from Oscar R. Cobar (Operations Principal, COMESA techops),
 2026-09-14, asking for a values file to `kubectl apply` for deploying MLA on CCH's cluster. The open items
 below are pulled directly from [`MLA-deployment-kubernetes.md`](MLA-deployment-kubernetes.md) §11 — that
-document is the full analysis and plan; this is the email built from it. Not yet sent.
+document is the full analysis and plan; this is the email built from it.
+
+**Superseded, not sent.** The [2026-09-14 meeting with George](../meetings/14-sept-deployment-meeting.md)
+covered the same six questions live, the same day this draft was written. Sending it now would re-ask
+questions already answered in the room and read as out of sync with that meeting. Kept here as a record
+of what was drafted, not as a pending action.
 
 ---
 

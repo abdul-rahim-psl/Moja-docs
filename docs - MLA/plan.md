@@ -1944,3 +1944,52 @@ alongside this entry, not superseded by it).
                 tested against the stated figures and does not upgrade their confirmation status), and
                 **R-37** (alerting destination). The stronger cold-start claim — a throwaway container
                 carrying none of this machine's state — is scoped to the other session and not yet run.
+
+### Phase 8 (partial) — Registry, image push, real Kubernetes manifests for CCH   [2026-09-15]
+
+Not a story; the closest analogue per `CLAUDE.md`'s "How a story gets built" §5 and §10's own
+instruction. Infrastructure work adjacent to §11's COMESA-environment checklist, moved ahead of the rest
+of that section by CCH techops' explicit `kubectl apply -f` ask (`docs/deployment/MLA-deployment-kubernetes.md`
+§1) and grounded in the 2026-09-14 meeting with George (`docs/meetings/14-sept-deployment-meeting.md`),
+which answered most of that document's §11 open questions live.
+
+**Built**       Registry decision (GitLab Container Registry, `10.0.70.91:5005/open-frms/cch-frms/cch-mla`
+                — zero new infrastructure, matches George's "URL + auth token" ask). The real `cch-mla`
+                image, built from `paysys-QA-F11-onwards` @ `a0437cd` (F-01–F-10, all live-verified —
+                every Critical- and High-severity finding from `bugs/qa-review-findings.md`; F-11 onwards,
+                Medium and Low severity, stays on the `paysys-QA-F11-onwards` TODO, not in this image),
+                pushed as `:a0437cd` and `:latest`. A `read_registry` deploy token (`comesa-mla-deploy`)
+                minted for CCH, held out of any committed file. The real manifest set —
+                `cch-mla/deploy/kubernetes/{00-namespace,01-configmap,02-mla-deployment}.yaml` plus a
+                `README.md` runbook — distinct from both the illustrative §9 skeleton in
+                `MLA-deployment-kubernetes.md` and the dry run's `kubernetes-dryrun/` copies. An interim
+                mTLS CA and MLA client identity for the MLA→PPA hop, generated as the stated, reversible
+                default while George investigates a shared cert-manager between the DRPP/Paysyslabs trust
+                boundaries. `MLA-deployment-kubernetes.md` updated throughout (§3, §5, §6, §8, §11, §12) to
+                record which of its six open questions are now settled, partially settled, or still open;
+                `comesa-mla-deployment-reply-email.md` marked superseded (not sent — the meeting covered
+                the same ground live).
+
+**Tests**       None — this is deployment/infrastructure work, not application code. No source under
+                `src/` changed.
+
+**Verified**    `live` — the image was pulled back from the registry with the newly-minted deploy token
+                and matched digest (`sha256:1e995f6de...868b`), confirming the push and the token's read
+                access both genuinely work, not just that the API calls returned 200. **Not verified**:
+                none of `cch-mla/deploy/kubernetes/` has been `kubectl apply`'d anywhere — no cluster, real
+                or dry-run, has seen these specific manifests yet. That remains true until CCH applies them
+                or another local dry run repeats it.
+
+**Diverged**    None from §12's register — no application behavior changed.
+
+**Left open**   `KAFKA_BROKERS` (CCH fills in directly — they already know the value, we only owed the
+                variable name) and `PPA_BASE_URL` (VPN IPs not yet exchanged) remain placeholders in
+                `01-configmap.yaml`. `KAFKA_GROUP_ID` is resolved — `paysys_cch_mla`, confirmed clash-free
+                (R-18). `cch-mla-jws-keys` and `cch-mla-pii-secret` are not
+                created — both genuinely blocked (real DFSP keys via CCH/Infotex; the PII rotation-trigger
+                answer, gate item #2, `plan.md` §7.1 #2) and not something this work unblocks. mTLS is
+                built against an interim default only; PPA's own side still needs configuring to trust it,
+                which is outside this repo. Metrics/health scraping deliberately deferred per the meeting.
+                §11 Q1 (plain manifests vs. Helm) was never explicitly answered by CCH; proceeding on the
+                plain-manifests assumption. No CI job pushes the image automatically yet — today's push was
+                manual, matching `local-deployment.md`'s own proven fully-manual mechanism.

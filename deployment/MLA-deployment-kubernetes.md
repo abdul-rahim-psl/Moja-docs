@@ -28,6 +28,18 @@ Every other §4/§8 behavior this document describes (readiness never gating on 
 pause-and-recover on a PPA outage, no restart required to resume) was independently observed live, not
 just read off the code.
 
+**Update, 15 September 2026 — image pushed, real manifests written.** The 2026-09-14 meeting with George
+(`docs/meetings/14-sept-deployment-meeting.md`) answered most of §11 live. Acting on that: the real
+`cch-mla` image (branch `paysys-QA-F11-onwards` @ `a0437cd`) is now built and pushed to
+**`10.0.70.91:5005/open-frms/cch-frms/cch-mla`** (GitLab Container Registry, same self-hosted instance
+already hosting this repo — §6 is no longer open), and the real manifest set lives at
+`cch-mla/deploy/kubernetes/` (not this document's §9 skeleton, not the dry run's `kubernetes-dryrun/`
+copies) — see that folder's `README.md` for exactly what's real versus still placeholder. A
+`read_registry` deploy token for CCH (`comesa-mla-deploy`) has been minted and is being sent to George
+directly, never committed to this repo. An interim MLA→PPA mTLS CA and client identity were also
+generated as the stated default while George's shared cert-manager investigation continues — reversible,
+per `CLAUDE.md`'s external-decisions rule.
+
 - [1. The ask, as received](#1-the-ask-as-received)
 - [2. Architecture — where MLA actually sits](#2-architecture--where-mla-actually-sits)
 - [3. What ships unconditionally vs. what only CCH can supply](#3-what-ships-unconditionally-vs-what-only-cch-can-supply)
@@ -115,22 +127,30 @@ labeled "(as) formal ask," and confirms `strategy.md` §1's boundary statement e
 
 **We cannot produce without CCH, and must not guess:**
 
-- The real `KAFKA_BROKERS` address. `KAFKA_AUDIT_TOPIC`'s name (`topic-event-audit`), partition count
-  (12) and retention (7-day / 250MB) are already on record — CCH is asked to confirm these hold for the
-  deployment target, not to supply them from scratch (`plan.md` §11's own Phase 8 checklist item is
-  phrased the same way — "confirm," not "obtain").
-- **A dedicated `KAFKA_GROUP_ID`** — R-18: the one misconfiguration in this system capable of affecting
-  live payments if it collides with a DRPP-internal group.
-- The VPN's resulting reachable address for `PPA_BASE_URL`, and who is issuing the mTLS certificate pair
-  each side presents on that hop.
-- Which registry their cluster's nodes can pull from (§6).
+- The real `KAFKA_BROKERS` value. **Update 2026-09-14:** George's side already knows the broker address
+  (it's their own cluster); what we owed him was the *variable name*, now shared. `KAFKA_AUDIT_TOPIC`'s
+  name (`topic-event-audit`), partition count (12) and retention (7-day / 250MB) remain on record — CCH
+  is still asked to confirm these hold for the deployment target, not to supply them from scratch
+  (`plan.md` §11's own Phase 8 checklist item is phrased the same way — "confirm," not "obtain").
+- ~~A dedicated `KAFKA_GROUP_ID`.~~ **Resolved 2026-09-14/15** — `paysys_cch_mla`, confirmed by George
+  against every existing DRPP-internal group (R-18, the one misconfiguration in this system capable of
+  affecting live payments). Already in `cch-mla/deploy/kubernetes/01-configmap.yaml`.
+- The VPN's resulting reachable address for `PPA_BASE_URL` — **still open**: the meeting confirmed the
+  site-to-site VPN mechanism and that only IP addresses (not port/protocol scoping) need defining, but
+  the IPs themselves haven't been exchanged yet.
+- Who is issuing the mTLS certificate pair each side presents on that hop — **still open**: George is
+  investigating a neutral shared cert-manager between the two trust boundaries. Built against an interim,
+  reversible default in the meantime — see the 2026-09-15 update above.
+- ~~Which registry their cluster's nodes can pull from (§6).~~ **Resolved 2026-09-14/15** — George is
+  flexible on location and only needs a URL plus a valid auth token; GitLab Container Registry chosen
+  (§6), image pushed, deploy token minted.
 - Real DFSP JWS public keys, and — per the 2026-09-09 meeting — whether MLA should be pointed at MCM
-  instead of a static mounted key directory (§8).
+  instead of a static mounted key directory (§8). **Still open**, untouched by this deployment thread.
 
 `CLAUDE.md`'s rule applies directly here: the mechanism (manifests, config surface, image) can and should
 be built now, against a stated default where one is needed; **this piece of work cannot be called done
-while those five items are still open**, and that must stay visible rather than get quietly resolved with
-a guess.
+while `PPA_BASE_URL`, mTLS provisioning and the JWS key question are still open**, and that must stay
+visible rather than get quietly resolved with a guess.
 
 ---
 
@@ -170,9 +190,9 @@ Derived directly from `cch-mla/.env.template`, the single source of truth for ML
 | --- | --- | --- |
 | `FUNCTION_NAME`, `NODE_ENV`, `PORT`, `HOST` | ConfigMap | Settled — static (`NODE_ENV=production`, `PORT=3001`, `HOST=0.0.0.0`). |
 | `KAFKA_ENABLED` | ConfigMap | Settled — `true` in this deployment (the `false` value only exists so the service can start with no broker present, for local dev — `plan.md` §3.3). |
-| `KAFKA_BROKERS` | ConfigMap | **Open — CCH must supply**, the real broker address inside their cluster. |
+| `KAFKA_BROKERS` | ConfigMap | **Open — CCH fills in directly.** George's side already knows the value (it's their own cluster); we only owed him this variable name, now shared. Placeholder in `cch-mla/deploy/kubernetes/01-configmap.yaml`. |
 | `KAFKA_CLIENT_ID` | ConfigMap | Settled — `cch-mla`. |
-| `KAFKA_GROUP_ID` | ConfigMap | **Open — CCH must supply a dedicated group ID (R-18).** Never reuse a DRPP-internal group name. |
+| `KAFKA_GROUP_ID` | ConfigMap | Settled — `paysys_cch_mla`. Confirmed by George, 2026-09-14, against every existing DRPP-internal group (R-18). |
 | `KAFKA_FROM_BEGINNING` | ConfigMap | Settled — `false`. |
 | `KAFKA_AUDIT_TOPIC` | ConfigMap | Settled — `topic-event-audit`, 12 partitions, 7-day / 250MB retention, already on record. Asked of CCH as a confirmation for the deployment target (§11 Q3), not an unknown. |
 | `PPA_BASE_URL` | ConfigMap | **Open — depends on the P2P VPN's resulting address.** Must be the single stable PPA service address, never an individual replica (`core-knowledge.md` §3.4). |
@@ -198,14 +218,19 @@ The `Dockerfile` (`cch-mla/Dockerfile`) already exists and needs no changes for 
 multi-stage (`node:22-bullseye` builder → `gcr.io/distroless/nodejs22-debian12:nonroot` runtime), runs as
 `nonroot`, `NODE_ENV=production`, exposes 3001.
 
-**What's missing is a push step.** `.gitlab-ci.yml` currently has `build`/`lint`/`test`/`regression` jobs
-only (and even those are blocked on the runner issue in Phase 7's own open item — `plan.md` §10) — nothing
-builds or pushes the container image today. That needs its own CI job once §11 Q2 below is answered,
-since the job's target registry and credentials depend on the answer.
+**Registry: settled 2026-09-14/15.** George confirmed he's flexible on location and only needs a URL plus
+a valid auth token. **GitLab Container Registry** — `10.0.70.91:5005/open-frms/cch-frms/cch-mla`, the
+same self-hosted instance already hosting this repo — was chosen over Docker Hub/GHCR/a cloud registry
+because it needs zero new infrastructure and matches that ask exactly. The image (branch
+`paysys-QA-F11-onwards` @ `a0437cd`) is pushed there, tags `a0437cd` and `latest`. A `read_registry`
+deploy token (`comesa-mla-deploy`) has been minted for CCH to pull with — see
+`cch-mla/deploy/kubernetes/README.md`, never committed to this repo.
 
-**Registry destination is explicitly left open** (per the plan for this document) rather than assumed —
-see §11 Q2. Whichever answer comes back, the Deployment manifest's `image:` field and (if the registry is
-private) an `imagePullSecret` follow mechanically from it; nothing else in the manifest set changes.
+**Still missing: an automated push step.** `.gitlab-ci.yml` currently has `build`/`lint`/`test`/`regression`
+jobs only (and even those are blocked on the runner issue in Phase 7's own open item — `plan.md` §10) —
+today's push was manual (`docker build` + `docker push`), the same fully-manual mechanism
+`local-deployment.md` already proved end to end. A CI job to automate this is follow-up work, not a
+blocker for this handoff.
 
 ---
 
@@ -230,9 +255,13 @@ private) an `imagePullSecret` follow mechanically from it; nothing else in the m
 Three genuinely different secrets, each with its own open provisioning question:
 
 1. **MLA's mTLS client identity (for the PPA hop).** Needs a CA, a way to issue MLA's client cert/key
-   pair, and PPA's CA cert for MLA to validate the far side. Whether CCH's cluster already runs
-   `cert-manager` (or an equivalent) or expects a manually-generated pair mounted as a `Secret` is unasked
-   — §11 Q5.
+   pair, and PPA's CA cert for MLA to validate the far side. **Update 2026-09-14/15:** the meeting
+   surfaced the real problem — two separate trust boundaries (DRPP, Paysyslabs), so neither side's
+   cert-manager trusts the other's certificates. George proposed a neutral, shared cert-manager both
+   sides handshake to, and is investigating. **Interim default built in the meantime** (reversible once
+   that lands): a dedicated CA plus MLA's client identity, generated 2026-09-15 —
+   `cch-mla/deploy/kubernetes/README.md` has the details. PPA's side still needs to be configured to
+   trust this interim CA before the hop actually works end to end against the real PPA.
 2. **DFSP JWS public keys (`JWS_PUBLIC_KEY_DIR`).** The current mechanism is a watched directory of
    `<dfspId>.pem` files, chosen so adding a key never requires a restart (`engineering-rules.md` §8). At
    the 2026-09-09 meeting, Sam (Mojoloop Foundation) recommended MLA interface with **MCM (Mojaloop
@@ -379,24 +408,28 @@ to CCH and what stayed open, not a full epic/story pair).
 
 ## 11. Open questions for CCH
 
-Consolidated from every "Open" row above — this is the substance of the reply to Oscar:
+Consolidated from every "Open" row above. Six were asked; the 2026-09-14 meeting with George
+(`docs/meetings/14-sept-deployment-meeting.md`) answered four live:
 
-1. **Format.** Plain Kubernetes manifests applied with `kubectl apply -f` (what this document assumes,
-   §1), or a Helm chart? The original email names both.
-2. **Registry.** Can your cluster's nodes pull from a registry we push to directly (Docker Hub, GHCR, our
-   GitLab registry), or do you need the image delivered to your own registry, or do we need to provide an
-   `imagePullSecret`?
-3. **Kafka.** The real broker address, plus confirmation that `topic-event-audit` (12 partitions, 7-day /
-   250MB retention — already on record) holds for the deployment target, and — this is the one item with
-   the most consequence if gotten wrong — **a consumer group ID dedicated to MLA**, never reused from an
-   existing DRPP-internal group (R-18).
-4. **The PPA endpoint.** Confirming the P2P VPN sketch (§2) is still the intended path, and what address
-   MLA should reach PPA at once that VPN is live.
-5. **mTLS provisioning for the MLA→PPA hop.** Who issues the certificate pair — does your cluster run
-   `cert-manager` or an equivalent, or should we generate and hand over a pair to be mounted as a
-   `Secret`?
-6. **Metrics/health scraping.** Does your own observability stack scrape `/metrics` and probe
-   `/health/*` in-cluster, or does that need to reach back across the VPN to ours?
+1. **Format.** **Still unanswered.** Plain Kubernetes manifests applied with `kubectl apply -f` (what
+   this document assumes, §1), or a Helm chart? The meeting didn't raise it; proceeding on the plain-
+   manifests assumption unless CCH's team says otherwise.
+2. **Registry — resolved.** Flexible on location; just needs a URL and a valid auth token. GitLab
+   Container Registry chosen, image pushed, deploy token minted — see the 2026-09-15 update above.
+3. **Kafka — mostly resolved.** Broker address is already known on George's side (no action needed from
+   him); we owed him the variable name (`KAFKA_BROKERS`), now shared. Consumer group ID resolved —
+   `paysys_cch_mla`, confirmed clash-free (R-18). `topic-event-audit`'s partition count/retention
+   confirmation is still outstanding.
+4. **The PPA endpoint — mechanism agreed, addresses outstanding.** Site-to-site VPN confirmed as the
+   path; only IP addresses on both sides need defining (no TCP/UDP scoping needed) — but those IPs
+   haven't been exchanged yet.
+5. **mTLS provisioning — still open.** Two separate trust boundaries (DRPP and Paysyslabs) means neither
+   side's cert-manager trusts the other's certificates today. Proposed: a neutral, shared cert-manager
+   both sides handshake to — George investigating and following up. Built against an interim, reversible
+   default in the meantime (`cch-mla/deploy/kubernetes/README.md`).
+6. **Metrics/health scraping — deliberately deferred.** DRPP has its own Prometheus/Grafana/Loki stack,
+   but MLA-only metrics are limited in isolation; George suggested Paysyslabs scrape MLA's metrics
+   directly instead. Agreed: deploy first, confirm the pod's reachable, revisit monitoring after.
 
 Not CCH's to answer, but worth naming so the reply doesn't imply it is: DFSP JWS key delivery (already in
 motion via Infotex per the 2026-09-09 meeting) and the MCM question are Mojoloop Foundation / CCH-Infotex
@@ -406,12 +439,16 @@ items already being tracked, not new asks created by this deployment work.
 
 ## 12. Next steps
 
-1. Send the reply to Oscar — §11's six questions, plus the architecture correction in §1 point 2 (MLA
-   talks to PPA, not Tazama directly).
-2. Once §11 Q1/Q2 are answered, add the image build+push job to `.gitlab-ci.yml` (currently has none —
-   §6) and commit the real manifest files (not the illustrative skeleton in §9) under a new
-   `cch-mla/deploy/kubernetes/` (or CCH-preferred path).
-3. Once §11 Q3/Q4/Q5 are answered, replace every `<ANGLE-BRACKET>` placeholder in §9 with the real value
-   and update §5's status column from Open to Settled per row.
+1. ~~Send the reply to Oscar~~ — **superseded by the 2026-09-14 meeting**, which covered the same ground
+   live; the drafted email was not sent.
+2. ~~Once §11 Q1/Q2 are answered, add the image build+push job to `.gitlab-ci.yml`... and commit the real
+   manifest files... under a new `cch-mla/deploy/kubernetes/`~~ — **done 2026-09-15**, manually (image
+   built/pushed by hand, matching `local-deployment.md`'s own fully-manual mechanism); the CI job itself
+   is still a follow-up, not a blocker.
+3. Replace the remaining `<ANGLE-BRACKET>` placeholders in `cch-mla/deploy/kubernetes/01-configmap.yaml`
+   (`KAFKA_BROKERS`, `PPA_BASE_URL`) once the VPN IP exchange lands, and create `cch-mla-jws-keys` /
+   `cch-mla-pii-secret` once CCH/Infotex delivers real keys and the PII rotation answer resolves.
 4. Live-verify against CCH's actual cluster before calling any of this done, per `engineering-rules.md`
-   §11 — a manifest that has only been read, never applied, is a design, not a deployment.
+   §11 — a manifest that has only been read, never applied, is a design, not a deployment. Nothing in
+   this update was applied to CCH's cluster; only the mechanism (image, registry, manifests, interim
+   mTLS) was produced and pushed to the registry.
