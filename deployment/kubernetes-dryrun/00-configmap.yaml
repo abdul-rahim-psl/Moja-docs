@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cch-mla-config
+  namespace: mla
+data:
+  FUNCTION_NAME: "cch-mla"
+  NODE_ENV: "production"
+  PORT: "3001"
+  HOST: "0.0.0.0"
+  KAFKA_ENABLED: "true"
+  KAFKA_BROKERS: "kafka.demo.svc.cluster.local:9092"
+  KAFKA_CLIENT_ID: "cch-mla"
+  KAFKA_GROUP_ID: "cch-mla-dryrun"
+  KAFKA_FROM_BEGINNING: "false"
+  KAFKA_AUDIT_TOPIC: "topic-event-audit"
+  PPA_BASE_URL: "https://ppa-stub.mla.svc.cluster.local:4443"
+  PPA_TIMEOUT_MS: "2000"
+  PPA_MAX_RETRIES: "3"
+  PPA_RETRY_BASE_MS: "1000"
+  PPA_CIRCUIT_BREAKER_THRESHOLD: "5"
+  PPA_REPROBE_INTERVAL_MS: "10000"
+  JWS_MAX_RETRIES: "3"
+  JWS_RETRY_BASE_MS: "1000"
+  JWS_CIRCUIT_BREAKER_THRESHOLD: "5"
+  JWS_REPROBE_INTERVAL_MS: "10000"
+  PII_MAX_RETRIES: "3"
+  PII_RETRY_BASE_MS: "1000"
+  PII_CIRCUIT_BREAKER_THRESHOLD: "5"
+  PII_REPROBE_INTERVAL_MS: "10000"
+  ALERT_WEBHOOK_TIMEOUT_MS: "3000"
+  LOG_LEVEL: "info"
+  LOG_PRETTY: "false"

@@ -155,10 +155,16 @@ re-deriving this plan from scratch in a future session.
 - [x] `kind load docker-image ppa-stub:dryrun --name mojaloop-fx`.
 
 **Manifests**
-- [x] Write `ConfigMap` (`cch-mla-config`) with §3's values — `cch-mla/deploy/kubernetes-dryrun/00-configmap.yaml`.
+- [x] Write `ConfigMap` (`cch-mla-config`) with §3's values — `kubernetes-dryrun/00-configmap.yaml`.
 - [x] Write `Deployment` + `Service` for `cch-mla` — `02-mla-deployment.yaml`.
 - [x] Write `Deployment` + `Service` for `ppa-stub` — `01-ppastub-deployment.yaml`.
 - [x] `kubectl apply -f` the full manifest set to the `mla` namespace.
+
+**Relocated 2026-09-15**: this folder moved from `cch-mla/deploy/kubernetes-dryrun/` to
+[`kubernetes-dryrun/`](kubernetes-dryrun/), alongside this document, in the `docs` repo. `cch-mla` is
+treated as the official, production repository — nothing that isn't a genuine deployment deliverable for
+CCH belongs in it, and these dry-run manifests never were. The real manifests stay at
+`cch-mla/deploy/kubernetes/`.
 
 **Real bug found and fixed along the way**: `ppa-stub`'s control port crashed on first boot —
 `RangeError: options.port should be >= 0 and < 65536. Received type number (NaN)`. Root cause: the tool

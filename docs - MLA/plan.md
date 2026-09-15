@@ -1962,7 +1962,10 @@ which answered most of that document's §11 open questions live.
                 minted for CCH, held out of any committed file. The real manifest set —
                 `cch-mla/deploy/kubernetes/{00-namespace,01-configmap,02-mla-deployment}.yaml` plus a
                 `README.md` runbook — distinct from both the illustrative §9 skeleton in
-                `MLA-deployment-kubernetes.md` and the dry run's `kubernetes-dryrun/` copies. An interim
+                `MLA-deployment-kubernetes.md` and the dry run's manifests, **relocated 2026-09-15** from
+                `cch-mla/deploy/kubernetes-dryrun/` to `docs/deployment/kubernetes-dryrun/`: `cch-mla` is
+                the official, production repo and should carry only genuine deployment deliverables for
+                CCH, never local validation artifacts. An interim
                 mTLS CA and MLA client identity for the MLA→PPA hop, generated as the stated, reversible
                 default while George investigates a shared cert-manager between the DRPP/Paysyslabs trust
                 boundaries. `MLA-deployment-kubernetes.md` updated throughout (§3, §5, §6, §8, §11, §12) to

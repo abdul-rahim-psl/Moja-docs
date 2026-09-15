@@ -33,8 +33,10 @@ just read off the code.
 `cch-mla` image (branch `paysys-QA-F11-onwards` @ `a0437cd`) is now built and pushed to
 **`10.0.70.91:5005/open-frms/cch-frms/cch-mla`** (GitLab Container Registry, same self-hosted instance
 already hosting this repo — §6 is no longer open), and the real manifest set lives at
-`cch-mla/deploy/kubernetes/` (not this document's §9 skeleton, not the dry run's `kubernetes-dryrun/`
-copies) — see that folder's `README.md` for exactly what's real versus still placeholder. A
+`cch-mla/deploy/kubernetes/` (not this document's §9 skeleton, not the dry run's
+[`kubernetes-dryrun/`](kubernetes-dryrun/) copies, relocated here 2026-09-15 — `cch-mla` is the official,
+production repo and carries only genuine deployment deliverables) — see that folder's `README.md` for
+exactly what's real versus still placeholder. A
 `read_registry` deploy token for CCH (`comesa-mla-deploy`) has been minted and is being sent to George
 directly, never committed to this repo. An interim MLA→PPA mTLS CA and client identity were also
 generated as the stated default while George's shared cert-manager investigation continues — reversible,
