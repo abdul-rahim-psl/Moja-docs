@@ -2049,5 +2049,40 @@ repeated here.
                 proposal is new Paysys-side infrastructure, not yet built — the interim CA remains in use
                 until it lands. `JWS_VALIDATION_DISABLED` must be confirmed off (`false`) before any real
                 traffic is trusted; nothing in this repo enforces that beyond the default itself and the
-                loud observability built around it. A reply to George confirming all four decisions has
-                not yet been sent.
+                loud observability built around it. **User decision [2026-09-15]: no written reply to
+                George is needed** — the only remaining action is handing over registry access directly
+                (see the entry below), not a formal response to his four points.
+
+### Phase 8 (partial) — Registry pivot: GHCR is the real delivery path, not GitLab   [2026-09-15]
+
+Same day, continuing the two entries above. **User decision**: the GitLab Container Registry push
+(`10.0.70.91:5005/open-frms/cch-frms/cch-mla`) is retroactively scoped to internal testing only — the
+registry CCH actually pulls from is **GitHub Container Registry**, under a new org repo
+`psl-izyane-cch-frms/cch-mla`.
+
+**Built**       Created `psl-izyane-cch-frms/cch-mla` (private GitHub repo, empty — not a source mirror
+                yet). Retagged and pushed the identical local image (same `a0437cd` build) to
+                `ghcr.io/psl-izyane-cch-frms/cch-mla:a0437cd` and `:latest`. Updated
+                `cch-mla/deploy/kubernetes/03-mla-deployment.yaml`'s digest-pinned `image:` field from the
+                GitLab reference to the GHCR one (digest unchanged). Updated
+                `cch-mla/deploy/kubernetes/README.md`'s Registry Access section and the `imagePullSecret`
+                creation command (`--docker-server=ghcr.io`, collaborator PAT instead of a deploy token).
+                `MLA-deployment-kubernetes.md` §6/§11 Q2/point 4 updated to record GHCR as the real path
+                and GitLab as superseded-to-testing-only.
+
+**Tests**       None — registry/infrastructure change, no application code touched.
+
+**Verified**    `live` — pushed digest (`sha256:1e995f6de223a58257f623b96792e15eef56d06f1f73e9e71c49b6d65fbe868b`)
+                matches the GitLab push's digest exactly, confirming byte-identical content, not a
+                re-derived build. Package confirmed created under the org (`visibility: private`,
+                3 versions) via the GitHub API. **Not verified**: nothing has actually been pulled from
+                GHCR by an outside account yet — access isn't wired up (see Left open).
+
+**Diverged**    None from §12's register.
+
+**Left open**   The GHCR package is not yet connected to the `cch-mla` repo (no public API for this — a
+                manual step in the package's own Settings page); without that link, a repo collaborator's
+                access does not yet govern the pull. George (or whoever pulls on CCH's side) has not yet
+                been invited as an outside collaborator — user is handling that invite directly, outside
+                this session. Once both are done, the actual end-to-end pull from GHCR by an external
+                account is still unverified.

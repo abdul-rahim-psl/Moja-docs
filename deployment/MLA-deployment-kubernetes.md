@@ -73,9 +73,11 @@ Outcomes:
    the interim bridge (the CA/client cert already generated 2026-09-15) that stays in place until the
    gateway is stood up, at which point MLA is reissued under the gateway's own authority.
 4. **Registry/GitHub access.** George's team read an earlier ask as requesting access to *their* GitHub —
-   a miscommunication. **Resolved**: CCH pulls the already-pushed image from Paysys's own GitLab registry
-   (already built, per the update above); CCH will separately mirror MLA's *source* to their own GitHub
-   once the build stabilizes — a later, deferred step, not an open item now. George also recommended
+   a miscommunication. **Resolved, then revised same day**: image built and pushed to Paysys's own GitLab
+   registry first (now internal testing only — see §6's own update); the real delivery path settled on
+   later 2026-09-15 is **GitHub Container Registry**, `ghcr.io/psl-izyane-cch-frms/cch-mla`, closer to
+   George's own original framing (CCH pulling from a Paysys-controlled location, source mirrored to
+   CCH's own GitHub once the build stabilizes — still a later, deferred step). George also recommended
    pinning by immutable digest rather than a mutable tag, since the image will keep changing during
    testing — **adopted**: `03-mla-deployment.yaml` now references the image by `sha256:` digest, with the
    tag kept only as a human-readable comment.
@@ -263,13 +265,23 @@ The `Dockerfile` (`cch-mla/Dockerfile`) already exists and needs no changes for 
 multi-stage (`node:22-bullseye` builder → `gcr.io/distroless/nodejs22-debian12:nonroot` runtime), runs as
 `nonroot`, `NODE_ENV=production`, exposes 3001.
 
-**Registry: settled 2026-09-14/15.** George confirmed he's flexible on location and only needs a URL plus
-a valid auth token. **GitLab Container Registry** — `10.0.70.91:5005/open-frms/cch-frms/cch-mla`, the
-same self-hosted instance already hosting this repo — was chosen over Docker Hub/GHCR/a cloud registry
-because it needs zero new infrastructure and matches that ask exactly. The image (branch
-`paysys-QA-F11-onwards` @ `a0437cd`) is pushed there, tags `a0437cd` and `latest`. A `read_registry`
-deploy token (`comesa-mla-deploy`) has been minted for CCH to pull with — see
-`cch-mla/deploy/kubernetes/README.md`, never committed to this repo.
+**Registry: revised 2026-09-15 — GHCR is the real delivery path.** George confirmed he's flexible on
+location and only needs a URL plus a valid auth token. GitLab Container Registry
+(`10.0.70.91:5005/open-frms/cch-frms/cch-mla`) was tried first, chosen for needing zero new
+infrastructure — **that push now stands as internal testing only**, not what CCH pulls from. The real
+delivery registry is **GitHub Container Registry**, `ghcr.io/psl-izyane-cch-frms/cch-mla`, in a new
+private repo (`psl-izyane-cch-frms/cch-mla`, created 2026-09-15) — matching George's own earlier note
+that CCH would rather mirror source to their own GitHub instance once the build stabilizes, and pulling
+the image from Paysys's side in the meantime. The image (branch `paysys-QA-F11-onwards` @ `a0437cd`) is
+pushed to both registries under the same tags (`a0437cd`, `latest`) and the identical digest
+(`sha256:1e995f6de223a58257f623b96792e15eef56d06f1f73e9e71c49b6d65fbe868b`), confirming byte-identical
+content. Access for CCH: George (or whoever pulls) is invited as an outside collaborator on the
+`cch-mla` repo with read access, authenticating with their own GitHub PAT
+(`read:packages` scope) — GHCR has no GitLab-style scoped deploy token for an outside party. **Open**:
+the GHCR package must still be connected to the `cch-mla` repo via the package's own Settings page (no
+public API for this) before a collaborator's repo access actually governs the pull — see
+`cch-mla/deploy/kubernetes/README.md`'s Outstanding Items. The `10.0.70.91` GitLab deploy token
+(`comesa-mla-deploy`) remains valid but is no longer the one being handed to CCH.
 
 **Still missing: an automated push step.** `.gitlab-ci.yml` currently has `build`/`lint`/`test`/`regression`
 jobs only (and even those are blocked on the runner issue in Phase 7's own open item — `plan.md` §10) —
@@ -468,8 +480,8 @@ Consolidated from every "Open" row above. Six were asked; the 2026-09-14 meeting
 1. **Format.** **Still unanswered.** Plain Kubernetes manifests applied with `kubectl apply -f` (what
    this document assumes, §1), or a Helm chart? The meeting didn't raise it; proceeding on the plain-
    manifests assumption unless CCH's team says otherwise.
-2. **Registry — resolved.** Flexible on location; just needs a URL and a valid auth token. GitLab
-   Container Registry chosen, image pushed, deploy token minted — see the 2026-09-15 update above.
+2. **Registry — resolved.** Flexible on location; just needs a URL and a valid auth token. Settled on
+   GHCR (`ghcr.io/psl-izyane-cch-frms/cch-mla`), image pushed — see §6's 2026-09-15 update above.
 3. **Kafka — mostly resolved.** Broker address is already known on George's side (no action needed from
    him); we owed him the variable name (`KAFKA_BROKERS`), now shared. Consumer group ID resolved —
    `paysys_cch_mla`, confirmed clash-free (R-18). `topic-event-audit`'s partition count/retention
