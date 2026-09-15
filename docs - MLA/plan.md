@@ -2075,14 +2075,18 @@ registry CCH actually pulls from is **GitHub Container Registry**, under a new o
 **Verified**    `live` — pushed digest (`sha256:1e995f6de223a58257f623b96792e15eef56d06f1f73e9e71c49b6d65fbe868b`)
                 matches the GitLab push's digest exactly, confirming byte-identical content, not a
                 re-derived build. Package confirmed created under the org (`visibility: private`,
-                3 versions) via the GitHub API. **Not verified**: nothing has actually been pulled from
-                GHCR by an outside account yet — access isn't wired up (see Left open).
+                3 versions) via the GitHub API. **Access model verified end to end, user-run**: invited
+                the PPA developer (internal, a deliberate test account, not George) via the package's own
+                "Manage access" → "Invite teams or people" (Read role) — not repository collaboration,
+                which the assistant had initially and incorrectly suggested was necessary; the correct
+                control is package-direct. The invited account genuinely `docker pull`'d the image using
+                their own PAT — confirmed working before handing access to George.
 
-**Diverged**    None from §12's register.
+**Diverged**    None from §12's register. One correction to this session's own earlier guidance: assumed
+                repo-connection + repo-collaborator inheritance was required (no public API for it,
+                reported as a manual step); the user found the actual control (package-level "Manage
+                access") first, which is simpler and doesn't expose the private source repo.
 
-**Left open**   The GHCR package is not yet connected to the `cch-mla` repo (no public API for this — a
-                manual step in the package's own Settings page); without that link, a repo collaborator's
-                access does not yet govern the pull. George (or whoever pulls on CCH's side) has not yet
-                been invited as an outside collaborator — user is handling that invite directly, outside
-                this session. Once both are done, the actual end-to-end pull from GHCR by an external
-                account is still unverified.
+**Left open**   George himself has not yet been invited — the verified pull was a deliberate internal
+                test account, not George. Same mechanism (package "Manage access" → Invite, Read role)
+                applies; nothing else needs to change once he's added.

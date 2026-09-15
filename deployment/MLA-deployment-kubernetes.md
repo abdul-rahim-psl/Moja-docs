@@ -275,13 +275,14 @@ that CCH would rather mirror source to their own GitHub instance once the build 
 the image from Paysys's side in the meantime. The image (branch `paysys-QA-F11-onwards` @ `a0437cd`) is
 pushed to both registries under the same tags (`a0437cd`, `latest`) and the identical digest
 (`sha256:1e995f6de223a58257f623b96792e15eef56d06f1f73e9e71c49b6d65fbe868b`), confirming byte-identical
-content. Access for CCH: George (or whoever pulls) is invited as an outside collaborator on the
-`cch-mla` repo with read access, authenticating with their own GitHub PAT
-(`read:packages` scope) — GHCR has no GitLab-style scoped deploy token for an outside party. **Open**:
-the GHCR package must still be connected to the `cch-mla` repo via the package's own Settings page (no
-public API for this) before a collaborator's repo access actually governs the pull — see
-`cch-mla/deploy/kubernetes/README.md`'s Outstanding Items. The `10.0.70.91` GitLab deploy token
-(`comesa-mla-deploy`) remains valid but is no longer the one being handed to CCH.
+content. Access for CCH: granted directly on the package itself (package Settings → "Manage access" →
+"Invite teams or people", role Read) — not repository collaboration, which would also expose the
+private source repo. **Verified 2026-09-15**: invited the PPA developer (internal, not George) with
+Read access as a test; they pulled successfully using their own PAT (`read:packages` scope), confirming
+the access model genuinely works end to end before handing it to George. GHCR has no GitLab-style
+scoped deploy token for an outside party — each puller authenticates with their own PAT instead. The
+`10.0.70.91` GitLab deploy token (`comesa-mla-deploy`) remains valid but is no longer the one being
+handed to CCH.
 
 **Still missing: an automated push step.** `.gitlab-ci.yml` currently has `build`/`lint`/`test`/`regression`
 jobs only (and even those are blocked on the runner issue in Phase 7's own open item — `plan.md` §10) —
