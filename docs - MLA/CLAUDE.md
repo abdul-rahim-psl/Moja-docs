@@ -98,11 +98,12 @@ The same applies to `user stories/`: a new source document is registered in `str
 
 `engineering-rules.md` is binding. Read it once in full before writing code. Its ten non-negotiables (§1), the anti-pattern list (§14), and the live-verification rule (§11) apply to every change.
 
-Three that come up constantly:
+Four that come up constantly:
 
 - **Prove it live.** A design is a hypothesis until it has been run. Never present unit-tested work as verified, and say plainly when something could not be verified.
 - **Above 95% Jest coverage and zero lint errors, enforced mechanically** — `coverageThreshold: 96` in the Jest config and a CI gate, not a promise anyone has to remember. Coverage is a floor, not the goal: every table row, failure path and race gets its own test.
 - **SOLID, calibrated.** A pattern earns its place by removing pain that exists in this codebase today. Decouple I/O and policy; do not decouple the ISO field mappings from their builders.
+- **Why-comments are short — 1-3 lines, one reason, every time new code is written, not just on a cleanup pass.** `engineering-rules.md` §5 caps this explicitly after the pattern recurred: a multi-paragraph JSDoc block re-litigating alternatives tried, chaining through `core-knowledge.md`/`qa-review-findings.md`/other files' own comments, or narrating how something was live-verified. That reasoning belongs in the story's `executive-summary.md`, not inline. This applies to every new comment written from here on, not only to comments already flagged for shortening — the instruction to shorten existing comments is not a one-time pass to revert to old habits on the next story.
 
 ## Documentation register
 

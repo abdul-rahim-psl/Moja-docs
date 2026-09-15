@@ -160,6 +160,7 @@ Some coupling in this design is load-bearing and must not be "cleaned up":
 - **Cyclomatic complexity ceiling of 15.** When branching pushes a function past it, **extract into named helpers** — never `eslint-disable`.
 - **Nesting depth of 3.** Use early returns and guard clauses.
 - **No comment explaining *what* the code does.** Comments explain *why* — a sentinel value, a deliberate deviation, a non-obvious ordering constraint, a reference to the story or FSD section that mandates it.
+- **A why-comment is 1-3 lines, one reason.** Not a multi-paragraph essay: no "alternatives tried and rejected" narrative, no chain of cross-references through three other files, no restatement of the live-verification story. State the one non-obvious fact and stop. The fuller reasoning belongs in the story's `executive-summary.md` (see [CLAUDE.md](CLAUDE.md) § "Epic and story documentation") or the commit, not inline in the code — a reader who wants that context can go there.
 - **Every magic constant is named**, and its origin is cited: `// FSD §6.4.3 — no source exists in any Mojaloop message`.
 - **No dead code, no commented-out code, no `TODO` without an issue reference.**
 - **Lint bar: zero errors.** Warnings are acceptable. `eslint-disable` requires a reason comment and is reviewed like a design change.
