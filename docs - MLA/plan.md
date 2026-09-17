@@ -2172,3 +2172,44 @@ session performed. Recorded in `docs/deployment/MLA-deployment-kubernetes.md` §
                 envelopes has been confirmed - ask the PPA engineer. The real FX-side rejection sample and
                 the `TxSts: "ABOR"` gap (§14 Q3) remain untouched by this entry. `KhaledSaiidi`/`orcr`'s
                 GHCR invites are not yet confirmed sent.
+
+### Phase 8 (partial) — PPA's source found locally; e2e-testing checklist §3 rewritten around it   [2026-09-17]
+
+Same thread, later the same day. **User-reported fact**: PPA's source repository, `cch-ppa`, is available
+locally at `/home/abdul-rahim/mojaloop/cch-ppa` (same self-hosted GitLab org as `cch-mla`:
+`open-frms/cch-frms/cch-ppa`). This corrects the entry above and every earlier claim in this knowledge
+base that `docs - MLA` has "zero visibility" into PPA's code - that was only ever true before this was
+pointed out. `CLAUDE.md` and `strategy.md` §1 updated to say so plainly rather than carry the stale claim.
+
+**Built**       Nothing in `cch-mla` - this entry is documentation-only, correcting the knowledge base and
+                `e2e-testing/checklist.md` §3 (PPA correctness definition of done, added earlier the same
+                day) to reflect the discovery. §3's tag system was rewritten: `[PPA-engineer]` (implying
+                every check needs the other engineer's cooperation) replaced with `[code-level]` (answerable
+                by reading `cch-ppa`'s source directly), `[local-stack]` (answerable by standing up
+                `cch-ppa`'s own `docker-compose.yml` - PPA + Postgres (its write-ahead store) + ValKey
+                (its correlation cache), fully self-contained, confirmed present in the repo), and
+                `[remote-instance]`/`[Tazama]` kept for what genuinely still needs the deployed instance or
+                a confirmed downstream Tazama target. Most of §3's ten subsections were reclassified from
+                "needs the PPA engineer" to "achievable this session, not yet done."
+
+**Tests**       None - documentation only.
+
+**Verified**    `live`, partially - confirmed the repo exists at the stated path, its git remote matches
+                `cch-mla`'s own org, and its `docker-compose.yml` genuinely defines a PPA + Postgres +
+                ValkKey stack with mTLS certs and a separate operator port. Its `git log` was read to name
+                specific commits implementing idempotency, classification/correlation, domestic/cross-border
+                discrimination, ISO translation, ajv/TMS schema validation, and DLQ replay (the last one
+                flagged `(unreviewed)` in its own commit message). **Not verified**: the local stack has not
+                been stood up, nothing has been run against it, and no line of `cch-ppa`'s actual translation
+                or idempotency logic has been read yet - this entry records the *capability* the discovery
+                unlocks, not a completed verification of any of §3's items.
+
+**Diverged**    None from §12's register - documentation/process only, no application behaviour anywhere
+                changed.
+
+**Left open**   Every item in `e2e-testing/checklist.md` §3 is still unchecked. The recommended next step,
+                per that section's own closing note, is standing up `cch-ppa`'s local compose stack and
+                re-running §1's corridor against it. Two things stay out of reach even then: what the
+                *specific* already-completed 8-envelope run (the entry above) did on the *remote*
+                `10.0.115.186:3000` instance, and where that remote instance's own TMS target actually
+                points - both still need the PPA engineer or further discovery, not a source read.
