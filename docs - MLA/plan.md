@@ -414,6 +414,7 @@ The POC was live-verified. Where we do something different, the burden of proof 
 | **PII secret rotation — headline answered [2026-09-04], trigger mechanism unresolved — gate item #2.** COMESA confirmed versioned keys over drain-first, but "a failure route which looks for and applies new keys" names a trigger that does not map cleanly onto a tokenizer that only ever writes tokens, never checks one — §7.1 #2's table cell has the precise ambiguity. **User decision [2026-09-04, `continue - before phase 5.md` §2]: no technical dependency on Phase 5's own build — confirmed, then Phase 5 was prioritized ahead of this item rather than sequenced after it (superseding an earlier same-day decision that had tied the two together).** | Phase 4's formal closure only — no longer gates starting Phase 5 | CCH (the trigger question) then Engineering (the build) |
 | ~~`cch-crosscutting-user-stories.md` is referenced throughout but absent~~ **Resolved [2026-09-07] — obtained**, home of US-AUD-01, US-MON-01, US-MON-02, US-PERF-01/02, US-SEC-01. Confirms the observability stack (Prometheus/Grafana/Loki/Tempo/Mimir, IDD §10). | ~~No longer gates Phase 6 in full~~ **Resolved [2026-09-08] — Phase 6 is formally closed** (§16's US-MON-01/US-PERF-01 entries); alert paths were built against a configurable sink (a metrics-based one, always active, plus an optional webhook) per `CLAUDE.md`'s own "External decisions" rule — an open destination decision does not block a mechanism built and live-verified against a stated, reversible default. **R-37 itself (alerting destination/routing) remains open, tracked below** — it gates only the real destination eventually being wired, not this codebase's own closure. | CCH (R-37's routing decision) |
 | **R-04 (Critical) has no acceptance criteria** — the "never synthesize" prohibitions. MLA-side equivalent: never fabricate an envelope for an event that did not arrive. | Phase 2/3 acceptance criteria | Story author — liftable from the POC's behaviour |
+| **No network path from the deployed MLA (`10.0.150.69`, namespace `mla`) to the real PPA (`10.0.115.186:3000`) — discovered [2026-09-17].** MLA is already correctly deployed and configured there (`PPA_MTLS_DISABLED=true`, `PPA_BASE_URL`/`PPA_HEALTH_BASE_URL` both pointed at the real PPA, pod healthy, `/health/ready` all `UP`) and was already delivering successfully to it earlier the same session. Connectivity then broke. Checked from three vantage points: this machine reaches `10.0.115.186:3000` fine (`curl` → HTTP 200); `10.0.150.69` times out (`curl: (28) Connection timed out`, `ip route get` shows it routing via its own gateway `10.0.150.1 dev ens192`, not through any VPN this session controls); the `cch-mla` pod itself also times out, confirmed via an ephemeral debug container (`redis:5.0.4-alpine`, already cached locally since the node has no internet access) attached to the pod's network namespace — `wget: download timed out`. The gap is specific to `10.0.150.x`'s own network path to `10.0.115.x`; retrying does not change the result (re-tested [2026-09-17], identical timeout). **No code or config change is needed on MLA's side — it will resume delivering automatically the moment this path opens, no restart or redeploy required.** | Live-traffic delivery from the deployed MLA to the real PPA; by extension, `e2e-testing/checklist.md` §3's `[remote-instance]` items against real traffic (those still need the PPA engineer/further discovery regardless, per that section's own closing note) | Whoever manages routing/firewalling between the `10.0.150.0/24` and `10.0.115.0/24` segments — not yet identified by name; CCH/COMESA infra or the Mojaloop Partner network team are the likely candidates |
 
 ### 13.2 Gates production, not the work ahead
 
@@ -2213,3 +2214,50 @@ pointed out. `CLAUDE.md` and `strategy.md` §1 updated to say so plainly rather 
                 *specific* already-completed 8-envelope run (the entry above) did on the *remote*
                 `10.0.115.186:3000` instance, and where that remote instance's own TMS target actually
                 points - both still need the PPA engineer or further discovery, not a source read.
+
+### Phase 8 (partial) — MLA shipped to the deployed cluster against the real PPA; connectivity blocker found   [2026-09-17]
+
+Same thread, later the same day. Infrastructure work, not a story - `CLAUDE.md`'s "How a story gets built"
+§5/§10 instruction, same basis as the three Phase 8 entries above.
+
+**Context.** A separately-deployed MLA already exists on its own machine (`10.0.150.69`, SSH key
+`~/.ssh/mojaloop_fx_10_0_150_69`, namespace `mla`), actively consuming real live Kafka traffic from the
+Mojaloop demo cluster - but configured to deliver to a co-located `ppa-stub`, not the real PPA this session's
+other two Phase 8 entries targeted.
+
+**Built**       Nothing new in `cch-mla` itself - this entry ships the `PPA_MTLS_DISABLED` fix (the entry
+                two above) to that already-running deployment. Image rebuilt, shipped with no registry
+                (that host has no internet): `docker save | ssh | docker load`, then
+                `kind load docker-image ... --name mojaloop-fx`. `cch-mla-config` ConfigMap patched -
+                `PPA_BASE_URL`/`PPA_HEALTH_BASE_URL` -> `http://10.0.115.186:3000`,
+                `PPA_MTLS_DISABLED=true` - and the deployment rolled to the new image.
+
+**Tests**       None - deployment and diagnostic work only, no application code changed in this entry.
+
+**Verified**    `live`, in two parts. **First, the deployment itself**: new pod `1/1 Running`, boot log
+                carried the designed `PPA_MTLS_DISABLED=true` `WARN` line, `/health/ready` all `UP` - and
+                delivery to the real PPA was briefly confirmed working from this same deployment earlier the
+                same session. **Second, connectivity then broke, and was checked from three vantage points**
+                once noticed: this machine reaches `10.0.115.186:3000` fine (`curl` -> HTTP 200,
+                `{"ready":true,...}`, re-confirmed on a later re-check with an identical result);
+                `10.0.150.69` times out (`curl: (28) Connection timed out after 5001 milliseconds`;
+                `ip route get 10.0.115.186` resolves via its own gateway, `10.0.150.1 dev ens192`, not
+                through any VPN this session controls); the `cch-mla` pod itself also times out - its image
+                has no `curl`/`wget`/`node` to test with directly (a minimal runtime image), so an ephemeral
+                debug container was attached to the pod's network namespace via
+                `kubectl debug ... --target=cch-mla`. The obvious debug image (`nicolaka/netshoot`) could
+                not be pulled - that node has no internet access, confirmed by watching it retry and time out
+                against `registry-1.docker.io` for two minutes straight - so `redis:5.0.4-alpine` was used
+                instead, already cached locally on the node from earlier work; its BusyBox `wget` was enough:
+                `wget: download timed out`, same failure as the host.
+
+**Diverged**    None from §12's register - infrastructure/deployment only, no application behaviour changed.
+
+**Left open**   **The connectivity gap itself - tracked as a blocker in §13.1, not resolved here.** No code
+                or config change is needed on MLA's side once the network path reopens; it will resume
+                delivering automatically, no restart required. The recommended check once it does:
+                `kubectl -n mla logs -l app=cch-mla --tail=30` on `10.0.150.69` for `Forwarded ...` lines and
+                non-`parked` delivery outcomes - real traffic, not a re-run of §1's synthetic 8-envelope feed.
+                Beyond that, per `e2e-testing/checklist.md` §3's own open items: confirm PPA's own processing
+                (not just its HTTP 200), and separately check whether the delivered messages actually reach
+                the local Tazama TMS stack correctly correlated.
