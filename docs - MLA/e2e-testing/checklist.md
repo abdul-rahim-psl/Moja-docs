@@ -6,7 +6,9 @@
 
 **What this is not.** Not a fault, retry, breaker, rejection, chaos, load, or multi-instance test — `tools/scenario-library` already covers those (`environment-simulation.md` §1, `plan.md` §4/§10) and this checklist deliberately does not repeat them. Every step below is the *happy* path only, per the explicit scope given for this checklist [2026-09-17].
 
-**Scope — MLA ↔ `ppa-stub`, not MLA ↔ the real PPA.** The real PPA (per `cch-ppa-user-stories.md`, Epics 6–10) has not been implemented anywhere in this workspace — `strategy.md` §1 records PPA implementation as not yet started. `ppa-stub` (`tools/ppa-stub/`) is the only PPA-shaped thing that exists to test against: it validates every envelope against the same ajv schema PPA would, speaks real mTLS, and records what it accepts — but it never translates to ISO 20022, correlates across legs, or dispatches to Tazama's TMS (`environment-simulation.md` §3.2 — "never a re-implementation"). This checklist proves MLA's own half of the contract genuinely works end to end; it cannot and does not prove anything about PPA's nine-step pipeline (`core-knowledge.md` §6.1), because no such pipeline runs here yet.
+**Scope — MLA ↔ `ppa-stub` (§§1–15 below), not MLA ↔ the real PPA.** `ppa-stub` (`tools/ppa-stub/`) validates every envelope against the same ajv schema PPA would, speaks real mTLS, and records what it accepts — but it never translates to ISO 20022, correlates across legs, or dispatches to Tazama's TMS (`environment-simulation.md` §3.2 — "never a re-implementation"). §§1–15 prove MLA's own half of the contract genuinely works end to end; they cannot and do not prove anything about PPA's real nine-step pipeline (`core-knowledge.md` §6.1).
+
+**A real PPA does now exist**, built separately by another engineer (not tracked in this docs folder — `strategy.md` §1, `CLAUDE.md`) and confirmed live [2026-09-17] at `http://10.0.115.186:3000` (OpenAPI doc at `/documentation`, matching this project's own Event Envelope contract and business-endpoint routing exactly). §19 below is a separate, additional pass against that real instance — run §§1–15 against `ppa-stub` first regardless, since the real PPA's mTLS/config requirements are not yet confirmed (§19's own open item) and a genuine integration bug is far easier to isolate once the `ppa-stub` pass is already known-clean.
 
 - [1. Prerequisites](#1-prerequisites)
 - [2. Bring up the harness](#2-bring-up-the-harness)
@@ -26,6 +28,7 @@
 - [16. Optional — repeat at larger scale](#16-optional--repeat-at-larger-scale)
 - [17. Teardown](#17-teardown)
 - [18. Definition of done](#18-definition-of-done)
+- [19. Additional pass — the real PPA instance](#19-additional-pass--the-real-ppa-instance)
 
 ---
 
@@ -192,3 +195,17 @@ Once the single corridor above passes cleanly, repeat with more data to build co
 This checklist is **passed** when every box above is checked for one full run with no unexpected skip, no rejection, no alert, and no breaker trip — i.e., the numbers in §15 tell the same clean story the log lines in §6–§14 do. It is **not** a substitute for `npm run scenario:all` (which additionally proves the fault, chaos, and concurrency paths — `plan.md` §10) and does not by itself close any phase or story in `plan.md` §16; record a §16 entry separately if this run is meant to serve as that story's live verification.
 
 **Explicitly out of scope, by design** (edge cases, not the core flow): transfer/FX-quote rejections, duplicate/dropped/corrupt records, out-of-order partition arrival, PPA 4xx/5xx/timeout, retry exhaustion, circuit-breaker trips and recovery, key-store or PII-secret outages, MLA/broker restarts mid-feed, and the `TxSts: "ABOR"` gap (`plan.md` §14 Q3) — all already covered by `tools/scenario-library` or separately tracked, and deliberately not re-tested here.
+
+---
+
+## 19. Additional pass — the real PPA instance
+
+**Confirmed live [2026-09-17]:** `http://10.0.115.186:3000` — `GET /health/ready` → `{"ready":true,"checks":{"writeAheadStore":true}}`; `GET /documentation`/`/documentation/json` serve an OpenAPI 3.0.3 doc titled "PPA Ingress API" listing `POST /QUOTES`, `/FXQUOTES`, `/TRANSFERS`, `/FXTRANSFERS` and the two health routes, with a request schema matching `core-knowledge.md` §5's Event Envelope field-for-field and example payloads using this project's own `test-mwk-dfsp`/`test-zmw-dfsp` ids. This is a genuinely separate, independently-built PPA — not `ppa-stub`, and not tracked in this docs folder (§1 above).
+
+**Not yet confirmed — do not point a real MLA at it before these are answered:**
+
+- [ ] **Does this instance enforce mTLS on the four business endpoints?** Its OpenAPI doc declares no `securitySchemes`, and it was reachable over plain `http://` for `/documentation` and `/health/ready`. `core-knowledge.md` §3.4 requires mTLS on every business call in the target design — confirm with the PPA engineer whether this instance is a deliberately unauthenticated dev build, or whether the business endpoints sit behind mTLS while health/docs don't.
+- [ ] **What `PPA_BASE_URL` (and, if mTLS is enforced, what CA/client cert) should MLA actually use?** Do not guess this — `.env.template`'s `PPA_BASE_URL`/`PPA_CLIENT_CERT_PATH`/`PPA_CLIENT_KEY_PATH`/`PPA_CA_CERT_PATH` currently point at the local `ppa-stub`, and pointing them elsewhere without confirming the target first risks delivering genuine (even if test) payment envelopes into someone else's real write-ahead store — persist happens *before* structural validation (`core-knowledge.md` §6.1 step 2), so even a malformed test envelope is written before it can be rejected.
+- [ ] **Is this instance meant for MLA integration testing at all**, or is it the PPA engineer's own dev/test deployment not yet intended for cross-team traffic? Confirm before running anything against it, even read-only.
+
+**Once those are answered:** repeat §§6–15 unmodified, substituting the confirmed `PPA_BASE_URL` (and certs, if required) for `ppa-stub`'s — the pipeline stages and their pass criteria do not change; only the delivery target does. The one check that **cannot** be repeated as written is §14 (`tools/ppa-stub/output/received.jsonl` is specific to the stub) — ask the PPA engineer how to independently confirm what their instance actually received and how it classified each envelope, since this checklist has no visibility into their store.

@@ -23,7 +23,7 @@ The six documents that govern this work:
 
 (All paths in this table are relative to this file's own directory, `docs/docs - MLA/`.)
 
-`user stories/` holds the five source user-story documents (`cch-crosscutting-user-stories.md` — audit, monitoring, performance, mTLS — added [2026-09-07]). They remain the requirements authority; `core-knowledge.md` is a synthesis of them, not a replacement. `EPICS/` re-splits the MLA and PII material one folder per epic, one file per story — the working unit for build work; PPA's and the crosscutting document's stories are not yet broken out there, since PPA implementation has not started.
+`user stories/` holds the five source user-story documents (`cch-crosscutting-user-stories.md` — audit, monitoring, performance, mTLS — added [2026-09-07]). They remain the requirements authority; `core-knowledge.md` is a synthesis of them, not a replacement. `EPICS/` re-splits the MLA and PII material one folder per epic, one file per story — the working unit for build work; PPA's and the crosscutting document's stories are not yet broken out there, since PPA's build is not tracked in this docs folder at all — it is a separate engineer's own repo and workspace. **A real PPA instance now exists and is reachable, confirmed live [2026-09-17]** — see `strategy.md` §1 for what was verified. This docs folder still has no visibility into that repo's own code, tests, or story tracking; do not assume anything about its internals beyond what has been independently confirmed against the running instance.
 
 ## The stack
 
