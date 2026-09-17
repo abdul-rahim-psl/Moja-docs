@@ -2,13 +2,11 @@
 
 # End-to-End Happy-Path Checklist — MLA ↔ PPA <!-- omit in toc -->
 
-**What this is.** A functional checklist for proving the *core* MLA→PPA flow works, start to finish, against a real broker and a real (stubbed) PPA — one clean, unmodified cross-border transaction, no faults injected. It exists because everything live-verified so far (`plan.md` §16) proves individual mechanisms and failure paths in isolation; this walks the *whole* pipeline in one sitting, in the order a payment actually moves through it, so a single run gives a yes/no answer on "does the core flow work."
+**What this is.** A functional checklist for proving the *core* MLA→PPA flow works, start to finish, against a real broker and the **real PPA**, built separately by another engineer and confirmed live [2026-09-17] at `http://10.0.115.186:3000` — one clean, unmodified cross-border transaction, no faults injected. It exists because everything live-verified so far (`plan.md` §16) proves individual mechanisms and failure paths in isolation; this walks the *whole* pipeline in one sitting, in the order a payment actually moves through it, so a single run gives a yes/no answer on "does the core flow work."
 
 **What this is not.** Not a fault, retry, breaker, rejection, chaos, load, or multi-instance test — `tools/scenario-library` already covers those (`environment-simulation.md` §1, `plan.md` §4/§10) and this checklist deliberately does not repeat them. Every step below is the *happy* path only, per the explicit scope given for this checklist [2026-09-17].
 
-**Scope — MLA ↔ `ppa-stub` (§§1–15 below), not MLA ↔ the real PPA.** `ppa-stub` (`tools/ppa-stub/`) validates every envelope against the same ajv schema PPA would, speaks real mTLS, and records what it accepts — but it never translates to ISO 20022, correlates across legs, or dispatches to Tazama's TMS (`environment-simulation.md` §3.2 — "never a re-implementation"). §§1–15 prove MLA's own half of the contract genuinely works end to end; they cannot and do not prove anything about PPA's real nine-step pipeline (`core-knowledge.md` §6.1).
-
-**A real PPA does now exist**, built separately by another engineer (not tracked in this docs folder — `strategy.md` §1, `CLAUDE.md`) and confirmed live [2026-09-17] at `http://10.0.115.186:3000` (OpenAPI doc at `/documentation`, matching this project's own Event Envelope contract and business-endpoint routing exactly). §19 below is a separate, additional pass against that real instance — run §§1–15 against `ppa-stub` first regardless, since the real PPA's mTLS/config requirements are not yet confirmed (§19's own open item) and a genuine integration bug is far easier to isolate once the `ppa-stub` pass is already known-clean.
+**Scope — MLA ↔ the real PPA is the target, by explicit instruction [2026-09-17]; `ppa-stub` is not used.** §19 is the primary content and **has already been run successfully once, live** — see its own Result. §§1–15 below were written first against `ppa-stub` before that instruction and are kept only because they remain the one way to inspect an envelope's actual bytes (`id`, tokenized fields, decoded body) — the real PPA exposes no such read-back (§19's own "What this cannot prove"). Run §19 for the real pass; fall back to §§1–15 against `ppa-stub` only when byte-level envelope inspection is specifically what's needed.
 
 - [1. Prerequisites](#1-prerequisites)
 - [2. Bring up the harness](#2-bring-up-the-harness)
@@ -28,7 +26,9 @@
 - [16. Optional — repeat at larger scale](#16-optional--repeat-at-larger-scale)
 - [17. Teardown](#17-teardown)
 - [18. Definition of done](#18-definition-of-done)
-- [19. Additional pass — the real PPA instance](#19-additional-pass--the-real-ppa-instance)
+- [19. The real PPA — primary path, run this first](#19-additional-pass--the-real-ppa-instance)
+
+**Start at §19.** §§1–18 are the `ppa-stub` path, kept for byte-level envelope inspection only — read the scope note above before using them.
 
 ---
 
@@ -202,10 +202,24 @@ This checklist is **passed** when every box above is checked for one full run wi
 
 **Confirmed live [2026-09-17]:** `http://10.0.115.186:3000` — `GET /health/ready` → `{"ready":true,"checks":{"writeAheadStore":true}}`; `GET /documentation`/`/documentation/json` serve an OpenAPI 3.0.3 doc titled "PPA Ingress API" listing `POST /QUOTES`, `/FXQUOTES`, `/TRANSFERS`, `/FXTRANSFERS` and the two health routes, with a request schema matching `core-knowledge.md` §5's Event Envelope field-for-field and example payloads using this project's own `test-mwk-dfsp`/`test-zmw-dfsp` ids. This is a genuinely separate, independently-built PPA — not `ppa-stub`, and not tracked in this docs folder (§1 above).
 
-**Not yet confirmed — do not point a real MLA at it before these are answered:**
+**mTLS resolved [2026-09-17], by user instruction, not by confirmation from the PPA side:** the real instance is plain HTTP with no discoverable mTLS port (443/3443/4443/8443/3001/4000 all checked, none listening). Rather than block on the other side standing one up, MLA gained a dev-only bypass — `PPA_MTLS_DISABLED` (`.env.template`, `src/clients/ppa.client.ts`), default `false`, loudly observable (boot-time `WARN` log, `mla_ppa_mtls_bypassed` metric) — mirroring the existing `JWS_VALIDATION_DISABLED` pattern per `CLAUDE.md`'s external-decisions rule. **This is a real, standing security gap while it's on**: MLA↔PPA traffic is unauthenticated and unencrypted for as long as `PPA_MTLS_DISABLED=true`, and nothing in this repo enforces turning it off again — that's an operational discipline, not a mechanism.
 
-- [ ] **Does this instance enforce mTLS on the four business endpoints?** Its OpenAPI doc declares no `securitySchemes`, and it was reachable over plain `http://` for `/documentation` and `/health/ready`. `core-knowledge.md` §3.4 requires mTLS on every business call in the target design — confirm with the PPA engineer whether this instance is a deliberately unauthenticated dev build, or whether the business endpoints sit behind mTLS while health/docs don't.
-- [ ] **What `PPA_BASE_URL` (and, if mTLS is enforced, what CA/client cert) should MLA actually use?** Do not guess this — `.env.template`'s `PPA_BASE_URL`/`PPA_CLIENT_CERT_PATH`/`PPA_CLIENT_KEY_PATH`/`PPA_CA_CERT_PATH` currently point at the local `ppa-stub`, and pointing them elsewhere without confirming the target first risks delivering genuine (even if test) payment envelopes into someone else's real write-ahead store — persist happens *before* structural validation (`core-knowledge.md` §6.1 step 2), so even a malformed test envelope is written before it can be rejected.
-- [ ] **Is this instance meant for MLA integration testing at all**, or is it the PPA engineer's own dev/test deployment not yet intended for cross-team traffic? Confirm before running anything against it, even read-only.
+**Config used for the live run below:**
+```
+PPA_BASE_URL=http://10.0.115.186:3000
+PPA_HEALTH_BASE_URL=http://10.0.115.186:3000
+PPA_MTLS_DISABLED=true
+```
 
-**Once those are answered:** repeat §§6–15 unmodified, substituting the confirmed `PPA_BASE_URL` (and certs, if required) for `ppa-stub`'s — the pipeline stages and their pass criteria do not change; only the delivery target does. The one check that **cannot** be repeated as written is §14 (`tools/ppa-stub/output/received.jsonl` is specific to the stub) — ask the PPA engineer how to independently confirm what their instance actually received and how it classified each envelope, since this checklist has no visibility into their store.
+**Run, live-verified [2026-09-17], happy-path corridor `01_MWK_to_ZMW_PRIMARY`, `--resign 0-19`:**
+
+- [x] MLA booted against this config: `/health/ready` → `{"status":"UP","kafka":"UP","piiSecret":"UP","jwsKeyStore":"UP"}`; boot log carried the designed `PPA_MTLS_DISABLED=true` `WARN` line; `mla_ppa_mtls_bypassed{service="cch-mla"} 1`.
+- [x] `npm run feeder -- --file __tests__/fixtures/DRPP_Kafka_E2E_Pack/01_MWK_to_ZMW_PRIMARY/raw_messages.json --resign 0-19` — fed 20 records (6 skipped by `--resign` itself as unsignable, the structural egress/party-lookup halves — expected, matches §5's own note).
+- [x] All 8 canonical records forwarded and accepted by the **real PPA** — `mla_forwarded_total`: `FXQUOTE=2`, `QUOTE=2`, `FXTRANSFER=2`, `TRANSFER=2`. `mla_ppa_delivery_outcomes_total{outcome="success"}=8` — no `client-error`, `server-error`, `timeout`, `tls-handshake-failure`, or `network-error` outcomes at all.
+- [x] `mla_skipped_total`: `egress=11`, `party-lookup=1`. `11+1+8=20` — every fed record accounted for in exactly one bucket.
+- [x] `mla_tokenization_failures_total=0`; `mla_consumer_lag` is `0` on every one of the 12 partitions once the run settled — offsets fully committed.
+- [x] MLA's own logs show each of the 8 as `Forwarded <EVENTTYPE> (id=...)` with a distinct `correlationId` per line — matches §7/§14's pass criteria from the `ppa-stub` path exactly, this time against the real thing.
+
+**What this run does and does not prove.** It proves MLA's full pipeline — ingestion, canonical selection, classification, decode, genuine JWS verification against locally re-signed fixtures, PII tokenization, schema-valid envelope construction, and delivery — produced 8 correct envelopes and that the real PPA's ingress accepted every one with HTTP 200. It does **not** prove anything about what PPA did after accepting them (translation, correlation, TMS dispatch — `core-knowledge.md` §6.1 steps 3–9): this checklist has no visibility into PPA's own store or logs, unlike §14's `received.jsonl` check against `ppa-stub`. It also does not prove mTLS itself works, since mTLS was bypassed for this run by design — that remains to be tested the day the real PPA (or a gateway in front of it) actually terminates it.
+
+**Left open:** whether `PPA_MTLS_DISABLED=true` stays the working mode going forward, or whether/when the PPA side adds real mTLS, is not this checklist's decision to make.

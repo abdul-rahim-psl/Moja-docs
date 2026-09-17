@@ -2095,3 +2095,80 @@ registry CCH actually pulls from is **GitHub Container Registry**, under a new o
 **Left open**   George himself has not yet been invited — the verified pull was a deliberate internal
                 test account, not George. Same mechanism (package "Manage access" → Invite, Read role)
                 applies; nothing else needs to change once he's added.
+
+### Phase 8 (partial) — First live delivery to the real PPA; GHCR access for INFITX; e2e-testing checklist   [2026-09-17]
+
+Three threads, same day. Not a story - infrastructure/integration work adjacent to §11, per `CLAUDE.md`'s
+"How a story gets built" §5/§10 instruction, same as the two entries above.
+
+**Context.** Checking whether MLA has a Swagger link (it doesn't - no REST business API, only
+`/health/*`/`/metrics`) surfaced that the real PPA - built separately by another engineer, in a repo this
+knowledge base has no visibility into - is live and reachable at `http://10.0.115.186:3000`, confirmed via
+its own `/health/ready` and OpenAPI doc (`strategy.md` §1 has the full confirmation). **User instruction
+[2026-09-17]: the real PPA, not `ppa-stub`, is the intended test target** - `docs - MLA/e2e-testing/checklist.md`
+(added the same day) was restructured around this after being written first against `ppa-stub`.
+
+**Built**       `docs - MLA/e2e-testing/checklist.md` - an 18-section functional happy-path checklist
+                walking MLA's whole pipeline stage by stage (ingestion → canonical selection →
+                classification → decode → JWS → PII tokenization → envelope/schema → delivery → offset
+                commit), registered per the indexing rule in `strategy.md` §2.7/§3. A real architecture gap
+                surfaced immediately on trying to point MLA at the real PPA: `HttpsPpaClient.deliver()`
+                (`src/clients/ppa.client.ts`) unconditionally used `https.request` with a mandatory client
+                cert/key/CA read at construction - no plain-HTTP path existed, and the real PPA is plain
+                HTTP on :3000 with no mTLS port found on any of six checked candidates (443/3443/4443/8443/
+                3001/4000). Raised to the user rather than guessed at or silently worked around
+                (`CLAUDE.md`'s external-decisions rule); **user chose: add a dev-only plain-HTTP bypass,
+                mirroring the existing `JWS_VALIDATION_DISABLED` pattern.** Built as `PPA_MTLS_DISABLED`
+                (default `false`) - `config.interface.ts`/`config.service.ts` (the three cert-path fields
+                become optional only when this is explicitly `true`, never silently), `ppa.client.ts`
+                (`deliver()` now branches `http.request`/`https.request` on the flag; `tlsOptions` is
+                `undefined` and no cert file is ever read when bypassed; `probeReady()`'s existing
+                protocol-detection guarded against the now-optional `tlsOptions`), a new
+                `mla_ppa_mtls_bypassed` gauge (`metrics.interface.ts`/`metrics.client.ts`, same shape as
+                `mla_jws_validation_bypassed`) and a boot-time `WARN` log (`index.ts`), and `.env.template`
+                documented with the same loud-bypass framing as its JWS sibling.
+
+**Tests**       17 new/changed: 3 in `ppa.client.test.ts` (never reads cert material when bypassed; delivers
+                over plain HTTP with no TLS options; classifies the plain-HTTP response identically to a
+                real mTLS one), 2 in `config.service.test.ts` (defaults to `false`; an explicit `true` no
+                longer requires the three cert paths, which resolve to `''`), 1 in `metrics.client.test.ts`
+                (the new gauge, default 0, set to 1), plus the `PPA_MTLS_DISABLED`/`mtlsDisabled` field
+                threaded into the existing full-snapshot and "every supplied value" config tests and into
+                five other test files' `Metrics` mocks (mechanical, not new behaviour under test). Full
+                suite: 493 tests, 100%/97.74%/100%/100% against the 96% gate, zero lint errors (0 errors /
+                225 pre-existing warnings, none new), `npx tsc --noEmit` clean on both the root and
+                `tools/tsconfig.json`.
+
+**Verified**    `live` - against the real running process, pointed at the real PPA, not a mock or `ppa-stub`.
+                Booted with `PPA_BASE_URL=http://10.0.115.186:3000`, `PPA_MTLS_DISABLED=true`: the designed
+                `WARN` line fired, `/health/ready` was `{"status":"UP","kafka":"UP","piiSecret":"UP",
+                "jwsKeyStore":"UP"}`, `/metrics` showed `mla_ppa_mtls_bypassed{service="cch-mla"} 1`. Fed the
+                happy-path corridor `01_MWK_to_ZMW_PRIMARY` re-signed (`--resign 0-19`, 6 of 20 structurally
+                unsignable and skipped by the tool itself, as expected): **all 8 canonical records - 2 each
+                of QUOTE/FXQUOTE/TRANSFER/FXTRANSFER - were forwarded and accepted by the real PPA with HTTP
+                200** (`mla_forwarded_total` by type, `mla_ppa_delivery_outcomes_total{outcome="success"}=8`,
+                zero of any other outcome). `mla_skipped_total` (`egress=11`, `party-lookup=1`) plus the 8
+                forwarded accounts for all 20 fed records exactly. `mla_tokenization_failures_total=0`,
+                `mla_consumer_lag=0` on all 12 partitions once settled. Full narrative and the exact config
+                used: `e2e-testing/checklist.md` §19. **What this does not prove**: mTLS itself (bypassed by
+                design for this run) or anything about PPA's own processing after its HTTP 200 (translation,
+                correlation, TMS dispatch) - this checklist has no visibility into the real PPA's store or
+                logs, unlike the `ppa-stub` path's `received.jsonl`.
+
+**Diverged**    New divergence, not in §12's register because it is infrastructure, not application
+                behaviour: MLA now has a second security-bypass flag (`PPA_MTLS_DISABLED`) alongside
+                `JWS_VALIDATION_DISABLED`. Both are testing-only, default off, loudly observable, and
+                neither is production-safe - **`PPA_MTLS_DISABLED=true` is a real, standing gap while it's
+                on** (unauthenticated, unencrypted MLA↔PPA traffic), not a mechanism that turns itself off;
+                nothing in this repo enforces disabling it again.
+
+**Also done, same day:** CCH provided two GitHub usernames for the INFITX deployment team - Khaled Saidi
+(`KhaledSaiidi`) and Oscar Cobar (`orcr`) - to be granted GHCR Read access on `psl-izyane-cch-frms/cch-mla`
+(§6's own access model, the Phase 8 entry above). The user is inviting both manually; not something this
+session performed. Recorded in `docs/deployment/MLA-deployment-kubernetes.md` §6/§12.
+
+**Left open**   Whether `PPA_MTLS_DISABLED=true` stays the working mode or the PPA side eventually adds real
+                mTLS is not this repo's decision. Nothing about PPA's own processing of the 8 delivered
+                envelopes has been confirmed - ask the PPA engineer. The real FX-side rejection sample and
+                the `TxSts: "ABOR"` gap (§14 Q3) remain untouched by this entry. `KhaledSaiidi`/`orcr`'s
+                GHCR invites are not yet confirmed sent.
