@@ -1,225 +1,139 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 
-# End-to-End Happy-Path Checklist — MLA ↔ PPA <!-- omit in toc -->
+# End-to-End Happy-Path Test — MLA ↔ PPA <!-- omit in toc -->
 
-**What this is.** A functional checklist for proving the *core* MLA→PPA flow works, start to finish, against a real broker and the **real PPA**, built separately by another engineer and confirmed live [2026-09-17] at `http://10.0.115.186:3000` — one clean, unmodified cross-border transaction, no faults injected. It exists because everything live-verified so far (`plan.md` §16) proves individual mechanisms and failure paths in isolation; this walks the *whole* pipeline in one sitting, in the order a payment actually moves through it, so a single run gives a yes/no answer on "does the core flow work."
+**What this is.** The record of the functional happy-path run that proved MLA's *core* job — start to
+finish, against a real broker and the **real PPA**, built separately by another engineer and confirmed
+live [2026-09-17] at `http://10.0.115.186:3000` — for one clean, unmodified cross-border transaction, no
+faults injected. Everything live-verified elsewhere (`plan.md` §16) proves individual mechanisms and
+failure paths in isolation; this is the one run that walked the *whole* pipeline in one sitting, in the
+order a payment actually moves through it, and answered "does the core flow work?" with a yes.
 
-**What this is not.** Not a fault, retry, breaker, rejection, chaos, load, or multi-instance test — `tools/scenario-library` already covers those (`environment-simulation.md` §1, `plan.md` §4/§10) and this checklist deliberately does not repeat them. Every step below is the *happy* path only, per the explicit scope given for this checklist [2026-09-17].
+**What this is not.** Not a fault, retry, breaker, rejection, chaos, load, or multi-instance test —
+`tools/scenario-library` already covers those (`environment-simulation.md` §1, `plan.md` §4/§10). Not a
+test against `ppa-stub` — by explicit instruction [2026-09-17], the real PPA is the target, and `ppa-stub`
+is not used here.
 
-**Scope — MLA ↔ the real PPA is the target, by explicit instruction [2026-09-17]; `ppa-stub` is not used.** §19 is the primary content and **has already been run successfully once, live** — see its own Result. §§1–15 below were written first against `ppa-stub` before that instruction and are kept only because they remain the one way to inspect an envelope's actual bytes (`id`, tokenized fields, decoded body) — the real PPA exposes no such read-back (§19's own "What this cannot prove"). Run §19 for the real pass; fall back to §§1–15 against `ppa-stub` only when byte-level envelope inspection is specifically what's needed.
-
-- [1. Prerequisites](#1-prerequisites)
-- [2. Bring up the harness](#2-bring-up-the-harness)
-- [3. Start MLA and confirm it's healthy](#3-start-mla-and-confirm-its-healthy)
-- [4. Make the corridor genuinely verifiable](#4-make-the-corridor-genuinely-verifiable)
-- [5. Feed the corridor](#5-feed-the-corridor)
-- [6. Ingestion and canonical selection](#6-ingestion-and-canonical-selection)
-- [7. Classification](#7-classification)
-- [8. Payload decode](#8-payload-decode)
-- [9. JWS signature verification](#9-jws-signature-verification)
-- [10. PII tokenization](#10-pii-tokenization)
-- [11. Envelope construction and schema validity](#11-envelope-construction-and-schema-validity)
-- [12. Delivery to PPA over mTLS](#12-delivery-to-ppa-over-mtls)
-- [13. Offset commit behaviour](#13-offset-commit-behaviour)
-- [14. What actually landed at PPA](#14-what-actually-landed-at-ppa)
-- [15. Metrics sanity sweep](#15-metrics-sanity-sweep)
-- [16. Optional — repeat at larger scale](#16-optional--repeat-at-larger-scale)
-- [17. Teardown](#17-teardown)
-- [18. Definition of done](#18-definition-of-done)
-- [19. The real PPA — primary path, run this first](#19-additional-pass--the-real-ppa-instance)
-
-**Start at §19.** §§1–18 are the `ppa-stub` path, kept for byte-level envelope inspection only — read the scope note above before using them.
+- [1. The run](#1-the-run)
+- [2. Definition of done](#2-definition-of-done)
+- [3. PPA correctness — definition of done (not yet run)](#3-ppa-correctness--definition-of-done-not-yet-run)
 
 ---
 
-## 1. Prerequisites
+## 1. The run
 
-- [ ] Node ≥ 22.17, `npm install` already run at `cch-mla`'s repo root.
-- [ ] Docker with the Compose plugin (see `tools/README.md` §1 for the VS Code snap / `docker-compose` workaround if `docker compose` fails silently).
-- [ ] `openssl` on `PATH` (for `npm run certs:generate`).
-- [ ] A terminal per long-running process: harness, `ppa-stub`, MLA, and one free for commands. Four terminals total.
+**Confirmed live [2026-09-17]:** `http://10.0.115.186:3000` — `GET /health/ready` → `{"ready":true,"checks":{"writeAheadStore":true}}`; `GET /documentation`/`/documentation/json` serve an OpenAPI 3.0.3 doc titled "PPA Ingress API" listing `POST /QUOTES`, `/FXQUOTES`, `/TRANSFERS`, `/FXTRANSFERS` and the two health routes, with a request schema matching `core-knowledge.md` §5's Event Envelope field-for-field and example payloads using this project's own `test-mwk-dfsp`/`test-zmw-dfsp` ids. This is a genuinely separate, independently-built PPA — not `ppa-stub`, and not tracked in this docs folder (`strategy.md` §1).
 
----
+**mTLS resolved [2026-09-17], by user instruction, not by confirmation from the PPA side:** the real instance is plain HTTP with no discoverable mTLS port (443/3443/4443/8443/3001/4000 all checked, none listening). Rather than block on the other side standing one up, MLA gained a dev-only bypass — `PPA_MTLS_DISABLED` (`.env.template`, `src/clients/ppa.client.ts`), default `false`, loudly observable (boot-time `WARN` log, `mla_ppa_mtls_bypassed` metric) — mirroring the existing `JWS_VALIDATION_DISABLED` pattern per `CLAUDE.md`'s external-decisions rule. **This is a real, standing security gap while it's on**: MLA↔PPA traffic is unauthenticated and unencrypted for as long as `PPA_MTLS_DISABLED=true`, and nothing in this repo enforces turning it off again — that's an operational discipline, not a mechanism. Full explanation: `learning/MLA/mTLS understanding.md`.
 
-## 2. Bring up the harness
-
-- [ ] `npm run harness:up` — Redpanda up, `topic-event-audit` created at 12 partitions.
-- [ ] `npm run certs:generate` — local CA + server + client certs for `ppa-stub`'s mTLS, written under `tools/ppa-stub/certs/`.
-- [ ] `npm run pii-secret:generate` — writes the local PII tokenization secret to `tools/pii-secret/generated/local.secret` (matches `.env.template`'s `PII_SECRET_PATH`).
-- [ ] Start `ppa-stub` in its own terminal: `npm run ppa-stub`. Confirm it logs both listeners up — business (mTLS, port 4443) and control/health (plain HTTP, port 4001).
-- [ ] `curl http://localhost:4001/health/ready` → `200`, confirms the stub itself is reachable before anything is fed at it.
-
----
-
-## 3. Start MLA and confirm it's healthy
-
-- [ ] Copy `.env.template` to `.env` if not already done; leave `KAFKA_ENABLED=true` for this test (the template default is `false`, meant only for a no-broker smoke start).
-- [ ] Start MLA in its own terminal: `npm run dev`.
-- [ ] `curl http://localhost:3001/health/live` → `{"status":"UP",...}`.
-- [ ] `curl http://localhost:3001/health/ready` → `{"status":"UP", kafka:"UP", piiSecret:"UP", jwsKeyStore:"UP"}`. **If any of the three is `DOWN`, stop here** — nothing downstream can be trusted until all three are `UP` (`health.service.ts` — `status` is `UP` only when all three are).
-- [ ] `curl http://localhost:3001/metrics` → returns Prometheus text output with no errors (confirms the metrics client is wired before the run, so the deltas checked later actually mean something).
-
----
-
-## 4. Make the corridor genuinely verifiable
-
-The captured signatures in every fixture belong to real DFSPs whose private keys we do not hold (`plan.md` §13.1) — fed unmodified, every canonical record fails JWS as `invalid-signature`, by design. To exercise the *happy* path, records must be locally re-signed against a throwaway keypair first (`plan.md` §6, the same mechanism Phase 3's own exit criterion and Phase 7's load test both use).
-
-Recommended fixture: `__tests__/fixtures/DRPP_Kafka_E2E_Pack/01_MWK_to_ZMW_PRIMARY/raw_messages.json` — one complete corridor transaction (20 records, 1 partition), touching all four `eventType`s (QUOTE, FXQUOTE, TRANSFER, FXTRANSFER) plus party lookups, with no rejection or fault shape mixed in — the same fixture the `happy-path` named scenario (`tools/scenario-library/scenarios.ts`) uses.
-
-- [ ] Generate a throwaway keypair for every DFSP id that appears as `fspiop-source` in the chosen fixture. For `01_MWK_to_ZMW_PRIMARY`, that's four ids:
-  ```bash
-  npm run keys:generate -- test-mwk-dfsp test-zmw-dfsp test-fxp2 hub-region-stg
-  ```
-  Confirm `tools/dfsp-keys/store/*.pem` (public, read by the running MLA via `fs.watch` — no restart needed) and `tools/dfsp-keys/private/*.key` (private, read only by `--resign`) now hold four files each.
-- [ ] Confirm the running MLA picked the new keys up with no restart: `/health/ready`'s `jwsKeyStore` stays `UP` throughout (it was already `UP` with an empty store; this just confirms the watch didn't crash on the new files).
-
----
-
-## 5. Feed the corridor
-
-- [ ] Re-sign every resignable record in the fixture and feed it at burst speed:
-  ```bash
-  npm run feeder -- --file __tests__/fixtures/DRPP_Kafka_E2E_Pack/01_MWK_to_ZMW_PRIMARY/raw_messages.json --resign 0-19
-  ```
-  `--resign` on an index that cannot be signed (no `fspiop-source`, or no body — the party-lookup `GET`s) is silently skipped, not an error (`resign.ts`'s own `isResignable` guard) — the feeder logs how many were skipped and why.
-- [ ] Feeder's own summary line reads `Fed 20 record(s)`. If it doesn't, the fixture path or count assumption above is wrong — stop and re-check before reading anything downstream as a pass.
-
----
-
-## 6. Ingestion and canonical selection
-
-- [ ] MLA's logs show 20 consumption lines, one per record, each ending in either a forwarded outcome or a named skip reason — never a raw exception or an unhandled-promise warning.
-- [ ] Every **party-lookup** operation (`getPartiesByTypeAndID`, `putPartiesByTypeAndID`) is skipped with reason `party-lookup`, not folded into a generic skip.
-- [ ] Every **non-canonical** half of a `start`/`egress` pair (`core-knowledge.md` §2.4, D1) is skipped with reason `egress` — the code's coarse name for "failed canonical selection," used for *every* non-canonical half regardless of which action value it actually carries (`ingestion.service.ts`'s own `SkipReason` comment) — never silently dropped with no log line.
-- [ ] Nothing is skipped as `unclassifiable` or logged as `unreadable` — both would mean a record this fixture is known to classify cleanly fell through a gap.
-
----
-
-## 7. Classification
-
-- [ ] Across the run, MLA forwards at least one envelope of **each** of the four `eventType`s: `QUOTE`, `FXQUOTE`, `TRANSFER`, `FXTRANSFER` (`core-knowledge.md` §2.3–§2.4). Confirm from the log lines (`"Forwarded <EVENTTYPE>"`) rather than assuming a count — canonical selection and classification interact in ways that are easy to get wrong by hand (see `plan.md` §3.2's own correction of its first count).
-- [ ] Each forwarded envelope's `msgType` is exactly `request` (POST leg) or `callback` (PUT/PATCH leg) — never a third value (`core-knowledge.md` §5).
-
----
-
-## 8. Payload decode
-
-- [ ] For every forwarded **TRANSFER** and **FXTRANSFER** envelope, the `body` in the delivered envelope (§14 below) is decoded JSON, not a `data:` URI string — confirms the mandatory base64 decode (US-MLA-03, D6) ran before envelope construction.
-- [ ] For every forwarded **QUOTE** and **FXQUOTE** envelope, the body matches the record's own `content.payload` directly (no decode step applies — `core-knowledge.md` §2.5).
-
----
-
-## 9. JWS signature verification
-
-- [ ] Zero `invalid-signature` or `missing-signature` skips in this run. Any occurrence means either a key didn't generate correctly (§4) or a record that should have been resignable was skipped by `--resign` (§5's skip count) — re-check both before treating the run as a genuine pass.
-- [ ] `mla_jws_validation_bypassed` (`/metrics`) reads `0` throughout — confirms the JWS bypass flag (`JWS_VALIDATION_DISABLED`) is off and every pass above is a genuine cryptographic verification, not a bypassed one.
-
----
-
-## 10. PII tokenization
-
-- [ ] Run the dedicated verification tool against the same running harness:
-  ```bash
-  npm run verify:tokenization
-  ```
-  It asserts, end to end against the real `ppa-stub` over real mTLS: (1) party-identity fields carry the `tkn_` prefix, (2) tokenization is deterministic (same input → same token), (3) transaction amounts reach `ppa-stub` unchanged, (4) ILP-carried fields on TRANSFER/FXTRANSFER bodies are exempt and reach `ppa-stub` byte-identical. All four must pass.
-- [ ] Independently, inspect one forwarded **QUOTE** envelope in `tools/ppa-stub/output/received.jsonl` (§14) by eye: `payer.partyIdInfo.partyIdentifier`, `payee.partyIdInfo.partyIdentifier`, and `payer.personalInfo.complexName` all start with `tkn_`; `amount` is untouched cleartext.
-
----
-
-## 11. Envelope construction and schema validity
-
-- [ ] No record in this run is skipped as `incomplete-envelope` — every forwarded record carries `msgType`, `eventType`, `id`, `fspiop-source`, and `fspiop-destination` (`core-knowledge.md` §5).
-- [ ] `ppa-stub` returns `400` for zero requests in this run (check its own request log or `mla_rejected_total{reason="client-error"}` stays at its pre-run value — the label PPA's own 4xx responses are counted under) — confirms every envelope MLA built passed the shared ajv schema both ends enforce.
-
----
-
-## 12. Delivery to PPA over mTLS
-
-- [ ] Every forwarded envelope reaches the **correct** business endpoint for its `eventType` (`core-knowledge.md` §3.4's routing table): `QUOTE`→`/QUOTES`, `FXQUOTE`→`/FXQUOTES`, `TRANSFER`→`/TRANSFERS`, `FXTRANSFER`→`/FXTRANSFERS`, all `POST`, all on `ppa-stub`'s mTLS port (4443) — never distinguished by URL suffix or HTTP method beyond that.
-- [ ] Confirm the connection is genuinely mTLS, not plain TLS: from a separate shell, **not** MLA, against the same running `ppa-stub`, run `curl -k https://localhost:4443/QUOTES -d '{}'` with no client certificate; it must fail at the TLS handshake (`certificate required`), proving MLA's own successful deliveries above were genuinely presenting a client certificate, not connecting to a server that accepts anyone.
-- [ ] `mla_ppa_delivery_outcomes_total{outcome="success"}` (`/metrics`) increased by exactly the number of envelopes forwarded in §7; every other outcome value (`client-error`, `server-error`, `tls-handshake-failure`, `network-error`, `timeout`) stays at its pre-run value — a genuine happy-path run produces none of them.
-
----
-
-## 13. Offset commit behaviour
-
-- [ ] Confirm the consumer group actually advanced: `mla_consumer_lag` (`/metrics`), scoped to the partition the fixture landed on, returns to `0` once the run settles — nothing left uncommitted.
-- [ ] Restart MLA (`Ctrl-C`, then `npm run dev` again) and confirm no reprocessing: no new "Forwarded"/"Skipped" log lines appear until fresh data is fed. This proves the offset was genuinely committed past every record in this run, not merely acted upon.
-
----
-
-## 14. What actually landed at PPA
-
-- [ ] `tools/ppa-stub/output/received.jsonl` contains exactly one line per envelope forwarded in §7 (cross-check the line count against `mla_forwarded_total`'s total delta).
-- [ ] Spot-check one line per `eventType`: `id` is present and non-empty, `msgType` ∈ {`request`,`callback`}, `body` is a decoded JSON object (never a raw string), `correlationId` is a fresh UUID distinct across every line (never reused, never the Kafka key — `core-knowledge.md` §2.6).
-- [ ] The **same `id`** appears on exactly two lines for the TRANSFER pair (prepare + fulfil/final, both carrying `transferId`) and is distinguished only by `msgType` — confirms the `id`+`msgType` compound identity (`core-knowledge.md` §5) is real, not just documented.
-
----
-
-## 15. Metrics sanity sweep
-
-Pull `/metrics` once more after the run and confirm, relative to the values recorded before §5:
-
-- [ ] `mla_forwarded_total` increased by the same number counted in §7.
-- [ ] `mla_rejected_total` and `mla_tokenization_failures_total` are **unchanged** — zero rejections and zero tokenization failures is what "happy path" means numerically.
-- [ ] `mla_keystore_unavailable_total` is **unchanged** — the key store was healthy throughout.
-- [ ] `mla_pii_breaker_state`, `mla_jws_breaker_state`, `mla_ppa_breaker_state` all read `0` — no breaker ever tripped.
-- [ ] `mla_partition_paused` reads `0` for every partition — nothing was ever parked.
-- [ ] `mla_alerts_total` is **unchanged** — a genuinely clean run raises no alert of any kind.
-- [ ] `mla_ack_latency_ms` gained samples (confirms the histogram is live) — the actual p95 budget (200 ms) is Phase 7's load-test concern, not this checklist's; a handful of samples from a 20-record burst is not a statistically meaningful latency claim either way.
-
----
-
-## 16. Optional — repeat at larger scale
-
-Once the single corridor above passes cleanly, repeat with more data to build confidence the result isn't an artefact of one small fixture:
-
-- [ ] `npm run scenario -- happy-path` — the same corridor, run through the named-scenario harness (still without `--resign`, so this specific invocation is expected to show `invalid-signature` skips, not forwards; use it to confirm the *mechanism* runs cleanly end-to-end, not to re-check §6–§14's pass criteria).
-- [ ] Feed the full 500-record export, re-signed: `npm run feeder -- --file __tests__/fixtures/raw_export_500/raw_export_500.json --resign 0-499`. Re-check §15's metrics deltas at this larger scale; `mla_rejected_total`/`mla_tokenization_failures_total` must still be unchanged.
-
----
-
-## 17. Teardown
-
-- [ ] Stop MLA (`Ctrl-C`).
-- [ ] Stop `ppa-stub` (`Ctrl-C`) — confirm its process actually exits; it does not always exit cleanly on its own after a run (a known, separately-tracked observation, `bugs/qa-review-findings.md` F-06's note on `scenario:all`).
-- [ ] `npm run harness:down` — tears down Redpanda.
-- [ ] `POST http://localhost:4001/control/reset` before tearing `ppa-stub` down if it's being reused for another run — clears `received.jsonl` for a clean next pass.
-
----
-
-## 18. Definition of done
-
-This checklist is **passed** when every box above is checked for one full run with no unexpected skip, no rejection, no alert, and no breaker trip — i.e., the numbers in §15 tell the same clean story the log lines in §6–§14 do. It is **not** a substitute for `npm run scenario:all` (which additionally proves the fault, chaos, and concurrency paths — `plan.md` §10) and does not by itself close any phase or story in `plan.md` §16; record a §16 entry separately if this run is meant to serve as that story's live verification.
-
-**Explicitly out of scope, by design** (edge cases, not the core flow): transfer/FX-quote rejections, duplicate/dropped/corrupt records, out-of-order partition arrival, PPA 4xx/5xx/timeout, retry exhaustion, circuit-breaker trips and recovery, key-store or PII-secret outages, MLA/broker restarts mid-feed, and the `TxSts: "ABOR"` gap (`plan.md` §14 Q3) — all already covered by `tools/scenario-library` or separately tracked, and deliberately not re-tested here.
-
----
-
-## 19. Additional pass — the real PPA instance
-
-**Confirmed live [2026-09-17]:** `http://10.0.115.186:3000` — `GET /health/ready` → `{"ready":true,"checks":{"writeAheadStore":true}}`; `GET /documentation`/`/documentation/json` serve an OpenAPI 3.0.3 doc titled "PPA Ingress API" listing `POST /QUOTES`, `/FXQUOTES`, `/TRANSFERS`, `/FXTRANSFERS` and the two health routes, with a request schema matching `core-knowledge.md` §5's Event Envelope field-for-field and example payloads using this project's own `test-mwk-dfsp`/`test-zmw-dfsp` ids. This is a genuinely separate, independently-built PPA — not `ppa-stub`, and not tracked in this docs folder (§1 above).
-
-**mTLS resolved [2026-09-17], by user instruction, not by confirmation from the PPA side:** the real instance is plain HTTP with no discoverable mTLS port (443/3443/4443/8443/3001/4000 all checked, none listening). Rather than block on the other side standing one up, MLA gained a dev-only bypass — `PPA_MTLS_DISABLED` (`.env.template`, `src/clients/ppa.client.ts`), default `false`, loudly observable (boot-time `WARN` log, `mla_ppa_mtls_bypassed` metric) — mirroring the existing `JWS_VALIDATION_DISABLED` pattern per `CLAUDE.md`'s external-decisions rule. **This is a real, standing security gap while it's on**: MLA↔PPA traffic is unauthenticated and unencrypted for as long as `PPA_MTLS_DISABLED=true`, and nothing in this repo enforces turning it off again — that's an operational discipline, not a mechanism.
-
-**Config used for the live run below:**
+**Config used:**
 ```
 PPA_BASE_URL=http://10.0.115.186:3000
 PPA_HEALTH_BASE_URL=http://10.0.115.186:3000
 PPA_MTLS_DISABLED=true
 ```
 
-**Run, live-verified [2026-09-17], happy-path corridor `01_MWK_to_ZMW_PRIMARY`, `--resign 0-19`:**
+**Fixture:** `__tests__/fixtures/DRPP_Kafka_E2E_Pack/01_MWK_to_ZMW_PRIMARY/raw_messages.json` — one complete corridor transaction (20 records, 1 partition), touching all four `eventType`s (QUOTE, FXQUOTE, TRANSFER, FXTRANSFER) plus party lookups, no rejection or fault shape mixed in. Re-signed against locally-generated throwaway keypairs (`npm run keys:generate -- test-mwk-dfsp test-zmw-dfsp test-fxp2 hub-region-stg`) — the captured signatures belong to real DFSPs whose private keys aren't held, so an unmodified feed would fail JWS by design.
+
+**Live-verified [2026-09-17]:**
 
 - [x] MLA booted against this config: `/health/ready` → `{"status":"UP","kafka":"UP","piiSecret":"UP","jwsKeyStore":"UP"}`; boot log carried the designed `PPA_MTLS_DISABLED=true` `WARN` line; `mla_ppa_mtls_bypassed{service="cch-mla"} 1`.
-- [x] `npm run feeder -- --file __tests__/fixtures/DRPP_Kafka_E2E_Pack/01_MWK_to_ZMW_PRIMARY/raw_messages.json --resign 0-19` — fed 20 records (6 skipped by `--resign` itself as unsignable, the structural egress/party-lookup halves — expected, matches §5's own note).
+- [x] `npm run feeder -- --file __tests__/fixtures/DRPP_Kafka_E2E_Pack/01_MWK_to_ZMW_PRIMARY/raw_messages.json --resign 0-19` — fed 20 records (6 skipped by `--resign` itself as unsignable, the structural egress/party-lookup halves — expected).
 - [x] All 8 canonical records forwarded and accepted by the **real PPA** — `mla_forwarded_total`: `FXQUOTE=2`, `QUOTE=2`, `FXTRANSFER=2`, `TRANSFER=2`. `mla_ppa_delivery_outcomes_total{outcome="success"}=8` — no `client-error`, `server-error`, `timeout`, `tls-handshake-failure`, or `network-error` outcomes at all.
 - [x] `mla_skipped_total`: `egress=11`, `party-lookup=1`. `11+1+8=20` — every fed record accounted for in exactly one bucket.
-- [x] `mla_tokenization_failures_total=0`; `mla_consumer_lag` is `0` on every one of the 12 partitions once the run settled — offsets fully committed.
-- [x] MLA's own logs show each of the 8 as `Forwarded <EVENTTYPE> (id=...)` with a distinct `correlationId` per line — matches §7/§14's pass criteria from the `ppa-stub` path exactly, this time against the real thing.
+- [x] `mla_tokenization_failures_total=0`; `mla_consumer_lag` is `0` on every one of the 12 partitions once the run settled — offsets fully committed, confirming the whole pipeline including the final "commit offset only on HTTP 200" step (`core-knowledge.md` §3.2 step 9).
+- [x] MLA's own logs show each of the 8 as `Forwarded <EVENTTYPE> (id=...)` with a distinct `correlationId` per line.
 
-**What this run does and does not prove.** It proves MLA's full pipeline — ingestion, canonical selection, classification, decode, genuine JWS verification against locally re-signed fixtures, PII tokenization, schema-valid envelope construction, and delivery — produced 8 correct envelopes and that the real PPA's ingress accepted every one with HTTP 200. It does **not** prove anything about what PPA did after accepting them (translation, correlation, TMS dispatch — `core-knowledge.md` §6.1 steps 3–9): this checklist has no visibility into PPA's own store or logs, unlike §14's `received.jsonl` check against `ppa-stub`. It also does not prove mTLS itself works, since mTLS was bypassed for this run by design — that remains to be tested the day the real PPA (or a gateway in front of it) actually terminates it.
+**What this run does and does not prove.** It proves MLA's full pipeline — Kafka consumption, canonical `start`/`egress` selection, event-type classification, base64 decode, genuine JWS verification against locally re-signed fixtures, PII tokenization, schema-valid envelope construction, and delivery — produced 8 correct envelopes and that the real PPA's ingress accepted every one with HTTP 200, advancing MLA's Kafka offset accordingly. It does **not** prove anything about what PPA did after accepting them (translation, correlation, TMS dispatch — `core-knowledge.md` §6.1 steps 3–9): this run has no visibility into PPA's own store or logs. It also does not prove mTLS itself works, since mTLS was bypassed for this run by design — that remains to be tested the day the real PPA (or a gateway in front of it) actually terminates it.
 
-**Left open:** whether `PPA_MTLS_DISABLED=true` stays the working mode going forward, or whether/when the PPA side adds real mTLS, is not this checklist's decision to make.
+**Left open:** whether `PPA_MTLS_DISABLED=true` stays the working mode going forward, or whether/when the PPA side adds real mTLS, is not this repo's decision. Nothing about PPA's own processing of the 8 delivered envelopes has been confirmed — would need to ask the PPA engineer directly.
+
+---
+
+## 2. Definition of done
+
+**Met [2026-09-17].** MLA's core job — consume from Kafka, select the canonical record, classify it,
+decode it where needed, verify the DFSP's signature, tokenize PII, build a schema-valid envelope, deliver
+it to PPA, and advance the offset only on HTTP 200 — ran start to finish against the real PPA with no
+unexpected skip, no rejection, no alert, and no breaker trip, for every record in the chosen corridor.
+This is **not** a substitute for `npm run scenario:all` (which additionally proves the fault, chaos, and
+concurrency paths — `plan.md` §10), and it does not by itself close any phase or story in `plan.md` §16 —
+recorded separately there (Phase 8 partial, 2026-09-17) as this run's own live verification.
+
+**Explicitly out of scope, by design** (edge cases, not the core flow): transfer/FX-quote rejections, duplicate/dropped/corrupt records, out-of-order partition arrival, PPA 4xx/5xx/timeout, retry exhaustion, circuit-breaker trips and recovery, key-store or PII-secret outages, MLA/broker restarts mid-feed, and the `TxSts: "ABOR"` gap (`plan.md` §14 Q3) — all already covered by `tools/scenario-library` or separately tracked, and deliberately not tested here.
+
+---
+
+## 3. PPA correctness — definition of done (not yet run)
+
+**§1 tested MLA's job, not PPA's.** An HTTP 200 from PPA's ingress only means "durably persisted, per `core-knowledge.md` §6.1 step 2" — persist happens **before** structural validation, so it says nothing about steps 3–9 (validation, idempotency, correlation, translation, TMS dispatch) actually running correctly. This section is what "PPA's own job is correct" would mean, broken into checkable pieces against PPA's documented nine-step pipeline (`core-knowledge.md` §6), the ISO 20022 translation reference (§7), and the correlation/durability model (§8).
+
+**Updated [2026-09-17]: PPA's source is now available locally**, at `/home/abdul-rahim/mojaloop/cch-ppa` — this changes what's checkable, so re-read before assuming the older "zero visibility" framing still applies. Critically, `cch-ppa`'s own `docker-compose.yml` stands up a **complete, self-contained local stack**: the PPA process itself, Postgres (its write-ahead store), and ValKey (its correlation cache) — with mTLS certs and a separate operator/DLQ-replay port already wired. This is genuinely separate infrastructure from the mystery remote instance at `10.0.115.186:3000` (not yet confirmed to be the same deployment), and it means most of the checks below no longer require anyone else's cooperation at all — they require *standing the stack up and looking*, which is work this session can do directly. Every item is marked with what it actually takes:
+- **[MLA-side]** — triggerable and observable purely by feeding MLA specific input and reading PPA's HTTP response or MLA's own metrics.
+- **[code-level]** — answerable by reading `cch-ppa`'s own source directly against the spec below. Proves the *implementation exists and matches intent*, not that a specific run behaved correctly — static, not live.
+- **[local-stack]** — requires standing up `cch-ppa`'s own `docker-compose.yml` and inspecting Postgres/ValKey/the DLQ directly, or deliberately faulting a dependency — fully within this session's control, not yet done as of this entry.
+- **[remote-instance]** — about the *specific* already-completed §1 run against the deployed instance at `10.0.115.186:3000` — that data lives only there; a local stack proves the mechanism works, not what that one remote instance actually did with those 8 envelopes.
+- **[Tazama]** — checkable independently only if the target Tazama instance (local `docker-compose.yml`'s TMS pointer, or the already-running local `tazama-tms-1` stack) is confirmed to be what either PPA instance actually dispatches to — not yet confirmed for either.
+
+### 3.1 Reachability gate & durable persist (steps 1–2)
+
+- [ ] **[remote-instance]** Each of the 8 envelopes from §1's run is actually present in the deployed PPA's write-ahead store, byte-for-byte — an HTTP 200 alone only proves PPA *claimed* to persist it.
+- [ ] **[local-stack]** With `cch-ppa`'s own ValKey or Postgres container stopped, a POST returns `503`, nothing persisted, nothing acknowledged (`core-knowledge.md` §6.1 step 1) — directly testable now by stopping a container in the local compose stack and re-running §1's feed against it instead of the remote instance.
+
+### 3.2 Structural validation (step 3)
+
+- [ ] **[code-level]** Confirm the implementation actually validates `msgType`/`eventType`/`id`/`fspiop-source`/`body` and routes a failure to the DLQ with a masked log, per §6.1 step 3 — read `src/services` for the validation step and where its failure path leads.
+- [ ] **[local-stack]** POST a deliberately malformed envelope (missing `id`, or an `eventType` outside the four valid values) at the local stack — confirm it still returns `200` (persist precedes validation) but lands in Postgres as a DLQ entry, not silently treated as valid.
+
+### 3.3 Idempotency (step 4)
+
+- [ ] **[code-level]** Confirm the idempotency check is a genuine atomic check-and-set against the write-ahead store (Postgres), keyed on `{id}:{isoMessageType}`, not a read-then-write — `git log` already shows a dedicated commit for this (`39c853c feat: classification setup and idempotency`).
+- [ ] **[local-stack]** Re-feed the identical corridor a second time at the local stack and confirm, directly in Postgres, that the second delivery of each `{id}:{isoMessageType}` pair was recognized as a duplicate and produced no second translation or TMS dispatch.
+
+### 3.4 Trigger/cache classification & correlation accumulation (steps 5–6, §8.1)
+
+- [ ] **[code-level]** Confirm the trigger/cache table (`core-knowledge.md` §6.5) is implemented as two independent properties, not conflated — the review finding this design avoids (R-01) is specifically about a component that fires a trigger *without* also caching, or vice versa.
+- [ ] **[local-stack]** After feeding the corridor, confirm directly in ValKey (`valkey-cli`, or the local compose's own port 6379) that the FXQUOTE/FXTRANSFER legs were written into the correlation cache (keyed by `conversionRequestId`/`commitRequestId`).
+- [ ] **[local-stack / Tazama]** Confirm the resulting pacs.008 carries the cached FX enrichment (`InstdAmt`/`XchgRate`, §7.3's "From cached FX Quote" row) — needs the local stack's own TMS target confirmed and reachable.
+
+### 3.5 Domestic vs. cross-border discriminator (step 7, §6.6)
+
+- [ ] **[code-level]** Confirm the discriminator logic exists and matches §6.6 exactly: domestic ⟺ no FX-quote state cached **and** no `determiningTransferId` in the body ⇒ silently discarded (counter only, no DLQ, no alert) — `git log` shows a dedicated commit (`0402046 feat: determining domestic and cross-border implementation`).
+- [ ] **[local-stack]** §1's corridor was cross-border throughout — the domestic path has never been exercised. Feed a TRANSFER-only corridor with no FXQUOTE/FXTRANSFER legs at the local stack, and confirm directly (metrics/logs) that it was silently discarded — no TMS message, no DLQ entry, no alert, only a counter incrementing.
+- [ ] **[local-stack]** The race case — `determiningTransferId` present but FX-quote state not yet cached — still classifies as cross-border and still emits a (degraded) pacs.008. Needs a deliberately timed feed (FX quote delayed past the transfer prepare).
+
+### 3.6 ISO 20022 translation correctness (§7.1–§7.4)
+
+- [ ] **[code-level]** Read the actual field-mapping implementation (`0177939 feat: All the translation stories`) against the reference tables — in particular the two failure modes that produce **no error anywhere** downstream, so they must be checked positively in the code, not assumed correct:
+  - `GrpHdr.MsgId` on every message is a PPA-generated ULID, pinned at first assembly — never copied from any wire `extensionList` key.
+  - pacs.002's `OrgnlInstrId`/`OrgnlEndToEndId` are resolved from the cached `transferId → {InstrId, EndToEndId}` mapping, never assumed equal to `transactionId`.
+  - `TxSts` is translated through an explicit table (`COMMITTED`→`ACSC`, not `ACCC`), not passed through as a raw string.
+  - Payee `Cdtr.BirthDt`/`CityOfBirth`/`CtryOfBirth` are set to the documented sentinels (`1900-01-01`/`"Unknown"`/`"ZZ"`), not left blank or fabricated.
+  - Agent identifiers use `FinInstnId.ClrSysMmbId.MmbId`, not the Mojaloop wire's own `FinInstnId.Othr.Id`.
+- [ ] **[local-stack / Tazama]** For a run against the local stack, confirm the messages a reachable Tazama instance actually received match the above — proves the code runs correctly, not just reads correctly.
+
+### 3.7 Local schema validation & the pacs.008 completeness check (§7.5)
+
+- [ ] **[code-level]** Confirm pinned local ajv schemas exist for all four message types and are validated with `removeAdditional: 'all'` before dispatch (`55b5c8c feat: ppa-13 validation through ajv`, `0786808 feat: added ajv validation to verify tms schema compatability`), and that the pacs.008 field-completeness check (`EndToEndId`, `Dbtr`, `Cdtr`, `DbtrAcct`, `CdtrAcct`) exists as a check distinct from schema shape validation.
+- [ ] **[local-stack]** Feed a case that would produce an incomplete pacs.008 and confirm it fails closed (DLQ, never sent to TMS) rather than dispatching.
+
+### 3.8 Dispatch to TMS (§7.6)
+
+- [ ] **[local-stack / Tazama, if target confirmed]** Exactly **four** Tazama messages ingested for one transaction — one each of `pain.001.001.11`, `pain.013.001.09`, `pacs.008.001.10`, `pacs.002.001.12` — matching `strategy.md` §1's "one cross-border payment produces exactly four Tazama messages" claim. Confirm what Tazama target the local stack's `.env` actually points at first (the already-running local `tazama-tms-1` stack is one candidate, per `docker ps` — not yet confirmed to be it).
+- [ ] **[code-level]** Confirm every PPA→TMS call is built with mutual TLS and a Keycloak-issued bearer token, and that the token is refreshed proactively before expiry, not reactively.
+- [ ] **[local-stack]** A simulated TMS 5xx/timeout produces retry-with-jitter (×3) before DLQ; a simulated 4xx DLQs immediately with no retry.
+
+### 3.9 Correlation TTL, parking, and out-of-order arrival (§8.2–§8.4)
+
+- [ ] **[code-level]** Confirm a parking mechanism exists that writes accumulated leg state to the DLQ before ValKey's TTL lapses (`9651f02 feat: parking and out of order with fixes and review`).
+- [ ] **[local-stack]** A leg parked before its ValKey TTL lapses (pacs.008 sent, pacs.002 not yet) is correctly recovered from the DLQ when the delayed fulfil finally arrives — needs a deliberately-delayed corridor feed against the local stack, with ValKey's TTL shortened for the test or the feed delayed past it.
+- [ ] **[local-stack]** A pacs.002 trigger arriving before any correlation state exists (fulfil-before-prepare) is held and retried within PPA's bounded window rather than dead-lettered immediately, and resolves once the prepare's pacs.008 lands.
+
+### 3.10 The DLQ (§8.5)
+
+- [ ] **[code-level]** Confirm a DLQ replay mechanism exists and is operator-triggered only, never automatic (`5be6c77 feat: dlq replay (unreviewed)` — flagged in its own commit message as unreviewed, worth a closer read before trusting it).
+- [ ] **[local-stack]** A genuine DLQ entry (from any of the checks above) carries PII already in tokenized form, never raw, inspected directly in Postgres.
+
+### Definition of done for this section
+
+**Not met, but now genuinely achievable from this session alone — no longer blocked on the PPA engineer for most of it.** The recommended next step is standing up `cch-ppa`'s own `docker-compose.yml` locally and re-running §1's corridor against it, then working through §§3.1–3.10 directly against Postgres/ValKey/the DLQ. What stays out of reach even then: confirming what the *specific already-completed* §1 run did on the *remote* `10.0.115.186:3000` instance (marked `[remote-instance]` above), and where the real deployed instance's own TMS target actually points — both still need the PPA engineer or further discovery, not a code read.
