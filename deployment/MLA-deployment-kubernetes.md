@@ -284,6 +284,12 @@ scoped deploy token for an outside party — each puller authenticates with thei
 `10.0.70.91` GitLab deploy token (`comesa-mla-deploy`) remains valid but is no longer the one being
 handed to CCH.
 
+**GitHub usernames received, 2026-09-17.** CCH emailed the two GitHub accounts to grant Read access to,
+for the INFITX team performing the deployment: **Khaled Saidi (`KhaledSaiidi`)** and **Oscar Cobar
+(`orcr`)**. The user is inviting both manually via the package's own "Manage access" → "Invite teams or
+people" route (the same mechanism verified 2026-09-15, above) — not yet done as of this entry, and not
+something this session performed.
+
 **Still missing: an automated push step.** `.gitlab-ci.yml` currently has `build`/`lint`/`test`/`regression`
 jobs only (and even those are blocked on the runner issue in Phase 7's own open item — `plan.md` §10) —
 today's push was manual (`docker build` + `docker push`), the same fully-manual mechanism
@@ -523,6 +529,8 @@ items already being tracked, not new asks created by this deployment work.
    under the gateway's own Interconnect CA, retiring the interim CA once that's live.
 5. Reply to George confirming the four decisions recorded in the 15 September update above, and send the
    registry URL + deploy token, `KAFKA_BROKERS`'s variable name, and the digest-pinning acknowledgement.
+   **Partially superseded 2026-09-17** — access is being granted directly on GHCR per-username instead
+   (see §6's 2026-09-17 update); invite `KhaledSaiidi` and `orcr` (Read role) — still open as of this entry.
 6. Live-verify against CCH's actual cluster before calling any of this done, per `engineering-rules.md`
    §11 — a manifest that has only been read, never applied, is a design, not a deployment. Nothing in
    this update was applied to CCH's cluster; only the mechanism (image, registry, manifests, interim
