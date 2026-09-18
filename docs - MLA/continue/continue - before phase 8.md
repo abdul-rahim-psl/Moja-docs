@@ -2,6 +2,12 @@
 
 # Continue — Before Phase 8 <!-- omit in toc -->
 
+> **Overtaken by events [2026-09-15 onwards] — read this alongside `plan.md` §16, not instead of it.**
+>
+> This document was written [2026-09-09] and its central claim — that there is no phase to pick up — **stopped being true six days later.** Phase 8 started without COMESA's environment, because the deployment-shaped work turned out not to need it. Since then: real Kubernetes manifests for CCH, a registry pivot to GHCR, the **first live delivery to the real PPA** at `10.0.115.186:3000` (8/8 envelopes, HTTP 200), PPA's source found locally at `cch-ppa`, and MLA deployed at `10.0.150.69` consuming real Mojaloop demo-cluster traffic. A separate QA workstream closed F-01 … F-10 (every Critical and High) and left F-11 … F-22 open on the `paysys-QA-F11-onwards` branch. One live blocker: no network path from the deployed MLA to the real PPA (`plan.md` §13.1).
+>
+> **What in here still holds:** §2 (the CI clause, unchanged), §4 (what is settled — do not re-litigate), §6 (the harness), §8 (the traps, still the ones that cost real time). **What does not:** the framing immediately below, and §5's claim that everything on the Phase 8 checklist is blocked — `plan.md` §11 now marks each bullet individually. Per `strategy.md` §4, `plan.md` §16 is the ground truth on status; a `continue -` document is corrected by it, never the other way round.
+
 **What this document is.** A session handoff, written at the point where Phase 7's engineering is complete and live-verified in full — load, concurrency and chaos all proven against a real broker, and all fifteen named scenarios passing unattended from a cold start. Read this in full before touching anything; it is short by design.
 
 **Read this part before anything else: Phase 7 is not closed, and Phase 8 cannot start.** Unlike every previous `continue -` document, this one does not hand you a phase you can begin. Two things are true at once:

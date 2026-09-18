@@ -2,7 +2,7 @@
 
 # QA Review — Findings (`cch-mla`, 2026-09-11) <!-- omit in toc -->
 
-**Scope:** every file under `cch-mla/src/`, plus `jest.config.ts`, `package.json`, `.gitlab-ci.yml`, `Dockerfile`, `.gitignore`. Read from the perspective of a senior QA engineer against the requirements in `core-knowledge.md`, the binding rules in `engineering-rules.md`, and the story text in `EPICS/`. PPA is not yet built and is out of scope.
+**Scope:** every file under `cch-mla/src/`, plus `jest.config.ts`, `package.json`, `.gitlab-ci.yml`, `Dockerfile`, `.gitignore`. Read from the perspective of a senior QA engineer against the requirements in `core-knowledge.md`, the binding rules in `engineering-rules.md`, and the story text in `EPICS/`. PPA is out of scope — it is a separate engineer's component in its own repository. (At review time this document said PPA "is not yet built"; that was never this docs folder's to claim, and it is not true — PPA is built, deployed, reachable, and its source is available locally at `cch-ppa`. The scope boundary is unchanged.)
 
 **State of the suite at review time:** 25 suites, 367 tests, all green; 100% statements/functions/lines, 98.06% branches (gate is 96). Every finding below is therefore a defect the suite does not detect — in several cases because a test pins the defective behaviour as correct. The companion document, [`qa-review-remediation.md`](qa-review-remediation.md), proposes a fix for each numbered item.
 
