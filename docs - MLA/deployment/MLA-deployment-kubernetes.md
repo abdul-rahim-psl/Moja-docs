@@ -82,6 +82,34 @@ Outcomes:
    testing — **adopted**: `03-mla-deployment.yaml` now references the image by `sha256:` digest, with the
    tag kept only as a human-readable comment.
 
+**Update, 20 September 2026 — connectivity mechanism confirmed, PKI exchange proposed, TLS settled.**
+George's follow-up (full source: [`george-reply-2026-09-20.md`](george-reply-2026-09-20.md)) on the two
+items still owed after 15-Sept:
+
+1. **Connectivity — whitelisting confirmed, PPA address still outstanding.** Per Slack, whitelisting (not
+   a VPN) is the agreed mechanism; DRPP's source IP has been shared with Paysys. The PPA hostname/IP given
+   back was flagged as looking like an internal address, not one reachable over the public internet —
+   Paysys's network team to re-check and supply either a resolvable hostname or a public IP. See §7, §11
+   Q4.
+2. **PKI exchange — CSR-based flow proposed, pending Paysys review.** `ca.crt`/`client.crt` carry nothing
+   sensitive and can go over email/Slack directly. To keep `client.key` from ever crossing the boundary,
+   George proposes generating PPA's private key and a CSR locally once he has Paysys's `ca.crt`/
+   `client.crt`, sending back only the CSR for signing, and receiving the signed cert in return. See §8
+   item 1, §11 Q5.
+3. **TLS version and cipher suites — resolved.** TLS 1.2/1.3 and any OpenSSL-supported cipher suite are
+   acceptable on the DRPP side. Nothing further to negotiate here. See §7, §11 Q5.
+
+**Update, 21 September 2026 — the 2026-09-15 interim CA was wrong; corrected, and `ca.crt`/`client.crt`
+sent to George.** Actioning the PKI exchange above required retrieving the live `cch-mla-ppa-mtls` secret
+(`mla` namespace, `10.0.150.69`) — doing so found it held `cch-mla-harness-ca` material (the local dev
+test-harness CA `ppa-stub` uses, `O=cch-mla dev harness`, issued 2026-09-14), never the dedicated
+Interconnect CA §8 item 1 describes as generated 2026-09-15. Nothing had been sent to George off this
+material yet, so nothing needs correcting on his end. A properly scoped Interconnect CA was generated
+(`O=Paysys, CN=cch-mla-ppa-interconnect-ca`) and the live secret recreated from it the same day; `PPA_MTLS_
+DISABLED=true` is still active on this deployment (§7), so no traffic was ever exposed to the wrong
+identity and no pod restart was needed. `ca.crt`/`client.crt` from the corrected CA (never `client.key`)
+were sent to George the same day. Full detail: §8 item 1, §11 Q5.
+
 - [1. The ask, as received](#1-the-ask-as-received)
 - [2. Architecture — where MLA actually sits](#2-architecture--where-mla-actually-sits)
 - [3. What ships unconditionally vs. what only CCH can supply](#3-what-ships-unconditionally-vs-what-only-cch-can-supply)
@@ -309,7 +337,13 @@ blocker for this handoff.
   This is still a `NetworkPolicy` egress rule on MLA's side (allow the gateway's address, port from
   `PPA_TIMEOUT_MS`'s own endpoint on `PPA_BASE_URL`), but the far side is a reachable public address
   behind an allow-list and SAN-pinned mTLS, not a private tunnel endpoint. Real addresses are still
-  pending (§11 Q4).
+  pending (§11 Q4). **Update 2026-09-20**: whitelisting is the confirmed mechanism (George, per Slack) —
+  DRPP's own source IP for the allow-list has already been shared with Paysys. The address given back for
+  the PPA side was flagged by George as looking like an internal IP, not one reachable over the public
+  internet — Paysys's network team still needs to confirm the PPA hostname (or a publicly-reachable IP if
+  the hostname doesn't resolve against a public DNS resolver). See §11 Q4.
+- **TLS version and cipher suites — resolved 2026-09-20.** George confirmed TLS 1.2/1.3 is acceptable on
+  the DRPP side, and any OpenSSL-supported cipher suite is fine — no fixed list to negotiate. See §11 Q5.
 - **No inbound Ingress for MLA.** All payment traffic arrives over Kafka; the only HTTP surface is
   `/health/*` and `/metrics`, consumed from inside the cluster (a kubelet probe, and whichever Prometheus
   scrapes it). Deliberately deferred per the 2026-09-14 meeting: deploy first, confirm the pod's
@@ -332,6 +366,28 @@ Three genuinely different secrets, each with its own open provisioning question:
    a dedicated CA plus MLA's client identity, generated 2026-09-15 —
    `cch-mla/deploy/kubernetes/README.md` has the details. PPA's side still needs to be configured to
    trust this interim CA before the hop actually works end to end against the real PPA.
+   **Update 2026-09-20 — PKI exchange mechanism proposed by George:** `ca.crt` and `client.crt` contain
+   nothing sensitive and can go over email/Slack directly. The private key (`client.key`) is the part that
+   must not travel. George's proposed sequence: once Paysys sends its `ca.crt` and `client.crt`, George
+   generates PPA's own private key locally and a CSR from the details in that `client.crt`, and sends back
+   only the CSR (also non-sensitive) over email/Slack; Paysys's CA signs it and returns the resulting
+   `client.crt` (or new cert off the newly generated key). The private key never leaves the environment
+   that holds it. Paysys only ever needs `ca.crt` and the (re-)signed `client.crt` for mTLS to work on its
+   side. Pending Paysys review/confirmation — see §11 Q5.
+   **Update 2026-09-21 — the 2026-09-15 interim CA was wrong; regenerated and corrected.** Retrieving the
+   live `cch-mla-ppa-mtls` secret from the `mla` namespace on `10.0.150.69` to action the item above
+   surfaced that its `ca.crt`/`client.crt` were never the dedicated interim CA this section describes —
+   the secret held `cch-mla-harness-ca` material instead (`O=cch-mla dev harness`, issued 2026-09-14), the
+   same self-signed CA `cch-mla/tools/ppa-stub/certs/` uses for local test harness runs against
+   `ppa-stub`. It was never sent to George. A correctly scoped, dedicated Interconnect CA was generated in
+   its place (`O=Paysys, CN=cch-mla-ppa-interconnect-ca`, 10-year root; `client.crt` at
+   `CN=cch-mla-client`, signed by that root, ~825-day validity) and the live secret was recreated from it
+   the same day. **No traffic impact**: `PPA_MTLS_DISABLED=true` is still active on this deployment (§7),
+   so nothing was consuming the wrong certs for an actual connection — this was a quiet correction, not a
+   remediation of a live failure, and no pod restart was needed or performed. `ca.crt` and `client.crt`
+   (never `client.key`, never `ca.key`) were shared with George the same day. Paysys's own `client.key`/
+   `ca.key` are held locally, not committed to any repository, consistent with this section's existing
+   rule.
 2. **DFSP JWS public keys (`JWS_PUBLIC_KEY_DIR`).** The current mechanism is a watched directory of
    `<dfspId>.pem` files, chosen so adding a key never requires a restart (`engineering-rules.md` §8). At
    the 2026-09-09 meeting, Sam (Mojoloop Foundation) recommended MLA interface with **MCM (Mojaloop
@@ -493,15 +549,27 @@ Consolidated from every "Open" row above. Six were asked; the 2026-09-14 meeting
    him); we owed him the variable name (`KAFKA_BROKERS`), now shared. Consumer group ID resolved —
    `paysys_cch_mla`, confirmed clash-free (R-18). `topic-event-audit`'s partition count/retention
    confirmation is still outstanding.
-4. **The PPA endpoint — architecture resolved 2026-09-15, addresses outstanding.** Superseding the
-   original VPN sketch: a public, IP allow-listed endpoint with a dedicated ingress gateway, per
-   [`connectivity-options.md`](connectivity-options.md) — accepted. The real address is still outstanding.
-5. **mTLS provisioning — architecture resolved 2026-09-15, gateway not yet built.** Two separate trust
-   boundaries (DRPP and Paysyslabs) means neither side's cert-manager trusts the other's certificates
-   today. George's proposal — a dedicated Interconnect CA terminating at a new ingress gateway in front of
-   PPA, per [`certificate-setup-proposal.md`](certificate-setup-proposal.md) — is accepted as the target.
-   That gateway is new Paysys-side infrastructure, not yet built. Built against an interim, reversible
-   default in the meantime (`cch-mla/deploy/kubernetes/README.md`).
+4. **The PPA endpoint — mechanism resolved 2026-09-20, addresses still outstanding on both legs.**
+   Whitelisting (not the VPN originally sketched, nor a straight public allow-list without it) is the
+   confirmed approach, per George on Slack — superseding §7's earlier "public, IP allow-listed endpoint"
+   framing only in that whitelisting is now explicit, not a new architecture. DRPP's source IP has been
+   shared with Paysys. Still outstanding: the PPA hostname (or public IP if the hostname won't resolve
+   against a public DNS resolver) — the address given back was flagged 2026-09-20 as looking like an
+   internal IP, pending Paysys's network team.
+5. **mTLS provisioning — architecture resolved 2026-09-15, key-exchange mechanism proposed 2026-09-20,
+   gateway not yet built.** Two separate trust boundaries (DRPP and Paysyslabs) means neither side's
+   cert-manager trusts the other's certificates today. George's proposal — a dedicated Interconnect CA
+   terminating at a new ingress gateway in front of PPA, per
+   [`certificate-setup-proposal.md`](certificate-setup-proposal.md) — is accepted as the target. That
+   gateway is new Paysys-side infrastructure, not yet built. Built against an interim, reversible default
+   in the meantime (`cch-mla/deploy/kubernetes/README.md`). **2026-09-20**: George proposed a CSR-based
+   exchange so no private key crosses the boundary (§8 item 1) — pending Paysys review. **TLS
+   version/cipher suites confirmed 2026-09-20**: TLS 1.2/1.3 and any OpenSSL-supported cipher suite are
+   acceptable to George's side — nothing further to negotiate on this point. **2026-09-21**: the interim
+   CA/client cert this item's "interim default" referred to was found to be the wrong material (dev-harness
+   CA, not a dedicated one) and was regenerated and corrected — full detail in §8 item 1's 2026-09-21
+   update. `ca.crt`/`client.crt` from the corrected CA were sent to George the same day; his CSR-based
+   exchange (above) is the next step once he reviews them.
 6. **Metrics/health scraping — deliberately deferred.** DRPP has its own Prometheus/Grafana/Loki stack,
    but MLA-only metrics are limited in isolation; George suggested Paysyslabs scrape MLA's metrics
    directly instead. Agreed: deploy first, confirm the pod's reachable, revisit monitoring after.

@@ -2317,6 +2317,52 @@ not evidence of anything on CCH's cluster.**
   progress. Matches the entry two above (`KhaledSaiidi`/`orcr` invited); this meeting confirms the
   invites were acted on rather than left pending.
 
+### Phase 8 (partial) — Interim mTLS CA on `10.0.150.69` found to be the wrong material; regenerated and corrected   [2026-09-21]
+
+George's 2026-09-20 follow-up (`docs/docs - MLA/deployment/george-reply-2026-09-20.md`) confirmed TLS
+1.2/1.3 and any OpenSSL cipher suite, confirmed whitelisting as the connectivity mechanism, and proposed a
+CSR-based exchange for the mTLS PKI material so `client.key` never crosses the boundary — `ca.crt` and
+`client.crt` were the two files actually needed from Paysys to start that exchange.
+
+**What went wrong.** `MLA-deployment-kubernetes.md` §8 item 1 records a dedicated interim Interconnect CA
+as generated 2026-09-15. Retrieving that material from the live `cch-mla-ppa-mtls` secret (`mla`
+namespace, `10.0.150.69`) to actually send it to George found it was not that CA at all — it was
+`cch-mla-harness-ca` (`O=cch-mla dev harness`, issued 2026-09-14), the same self-signed CA
+`cch-mla/tools/ppa-stub/certs/` uses for local test-harness runs against `ppa-stub`. The dedicated
+Interconnect CA the documentation described either was never actually generated, or was generated and
+never made it into the deployed secret — either way, the secret held the wrong material. **Caught before
+anything was sent externally** — no correction owed to George, since nothing had reached him yet.
+
+**Fix.** A correctly scoped, dedicated CA was generated (`O=Paysys, CN=cch-mla-ppa-interconnect-ca`,
+10-year root; MLA's client cert at `CN=cch-mla-client`, signed by that root, ~825-day validity). The live
+`cch-mla-ppa-mtls` secret was deleted and recreated from the new `ca.crt`/`client.crt`/`client.key` the
+same day. `ca.crt` and `client.crt` (never `client.key`) were sent to George the same day, as the two
+non-sensitive files his 09-20 email asked for.
+
+**Verified**   `live` — confirmed via SSH onto `10.0.150.69` (key `~/.ssh/mojaloop_fx_10_0_150_69`) that
+                the secret existed, extracted and inspected both the old and new `ca.crt`/`client.crt`
+                with `openssl x509 -noout -subject -issuer -dates` before and after, confirming the wrong
+                subject/issuer on the original and the correct one on the replacement. Secret deletion and
+                recreation both confirmed via `kubectl get secret` before/after. Temporary cert files
+                copied to the remote box's `/tmp` for the `kubectl create secret --from-file` step were
+                deleted immediately after the secret was created, in the same command chain.
+
+**No traffic impact.** `PPA_MTLS_DISABLED=true` is still active on this deployment (`MLA-deployment-
+kubernetes.md` §7) — MLA is not currently using this secret's contents for any live connection to the real
+PPA, so the wrong material was never actually exercised and no pod restart was needed or performed. This
+was a documentation/provisioning correction, not an incident.
+
+**Left open**   Same items already tracked: George's CSR-based exchange (§8 item 1) is the next step,
+                pending his review of the corrected `ca.crt`/`client.crt`; the PPA hostname/IP re-check
+                (§11 Q4) is still with Paysys's network team; the ingress-gateway architecture is still not
+                built. `client.key`/the CA's own private key are held locally (this session's scratchpad,
+                not committed to any repository) pending the secret's role being superseded by the gateway
+                architecture.
+
+**Docs updated**   `MLA-deployment-kubernetes.md` §8 item 1, §11 Q5, and its top-of-file 21-September
+                dated update block; `cch-mla/deploy/kubernetes/README.md`'s "Certificate Provisioning"
+                section.
+
 **Built**       Nothing in `cch-mla` — documentation only.
 
 **Tests**       None.
