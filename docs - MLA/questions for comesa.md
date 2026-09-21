@@ -158,3 +158,43 @@ tracked?"
 timeout, ILP mismatch, NDC breach, insufficient liquidity, both expiry variants, plus a committed
 baseline), in the same layout as `DRPP_Kafka_E2E_Pack`, at
 `docs/deployment/topic-event-audit-edge-case-captures/`.
+
+---
+
+## Open question for the Mojaloop Foundation — 2026-09-21 (is MLA's own JWS validation redundant?)
+
+Not part of the 2026-09-09 meeting or the 09-10 thread above — raised separately, by Mutale to Michael
+(Mojaloop Foundation) directly, tracked in full in `plan.md` §14 item 10 and §16's [2026-09-21] "Michael's
+reply" entry.
+
+**Context.** Paysys wants to validate the JWS signature on every transaction message it receives on the
+Kafka audit topic. Because DRPP is more than one switch (a regional hub plus eNIIPs per region, each
+potentially its own MCM), obtaining every JWS public key — DFSP, region, eNIIP and FXP — is a real,
+unresolved problem (tracked as Q1 above / `plan.md` §13.1's DFSP-keys row). In the meantime Paysys is
+willing to turn signature validation off — but first needs confirmation that the hub is the **only**
+ingress/egress into the system, since we had already separately confirmed to Paysys that DRPP validates
+every message, making an invalid signature reaching the topic already believed to be effectively nil.
+
+**Question, as asked.** Whether the hub is the only ingress or way to get messages in and out of the
+system, so that Paysys can safely turn off JWS signature validation for now.
+
+**Michael's reply, verbatim:** "Nothing will get on to the Kafka topic unless it has already been
+validated by the switch, and the Kafka topic is in the same system boundary as the validation process. I'm
+not sure what would be gained by PaySys performing another validation. What kind of use case are they
+planning to guard against?"
+
+**What this answers, and what it doesn't.** The trust-boundary premise — hub-only ingress, audit topic
+inside the same boundary as the switch's own validation — is now confirmed directly rather than assumed,
+and in production MLA's own consumer process sits inside that same boundary, not a separate one. It does
+not itself authorize turning validation off: Michael's reply asks a fair question back rather than granting
+the request, and the answer to *that* question has not yet been sent. The one candidate use case still
+worth sending back, if we want to pursue this further, is narrower than a same-boundary argument: JWS
+validation is tamper-evidence for the specific switch-to-Kafka hop, distinct from the DFSP-to-switch
+validation Michael's answer addresses, and would catch corruption or truncation on that hop that
+trust-boundary confirmation alone does not rule out. Whether to send this is not yet decided.
+
+**Standing position, unchanged by this reply.** `george-reply-2026-09-15.md` item 2's original proposal to
+disable MLA's own JWS validation permanently remains **not accepted as a permanent change**
+(`MLA-deployment-kubernetes.md` §6) — `engineering-rules.md` treats DFSP signature verification as
+non-negotiable, and F-04 of the QA workstream specifically hardened it. `JWS_VALIDATION_DISABLED` stays a
+scoped, reversible, loudly-observable testing-only bypass, default off — this reply does not change that.

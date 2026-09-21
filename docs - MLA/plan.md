@@ -458,6 +458,7 @@ Ordered by how much they change what we build. The first four are the ones to pu
 7. **Is `dateOfBirth` genuinely unavailable on this topic**, or absent only from these test parties? Zero occurrences across every capture; downstream `pacs.008` mapping depends on it. **PPA-side (`pacs.008` translation) — not a numbered cch-mla phase.**
 8. **Is `binId` / `processedAsBatch` (present on 59 of 500 records) relevant to us?** Neither the FSD, the stories, nor the POC models batch processing on this topic. Probably out of scope — worth one question rather than an assumption. **If relevant at all, Phase 2** (ingestion/classification scope).
 9. **Alerting destination/routing** (PagerDuty / Slack / email, and the mechanism connecting a condition to it — e.g. Grafana Alertmanager) — R-37, High, from `cch-crosscutting-user-stories.md`'s own Actions table (its own action #5, owner "CCH + FSD author"). The observability *stack* is already confirmed (Prometheus/Grafana/Loki/Tempo/Mimir, IDD §10) and is not itself a question. A SIEM/log-aggregation platform (IDD Open Item #8) is a separate, related question, relevant to audit-log output rather than metrics. **No longer gates Phase 6's formal closure** — Phase 6 closed [2026-09-08] with alert paths built against a configurable sink (§9, §13.1, §16's US-MON-01 entry); this question gates only which real destination is eventually wired into that sink.
+10. **Is the hub the only ingress/egress into the system, such that MLA's own JWS validation is redundant?** Distinct from item 1 above (obtaining the keys) — this asks whether validation is needed *at all*, so `JWS_VALIDATION_DISABLED` could become a standing default rather than a scoped testing bypass, while item 1 stays unresolved. **Partially answered [2026-09-21] — Michael (Mojaloop Foundation), via Mutale.** Verbatim: *"Nothing will get on to the Kafka topic unless it has already been validated by the switch, and the Kafka topic is in the same system boundary as the validation process. I'm not sure what would be gained by PaySys performing another validation. What kind of use case are they planning to guard against?"* **Confirms the trust-boundary premise** — the hub-only-ingress half of the question is now answered directly, not assumed, and **in production, MLA's own consumer process sits inside that same boundary**, so a different-trust-zone argument for keeping validation on does not apply here. **Does not itself authorize disabling validation** — `george-reply-2026-09-15.md` item 2's original ask stays **not accepted as a permanent change** (`MLA-deployment-kubernetes.md` §6), and Michael has asked a fair follow-up of his own: what failure mode MLA's re-validation guards against, given the switch already validates. The one candidate answer that survives is narrower than originally drafted here: JWS verification is tamper-evidence for the specific switch-to-Kafka hop, which trust-boundary confirmation alone does not rule out corruption or truncation on. **Whether that narrower point is worth sending back to Michael is the user's call, not yet actioned** — weaker ground than a same-boundary/different-trust-zone argument would have been. §16's [2026-09-21] "Michael's reply" entry has the full narrative. **Gates nothing today** — `JWS_VALIDATION_DISABLED` remains exactly what it was built as (§13.1's DFSP-keys row, `plan.md` §16's 2026-09-15 entry): a scoped, reversible, loudly-observable testing-only bypass, default off.
 
 **Not on this list:** which record is the final-state trigger. That is D5, settled internally as `commitTransfer` with the ISO `TxSts` vocabulary (`COMM`/`RESV`) — §3.1 — so it is not a question for COMESA.
 
@@ -2427,3 +2428,54 @@ the container's distroless `nonroot` user — fixed with `chmod 644`. Full detai
                 `tazama-tms-1` stack is running, but the Tazama `auth-service`/Keycloak instance PPA's
                 bearer-token chain depends on is not. This phase is not done by the §13 definition until
                 MLA is up, the corridor is fed, and the checklist's feed/verify boxes are live-verified.
+
+### Phase 8 (partial) — Michael's reply on the JWS-validation-disable question; confirms the premise, does not grant the ask   [2026-09-21]
+
+**Context.** Mutale put the JWS-validation-disable question to Michael (Mojaloop Foundation) directly, per
+the 09-17 check-in's tracking (§16's own "17-Sept check-in" entry above): whether the hub is the only
+ingress/egress into the system, so that Paysys can safely turn `JWS_VALIDATION_DISABLED` on as more than a
+scoped testing bypass while the DFSP-key/MCM question (§13.1's DFSP-keys row) remains unresolved. The
+question stated explicitly that DRPP already validates every message, so the concern was never "could an
+invalid signature slip through" — it was whether Kafka's audit topic could be reached by anything other
+than the hub.
+
+**Michael's reply, verbatim:** "Nothing will get on to the Kafka topic unless it has already been
+validated by the switch, and the Kafka topic is in the same system boundary as the validation process. I'm
+not sure what would be gained by PaySys performing another validation. What kind of use case are they
+planning to guard against?"
+
+**What this confirms.** The specific premise asked about — that the hub is the only ingress/egress and the
+audit topic sits inside the same trust boundary as the switch's own validation — is now confirmed directly
+by the Mojaloop Foundation, not merely assumed from architecture diagrams. This is new, load-bearing
+evidence for the "no other ingress" half of the original question.
+
+**What it does not do.** Michael's reply answers the trust-boundary question but does not itself authorize
+disabling JWS validation, and asks a fair question back — what failure mode MLA's own re-validation is
+meant to catch, given the switch already validated. **In production, MLA's consumer process and the
+DRPP/Kafka boundary Michael describes are the same boundary** — so a network-reachability or
+different-trust-zone argument for keeping validation on does not hold here. The one candidate answer that
+survives is narrower: JWS verification is tamper-evidence for the specific hop between the switch writing
+to Kafka and MLA reading from it — a corrupted or truncated record on that hop is still something
+validation would catch that trust-boundary confirmation alone does not rule out. A reused or misconfigured
+consumer group stealing partition assignment (R-18) is a related but distinct concern — it is about
+consumer-group identity, not signature validity, and JWS verification would not by itself catch it. Neither
+point was in the question sent to Michael, so neither has been rejected — they simply have not been asked
+yet, and whether it is worth raising a narrower tamper-evidence argument, given how directly Michael's
+question already undercuts the broader one, is the user's call.
+
+**No change to what is already on record.** `george-reply-2026-09-15.md` item 2's proposal to disable JWS
+validation permanently is still **not accepted as a permanent change** (`MLA-deployment-kubernetes.md` §6's
+2026-09-15 update) — `engineering-rules.md` treats DFSP signature verification as a non-negotiable, and
+F-04 of the QA workstream specifically hardened it. `JWS_VALIDATION_DISABLED` remains what it was built as:
+a scoped, reversible, loudly-observable testing-only bypass (`plan.md` §16's own 2026-09-15 entry), not a
+mechanism this reply authorizes turning on as a standing default. Michael's answer moves the underlying
+question forward — the trust-boundary premise is now confirmed rather than assumed — but the actual ask
+(permanently disabling MLA's own validation) is still open, now with a follow-up question of Michael's own
+attached to it. Tracked in §13.1 and `questions for comesa.md` Q1; the DFSP-keys/MCM item there is the real
+fix regardless of how this sub-question resolves.
+
+**Left open**   Whether to send Michael the narrower tamper-evidence argument above is a decision for the
+                user, not yet actioned — weaker ground than this entry first stated, now that the
+                trust-boundary argument for keeping validation on is confirmed not to apply in production.
+                No engineering change follows from this reply either way — `JWS_VALIDATION_DISABLED` stays
+                exactly what it already was.
