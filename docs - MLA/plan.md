@@ -2675,3 +2675,91 @@ anything wrong with MLA itself). §13.1's row updated with this in place of "not
                 infrastructure (port-forwards, SSH tunnel) built for this entry was left running rather than
                 torn down, in case immediately re-feeding or re-checking is wanted next - not a
                 standing/committed piece of infrastructure, and safe to kill at will.
+
+### Phase 8 (partial) — SSH access to the real remote PPA obtained; its own write-ahead store inspected directly, closing the last `[remote-instance]` gap   [2026-09-21]
+
+**Context.** Immediately following the entry above. The user obtained SSH credentials
+(`abdul.rahim@10.0.115.186`, initially password-based) for the real PPA host itself - infrastructure this
+knowledge base previously had zero access to, distinct from `10.0.150.69` (MLA's own host). Password auth
+was switched to a dedicated key pair (`~/.ssh/ppa_10_0_115_186`, `ssh-copy-id`) so the session could
+connect non-interactively going forward, the same way it already does for `10.0.150.69`. Documented
+separately, briefly, in `learning/PKI/ssh-keypair-for-ppa-access.md` (why password auth can't be scripted,
+what `ssh-keygen`/`ssh-copy-id` each do, the parallel to the CSR exchange in the sibling PKI doc).
+
+**Built**       Nothing in `cch-mla`/`cch-ppa` - a dedicated SSH key pair only
+                (`~/.ssh/ppa_10_0_115_186{,.pub}`), and the one learning doc above.
+
+**Tests**       None.
+
+**Verified**    `live`, via `docker ps` (this account has `sudo`, password-gated, no NOPASSWD) on
+                `10.0.115.186`: **`cch-ppa-ppa-1`** (the real PPA process, port 3000, up 6 days) with its
+                own **`cch-ppa-postgres-1`** (port 5432) and **`cch-ppa-valkey-1`** (port 6379) - and,
+                genuinely surprising, a **separate, co-located local Tazama TMS stack on the same box**
+                (`tazama-keycloak`, `tazama-postgres` on 5433, `tazama-valkey` on 6380, `tazama-nats`, up 4
+                days) - not yet confirmed to be what PPA actually dispatches to, but a real candidate for
+                the "where does the real instance's TMS target point" question that has been open since
+                the first Phase 8 entries. Two attempts at reading the `cch-ppa-ppa-1` container's own env
+                (for its TMS/NATS config) were **blocked by the harness's own safety classifier**
+                (`Credential Materialization`, then `Production Reads`) - correctly cautious, since a full
+                env dump on unfamiliar infrastructure can carry secrets; not pursued further this entry,
+                left for the user to check directly if wanted. Pivoted instead to `cch-ppa-ppa-1`'s own
+                Prometheus endpoint (`:9464/metrics`, no `sudo` needed) and, since the harness would not run
+                further `sudo` reads unattended on this newly-accessed host, the user ran the remaining
+                `psql`/`docker exec` commands directly and relayed the output back verbatim.
+
+**PPA's own processing of the 8 envelopes from the entry above, confirmed byte-for-byte for the first time
+                on the specific remote instance §1's original run actually targeted** (closing
+                `e2e-testing/checklist.md` §3.1's and §3.10's `[remote-instance]` rows): `:9464/metrics`
+                showed `ppa_local_validation_failed_total` = 2 each for `pain.001.001.11`/
+                `pain.013.001.09`/`pacs.008.001.10`, `ppa_dlq_write_total{code="LOCAL_VALIDATION_FAILED"}=6`,
+                `ppa_dlq_write_total{code="IDENTITY_UNRESOLVED"}=2`, `ppa_tms_circuit_breaker_state=0`
+                (healthy, simply never invoked). Cross-checked directly in Postgres
+                (`docker exec cch-ppa-postgres-1 psql -U ppa -d ppa`, real credentials found via
+                `POSTGRES_USER`/`POSTGRES_DB` on the container - not `postgres`/`postgres` as first guessed):
+                **all 8 rows present in `write_ahead`**, `(id, msg_type)` as the primary key, row-for-row
+                matching the metrics exactly - `FXQUOTE`/`FXTRANSFER` (request+callback each)
+                `status='completed'`; `QUOTE` request/callback (`pain.001`/`pain.013`) and `TRANSFER`
+                request (`pacs.008`) `status='failed'`, `error.code='LOCAL_VALIDATION_FAILED'`, with the
+                exact missing-field lists (`RmtInf`, `SttlmInf`, `ChrgBr`, `Purp`, `PmtMtd`, `ReqdAdvcTp`,
+                `Dbtr`/`Cdtr`/`DbtrAcct`/`CdtrAcct`, and others) matching `cch-ppa/README.md`'s own
+                documented gap and today's separate local-stack finding exactly; `TRANSFER`'s `pacs.002`
+                `status='failed'`, `error.code='IDENTITY_UNRESOLVED'`, `"No cached or parked pacs.008
+                identifier mapping found ... refusing to synthesize a pacs.002 (R-04)"` - the R-04
+                protection working as designed, now proven on the real instance, not only the local stack.
+                `created_at` on every row is `2026-09-17` (the original run); `updated_at` is today - the
+                identical corridor re-fed today (the entry above) updated the same 8 rows rather than
+                duplicating them, consistent with the `(id, msg_type)` primary key, though this alone
+                doesn't distinguish "recognized as duplicate and skipped" from "re-validated and got the
+                same result" - `processed_pairs` (seen in `\dt`'s table list, presumably the actual
+                idempotency ledger) was not inspected this entry to settle which.
+
+**A genuine new finding, not previously tracked anywhere**: inspecting the QUOTE request row's own
+                `envelope` column closely, `payer.personalInfo.complexName` and both parties'
+                `partyIdInfo.partyIdentifier` carry `tkn_...` prefixes as expected, but
+                **`payee.personalInfo.complexName` sits raw and untokenized** -
+                `{"lastName": "Banda", "firstName": "Chikondi"}` - in the same envelope, now persisted in a
+                real (if test) deployed instance's own DLQ. **Confirmed this is a spec gap, not an
+                engineering defect**: `core-knowledge.md` §4.1 and `cch-pii-user-stories.md`'s own
+                Fields-to-Tokenize table list only "Payer legal name" for Quote request - there is no
+                "Payee legal name" row at all, so MLA is tokenizing exactly what's specified. Every other
+                exempt field in that table carries an explicit reason (the three ILP-packet rows all cite
+                the cryptographic-binding constraint); this one has no stated rationale, and a real name is
+                PII regardless of which party it belongs to. Checked against `core-knowledge.md` §13's open
+                register and `qa-review-findings.md` - the existing "payee name" items (R-12, FSD Open Item
+                #4) are a different problem entirely (payee display name having no *source* for ISO
+                translation, not this tokenization asymmetry). **Flagged to the user directly, same session**
+                per `CLAUDE.md`'s external-decisions rule - this is CCH's/the story author's call on whether
+                the Fields-to-Tokenize table itself needs a "Payee legal name" row added, not something
+                engineering can decide unilaterally.
+
+**Diverged**    None from §12's register - a requirements-gap finding, not an application behaviour change.
+
+**Left open**   Whether payee's `personalInfo.complexName` should be tokenized is now an explicit open
+                question for CCH/the story author, not yet answered. The co-located `tazama-*` stack's
+                relationship to PPA's actual TMS dispatch target is still unconfirmed - the two blocked
+                `sudo` env-read attempts would likely have answered this directly; either re-attempt with
+                the user relaying output, or ask the PPA engineer, whichever is faster. `processed_pairs`
+                (the likely real idempotency ledger) was not inspected. Everything downstream of TMS
+                dispatch (`checklist.md` §3.6's Tazama-side confirmation, §3.8, §3.9) remains blocked on the
+                same pre-existing schema-completeness gap as the local-stack run, now confirmed identical on
+                the remote instance too - not a remote-access problem any more, a `cch-ppa` code gap.
