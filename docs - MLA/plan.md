@@ -2381,3 +2381,49 @@ was a documentation/provisioning correction, not an incident.
                 check should ask directly rather than assume either outcome. `strategy.md` §1 and `plan.md`
                 §1's status table are updated by this same sweep to stop implying CCH-side deployment has
                 happened.
+
+### Phase 8 (partial) — PPA stood up locally, in progress   [2026-09-21]
+
+**Context.** The cross-machine connectivity blocker (§13.1) between the deployed MLA (`10.0.150.69`) and
+the real PPA (`10.0.115.186:3000`) has no resolution date. Rather than wait on it, E2E work is moving to a
+local stand-up of both services on this machine — `e2e-testing/locally-up.md`, added [2026-09-21]. This
+entry records the first half of that: PPA is up and live-verified; MLA and the corridor feed are not yet
+done, so this phase of work is itself still in progress, not closed.
+
+**Built**       Nothing in `cch-ppa` or `cch-mla` — no application code touched. Local environment setup
+                only: `cch-ppa/.env` from its template, and a throwaway dev mTLS cert set generated into
+                `cch-ppa/certs/` (CA, server/client pair, and a separate operator CA/server/client set) —
+                gitignored, not committed, documented in `e2e-testing/locally-up.md` §3.
+
+**Real gap found and fixed, not previously known.** `locally-up.md`'s own first draft assumed
+`DOCS_INSECURE_HTTP=true` made certificates unnecessary for a local PPA boot. That's wrong: PPA's
+operator-replay listener (`initializeOperatorServer`) starts before the ingress listener and reads its
+mTLS cert files unconditionally, regardless of that flag — with no `certs/` directory, PPA crash-loops on
+every boot attempt (`ENOENT ... ppa-operator-server.crt`). `cch-ppa` ships no cert-generation script of
+its own. Fixed by generating a full throwaway set matching every path `.env.template` defaults to. Two
+further local-only snags surfaced and were fixed in sequence: `docker compose up` had already
+auto-created `cch-ppa/certs/` as `root:root` (from an earlier attempt, before the host directory existed —
+Docker creates the missing bind-mount path itself, as root) — required `sudo chown` back to the invoking
+user before certs could be written; and the generated `.key` files defaulted to mode `600`, unreadable by
+the container's distroless `nonroot` user — fixed with `chmod 644`. Full detail:
+`e2e-testing/locally-up.md` §6.1.
+
+**Verified**    `live` — `docker ps -a` showed `cch-ppa-ppa-1 Up`, `cch-ppa-postgres-1 Up ... (healthy)`,
+                `cch-ppa-valkey-1 Up ... (healthy)`; PPA's boot log carried
+                `Operator server listening on 0.0.0.0:3010`, `Metrics server listening on 0.0.0.0:9464`,
+                the designed `DOCS_INSECURE_HTTP is set - serving plain HTTP with NO mTLS on any route.
+                Dev only.` WARN, and `Fastify listening on 0.0.0.0:3000`; `curl http://localhost:3000/
+                health/ready` returned `{"ready":true,"checks":{"writeAheadStore":true}}` — the same
+                shape confirmed against the remote instance on 2026-09-17.
+
+**Tests**       None — this is environment stand-up, not application code; no test suite runs here.
+
+**Diverged**    None from the design. Diverged from this document's own first draft of the *procedure*,
+                corrected in place in `e2e-testing/locally-up.md` §3/§6.1 rather than left standing.
+
+**Left open**   MLA is not yet stood up locally, and no corridor has been fed through either service —
+                `e2e-testing/locally-up.md` §2's MLA and feed/verify checklist sections are still
+                unchecked. TMS dispatch is separately out of scope for this pass (§6.2): the local
+                `tazama-tms-1` stack is running, but the Tazama `auth-service`/Keycloak instance PPA's
+                bearer-token chain depends on is not. This phase is not done by the §13 definition until
+                MLA is up, the corridor is fed, and the checklist's feed/verify boxes are live-verified.

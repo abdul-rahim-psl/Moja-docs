@@ -48,17 +48,28 @@ independently and have not previously been pointed at each other.
 ## 2. Checklist
 
 The concrete, ordered steps — §§3–5 below give the reasoning behind each one; this is the
-one to actually work from and check off. None of it is done yet.
+one to actually work from and check off. **PPA is done and live-verified [2026-09-21]; MLA and
+the feed are not yet started.** Per `CLAUDE.md`'s mid-story rule, boxes below are checked as work
+actually happens, each annotated with its real state — not held back to the end.
 
-**PPA (`cch-ppa`)**
+**PPA (`cch-ppa`) — done, live-verified [2026-09-21]**
 
-- [ ] `cp .env.template .env`
-- [ ] In `.env`, set `DOCS_INSECURE_HTTP=true` (`NODE_ENV` already defaults to `dev`)
-- [ ] `docker compose up -d`
-- [ ] `docker compose ps` — `ppa`, `postgres`, `valkey` all `Up`/`healthy`
-- [ ] `curl http://localhost:3000/health/ready` → `{"ready":true,...}`
+- [x] `cp .env.template .env` — done; `DOCS_INSECURE_HTTP=true` was already the template's own
+      default, no edit needed
+- [x] In `.env`, confirm `DOCS_INSECURE_HTTP=true` (`NODE_ENV` already defaults to `dev`) — confirmed
+      present, unedited
+- [x] **Generate dev mTLS certs into `cch-ppa/certs/` before bringing the stack up** — a step this
+      checklist originally omitted; turned out to be required. See §3 and §6.1 for why and exactly
+      what was generated.
+- [x] `docker compose up -d` — done; required one intermediate fix (certs directory ownership, §6.1)
+      before the `ppa` container would start cleanly
+- [x] `docker compose ps` — `ppa`, `postgres`, `valkey` all `Up`/`healthy`, confirmed via
+      `docker ps -a` (`cch-ppa-ppa-1 Up`, `cch-ppa-postgres-1 Up ... (healthy)`,
+      `cch-ppa-valkey-1 Up ... (healthy)`)
+- [x] `curl http://localhost:3000/health/ready` → live output: `{"ready":true,"checks":{"writeAheadStore":true}}`
+      — matches the shape confirmed against the remote instance on 2026-09-17
 
-**MLA (`cch-mla`)**
+**MLA (`cch-mla`) — not yet started****
 
 - [ ] `npm run harness:up`
 - [ ] `npm run keys:generate -- test-mwk-dfsp test-zmw-dfsp test-fxp2 hub-region-stg`
@@ -103,16 +114,28 @@ previously `[local-stack]`/blocked)**
 
 Work from `/home/abdul-rahim/mojaloop/cch-ppa`.
 
+**Corrected [2026-09-21] after actually running this**: an earlier version of this section claimed
+no certificates were needed at all. That is wrong — see step 2 below and §6.1. `DOCS_INSECURE_HTTP`
+only removes mTLS from the *ingress* listener; PPA will not boot at all without a cert set present,
+because a second listener reads cert files unconditionally regardless of that flag.
+
 1. **Create `.env` from `.env.template`.** The template's defaults already assume a fully local
    stack (`PG_HOST=localhost`, `CACHE_HOST=localhost`, `TMS_BASE_URL=http://localhost:3000`).
-2. **Set `DOCS_INSECURE_HTTP=true` with `NODE_ENV=dev`.** This is the load-bearing decision for a
-   quick local up: PPA's ingress (the four `/QUOTES`/`/FXQUOTES`/`/TRANSFERS`/`/FXTRANSFERS`
-   endpoints plus health) then serves plain HTTP with **no mTLS at all**
-   (`src/clients/fastify.ts`'s `initializeFastifyClient`) — mirroring the same dev-only bypass
-   already used against the real remote PPA (`PPA_MTLS_DISABLED` on MLA's side,
-   `e2e-testing/checklist.md` §1). This means **no certificates need to be generated** for the
-   MLA↔PPA hop specifically. `docs_insecure_http` is rejected outright unless `NODE_ENV=dev`
-   (`src/config.ts`), so it cannot leak into a non-dev config by accident.
+   `DOCS_INSECURE_HTTP=true` is already the template's own default.
+2. **Generate a dev mTLS cert set into `cch-ppa/certs/` — required, not optional.** `runServer`
+   (`src/index.ts`) starts the operator-replay listener (`initializeOperatorServer`,
+   `src/clients/operator.ts`) *before* the main ingress listener, and it reads
+   `OPERATOR_MTLS_CERT_PATH`/`KEY_PATH`/`CA_PATH` unconditionally — `DOCS_INSECURE_HTTP` only gates
+   `initializeFastifyClient`'s ingress listener, not this one. With no `certs/` directory at all,
+   PPA crash-loops on boot (`ENOENT ... ppa-operator-server.crt`) before the ingress ever starts,
+   regardless of `DOCS_INSECURE_HTTP`. `cch-ppa` ships no cert-generation script of its own
+   (`cch-mla/tools/ppa-stub/scripts/generate-certs.sh` is the only one anywhere in this workspace,
+   and it targets `ppa-stub`'s own file layout, not PPA's). A throwaway self-signed set was
+   generated for this run — CA, server/client pair (`server.crt/key`, `client.crt/key`, reused for
+   `TMS_MTLS_*` per the template's own comment), and a **separate** operator CA/server/client set
+   (`operator-client-ca.crt/key`, `ppa-operator-server.crt/key`, `operator-client.crt/key`) —
+   matching every path `.env.template` defaults to. Dev-only, `cch-ppa/.gitignore` already excludes
+   `certs/`, never committed.
 3. **`docker compose up -d`** from `cch-ppa/`. This brings up Postgres and ValKey (both with
    healthchecks the `ppa` service depends on) and the PPA process itself, listening on `PORT`
    (default `3000`) and the metrics port (`9464`).
@@ -120,11 +143,17 @@ Work from `/home/abdul-rahim/mojaloop/cch-ppa`.
    `{"ready":true,...}` once Postgres/ValKey report healthy — the same shape
    `e2e-testing/checklist.md` §1 checked against the remote instance.
 
-**What this does *not* stand up:** the operator-replay listener (port `3010`,
-`OPERATOR_MTLS_CERT_PATH` etc.) is a **separate** Fastify instance
-(`src/clients/operator.ts`) that reads its mTLS cert files unconditionally — `DOCS_INSECURE_HTTP`
-only gates the main ingress listener, not this one. `cch-ppa` has no cert-generation script of its
-own for this. See §6.
+**Live-verified [2026-09-21]**: `docker ps -a` showed `cch-ppa-ppa-1 Up`,
+`cch-ppa-postgres-1 Up ... (healthy)`, `cch-ppa-valkey-1 Up ... (healthy)`; boot logs carried
+`Operator server listening on 0.0.0.0:3010`, `Metrics server listening on 0.0.0.0:9464`, the
+designed `DOCS_INSECURE_HTTP is set - serving plain HTTP with NO mTLS on any route. Dev only.`
+WARN, and `Fastify listening on 0.0.0.0:3000`; `curl http://localhost:3000/health/ready` returned
+`{"ready":true,"checks":{"writeAheadStore":true}}`.
+
+**What this does *not* stand up:** DLQ replay testing itself (`e2e-testing/checklist.md` §3.10) —
+the operator listener is up and reachable, but nothing has exercised `POST /dlq/:id/:msgType/replay`
+yet with the generated `operator-client.crt/key`. That's separate follow-on work, not blocked by
+anything above.
 
 ---
 
@@ -178,16 +207,35 @@ setup unlocks over the [2026-09-17] run: PPA's own Postgres and ValKey are now d
 
 ## 6. Open items and scoping decisions
 
-These surfaced while working out the steps above — flagged rather than resolved quietly, per
-`CLAUDE.md`'s external-decisions rule, even though none of them blocks the local up itself:
+### 6.1 What actually broke standing PPA up, and how it was fixed [2026-09-21]
 
-- **Operator-replay port (3010) needs mTLS certs that `cch-ppa` has no script to generate.**
-  `cch-mla/tools/ppa-stub/scripts/generate-certs.sh` is the only cert-generation script anywhere in
-  this workspace, and it generates a server/client pair for `ppa-stub`, not PPA's operator listener
-  specifically (which additionally wants an `operator-client-ca.crt`, distinct from the
-  MLA-ingress CA). Not needed for the core MLA↔PPA corridor test in §5 — only for exercising
-  `e2e-testing/checklist.md` §3.10 (the DLQ replay path). Left open until that section is actually
-  worked.
+Three real problems, found and fixed in sequence — recorded here rather than silently smoothed
+over, since each is a genuine correction to what this document originally assumed:
+
+1. **PPA crash-loops on boot with no `certs/` directory at all**, regardless of
+   `DOCS_INSECURE_HTTP`. `ENOENT: no such file or directory, open '/home/app/certs/ppa-operator-server.crt'`
+   — the operator-replay listener (`initializeOperatorServer`) reads its cert files unconditionally,
+   and `runServer` starts it before the ingress listener that `DOCS_INSECURE_HTTP` actually gates.
+   This is the correction folded into §3 above: certs are required for *any* local PPA boot, not
+   just for mTLS-authenticated ingress traffic.
+2. **`docker compose up` had silently auto-created `cch-ppa/certs/` owned by `root:root`** (mode
+   `755`), from an earlier attempt where the container tried to bind-mount a path that didn't yet
+   exist on the host — Docker creates the missing host-side directory itself, as `root`, before the
+   container's own user namespace applies. This blocked writing certs into it as a normal user
+   (`Permission denied`) until fixed with `sudo chown` back to the invoking user. Worth knowing
+   before assuming a `certs/`-style bind-mount directory is safe to write into without checking
+   its owner first.
+3. **Generated `.key` files defaulted to mode `600`** (owner-only), unreadable by the container's
+   process, which runs as the distroless base image's `nonroot` user (`Dockerfile`'s
+   `USER nonroot`, not the host UID) — `EACCES: permission denied, open '/home/app/certs/ppa-operator-server.key'`.
+   Fixed with `chmod 644` on the generated key files. Acceptable for throwaway local dev certs;
+   would not be an acceptable practice for anything resembling a real key.
+
+None of these three needed a code change in `cch-ppa` itself — all three were local-environment
+setup gaps this document now accounts for.
+
+### 6.2 Remaining open items
+
 - **TMS dispatch is not automatically part of "PPA is up."** `cch-ppa`'s `TMS_BASE_URL` defaults to
   `http://localhost:3000` in the checked-in template (a stale/self-referential placeholder —
   that's PPA's own port), and needs pointing at the real local Tazama stack's TMS ingress
