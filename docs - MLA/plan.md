@@ -2429,6 +2429,75 @@ the container's distroless `nonroot` user — fixed with `chmod 644`. Full detai
                 bearer-token chain depends on is not. This phase is not done by the §13 definition until
                 MLA is up, the corridor is fed, and the checklist's feed/verify boxes are live-verified.
 
+### Phase 8 (partial) — MLA stood up locally, corridor fed twice, PPA's own store inspected directly for the first time   [2026-09-21]
+
+**Context.** Continuation of the entry above. MLA is now also up locally, pointed at the locally-run PPA
+instead of the unreachable remote one, and a full corridor was fed through both — twice, the second time
+specifically to catch ValKey state within its TTL window after the first attempt missed it. This is the
+first time `e2e-testing/checklist.md` §3's `[local-stack]` items have actually been checked against real
+Postgres/ValKey state rather than only read from source.
+
+**Built**       Nothing in `cch-mla` or `cch-ppa` — no application code touched. `cch-mla/.env`'s
+                `PPA_BASE_URL`/`PPA_HEALTH_BASE_URL` repointed from the remote `10.0.115.186:3000`
+                (2026-09-17's value) to the local `http://localhost:3000`; everything else in that file
+                (Kafka, PII secret, PPA_MTLS_DISABLED) was already correct from the 2026-09-17 run and
+                needed no change. Keys (`tools/dfsp-keys`) and the PII secret
+                (`tools/pii-secret/generated/local.secret`) already existed from prior sessions and were
+                verified present rather than regenerated.
+
+**Verified**    `live` — `npm run harness:up` brought the existing (stopped) Redpanda containers back up;
+                `topic-event-audit` confirmed at 12 partitions directly (`rpk topic describe`). MLA booted
+                clean: `/health/ready` → `{"status":"UP","service":"cch-mla","kafka":"UP","piiSecret":"UP",
+                "jwsKeyStore":"UP"}`, boot log carrying the designed `PPA_MTLS_DISABLED=true` WARN. Fed
+                `01_MWK_to_ZMW_PRIMARY/raw_messages.json` (20 records, `--resign 0-19`): all 8 canonical
+                envelopes forwarded and accepted (`mla_forwarded_total`: 2 each of
+                QUOTE/FXQUOTE/TRANSFER/FXTRANSFER; `mla_ppa_delivery_outcomes_total{outcome="success"}=8`,
+                no other outcome; `mla_skipped_total` egress=11 + party-lookup=1 + 8 forwarded = 20, every
+                record accounted for; `mla_tokenization_failures_total=0`; consumer lag 0 on all 12
+                partitions after settling) — the same shape as the 2026-09-17 remote-PPA run, now against
+                the local one.
+
+**PPA's own store inspected directly for the first time** (`e2e-testing/checklist.md` §3.1, §3.4, §3.7,
+                §3.10 — previously `[local-stack]`/not yet done): `write_ahead` held all 8 rows.
+                `FXQUOTE`/`FXTRANSFER` both `status='completed'`. **`QUOTE` (`pain.001`/`pain.013`) and
+                `TRANSFER`'s `pacs.008` leg both `status='failed'` with `LOCAL_VALIDATION_FAILED`** —
+                missing required ISO fields (`PmtMtd`, `ReqdAdvcTp`, `RmtInf`, `ChrgBr`, `Purp`, and
+                others) — this is `cch-ppa/README.md`'s own already-documented gap (those three message
+                types' field mapping is not yet schema-complete), now confirmed live for the first time
+                rather than only known from reading the source; **not a defect introduced by this session's
+                setup.** `TRANSFER`'s `pacs.002` leg then failed with `IDENTITY_UNRESOLVED` ("refusing to
+                synthesize a pacs.002 (R-04)") — a correct downstream consequence of `pacs.008` never
+                reaching the step that writes its identifier mapping, itself a positive confirmation that
+                the R-04 "never synthesize" protection works as designed under a real failure, not a
+                fabricated test case. `ValKey`'s `correlation:<transferId>` hash (after a second feed,
+                checked promptly this time — the first check came back empty purely because the default
+                300s correlation TTL had already lapsed by the time it ran, 13 minutes after the first
+                feed) held every merged field for the transaction (`quote`, `quoteCallback`, `fxQuote`,
+                `fxQuoteCallback`, `fxTransfer`, `pain001Pin`, `pain013Pin`, `pacs008Pin`, correctly no
+                `pacs002Pin`), with `quote-id-map:<quoteId>`/`fxtransfer-id-map:<fxTransferId>` as separate
+                lookup indices — a more informative keying scheme than `checklist.md` §3.4 had assumed
+                (`conversionRequestId`/`commitRequestId` directly), corrected there. PII fields inside the
+                cached `quote` (`payee`/`payer`/`personalInfo`) all carried `tkn_...` prefixes, confirming
+                tokenization intact at this layer. The same tokenization was independently confirmed inside
+                a dead-lettered (`status='failed'`) row's own `envelope` column directly in Postgres,
+                closing `checklist.md` §3.10's DLQ-tokenization item.
+
+**Tests**       None — environment stand-up and live verification, not application code.
+
+**Diverged**    None from the design. `e2e-testing/checklist.md` §3.4's assumed ValKey key names were
+                corrected to match what the code actually uses, in the same pass.
+
+**Left open**   Everything downstream of TMS dispatch (`checklist.md` §3.6 Tazama-side confirmation, §3.8,
+                §3.9) is not exercisable as things stand — no message from today's four types reached TMS,
+                since three of the four failed local validation first and the fourth (`pacs.002`) had
+                nothing to resolve against. This is blocked on the same pre-existing schema-completeness
+                gap `cch-ppa/README.md` already names, not on local-stack access. The deliberate
+                fault-injection variants (§3.1's outage case, §3.2's malformed-envelope case, §3.3's
+                duplicate-redelivery case, §3.5's domestic/race cases) and the remaining code-level reads
+                are still open, listed in full in `checklist.md`'s own updated "Definition of done for this
+                section". TMS dispatch's own missing local `auth-service`/Keycloak dependency
+                (`locally-up.md` §6.2) is unrelated to and does not block any of the above.
+
 ### Phase 8 (partial) — Michael's reply on the JWS-validation-disable question; confirms the premise, does not grant the ask   [2026-09-21]
 
 **Context.** Mutale put the JWS-validation-disable question to Michael (Mojaloop Foundation) directly, per

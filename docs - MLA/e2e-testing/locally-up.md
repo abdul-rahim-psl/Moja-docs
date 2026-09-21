@@ -7,7 +7,10 @@ deployment at `10.0.150.69` and the real PPA at `10.0.115.186:3000` — is block
 network path between them (`plan.md` §13.1, `e2e-testing/checklist.md`), and that gap sits with
 whoever manages routing between the two segments, not with engineering. Rather than wait on it,
 the plan is to run both services on this machine, talking to each other over `localhost`, and
-continue the E2E work there. This document is the steps to do that — not a record of a run yet.
+continue the E2E work there. **This is now also the record of the first such run** [2026-09-21] —
+§2's checklist is checked and annotated with what was actually found, including two real gaps this
+document's own first draft missed (§6.1) and one genuine, pre-existing PPA-side finding confirmed
+live for the first time (§2's PPA-store checks).
 
 **What this is not.** Not a replacement for the real cross-machine test once connectivity is
 restored — a local run proves the mechanism, not the actual deployed instances talking to each
@@ -48,9 +51,11 @@ independently and have not previously been pointed at each other.
 ## 2. Checklist
 
 The concrete, ordered steps — §§3–5 below give the reasoning behind each one; this is the
-one to actually work from and check off. **PPA is done and live-verified [2026-09-21]; MLA and
-the feed are not yet started.** Per `CLAUDE.md`'s mid-story rule, boxes below are checked as work
-actually happens, each annotated with its real state — not held back to the end.
+one to actually work from and check off. **Every section below is done and live-verified
+[2026-09-21]** — PPA up, MLA up, corridor fed twice, and PPA's own store inspected directly for
+the first time. Per `CLAUDE.md`'s mid-story rule, boxes were checked as work actually happened,
+each annotated with its real state — not held back to the end. §6.2 still lists what this pass
+deliberately did not cover (TMS dispatch and beyond).
 
 **PPA (`cch-ppa`) — done, live-verified [2026-09-21]**
 
@@ -69,44 +74,71 @@ actually happens, each annotated with its real state — not held back to the en
 - [x] `curl http://localhost:3000/health/ready` → live output: `{"ready":true,"checks":{"writeAheadStore":true}}`
       — matches the shape confirmed against the remote instance on 2026-09-17
 
-**MLA (`cch-mla`) — not yet started****
+**MLA (`cch-mla`) — done, live-verified [2026-09-21]**
 
-- [ ] `npm run harness:up`
-- [ ] `npm run keys:generate -- test-mwk-dfsp test-zmw-dfsp test-fxp2 hub-region-stg`
-- [ ] `npm run pii-secret:generate`
-- [ ] `cp .env.template .env`, then set:
-  ```
-  PPA_BASE_URL=http://localhost:3000
-  PPA_HEALTH_BASE_URL=http://localhost:3000
-  PPA_MTLS_DISABLED=true
-  KAFKA_ENABLED=true
-  KAFKA_BROKERS=localhost:19092
-  ```
-- [ ] `npm run dev`
-- [ ] `curl http://localhost:3001/health/ready` → `kafka`, `piiSecret`, `jwsKeyStore` all `UP`
-- [ ] Boot log shows the `PPA_MTLS_DISABLED=true` `WARN` line (confirms the bypass is actually
-      active, not silently ignored)
+- [x] `npm run harness:up` — done; containers existed stopped from a prior session, brought back up
+      cleanly; `topic-event-audit` confirmed at 12 partitions via
+      `docker exec cch-mla-redpanda rpk topic describe topic-event-audit --brokers redpanda:9092`
+- [x] `npm run keys:generate -- test-mwk-dfsp test-zmw-dfsp test-fxp2 hub-region-stg` — already
+      present from prior work (both `tools/dfsp-keys/store/*.pem` and `tools/dfsp-keys/private/*.key`
+      confirmed on disk for all four ids); not regenerated
+- [x] `npm run pii-secret:generate` — already present (`tools/pii-secret/generated/local.secret`);
+      not regenerated
+- [x] `.env` already existed from the 2026-09-17 real-remote-PPA run, with everything else already
+      correct (`KAFKA_ENABLED=true`, `KAFKA_BROKERS=localhost:19092`, `PPA_MTLS_DISABLED=true`) — the
+      only edit needed was `PPA_BASE_URL`/`PPA_HEALTH_BASE_URL`, from the remote
+      `10.0.115.186:3000` to `http://localhost:3000`
+- [x] `npm run dev` — booted clean
+- [x] `curl http://localhost:3001/health/ready` → live output:
+      `{"status":"UP","service":"cch-mla","kafka":"UP","piiSecret":"UP","jwsKeyStore":"UP"}`
+- [x] Boot log carried the designed
+      `WARN ... PPA_MTLS_DISABLED=true - PPA delivery is UNAUTHENTICATED plain HTTP...` line
 
-**Feed and verify**
+**Feed and verify — done, live-verified [2026-09-21]**
 
-- [ ] `npm run feeder -- --file __tests__/fixtures/DRPP_Kafka_E2E_Pack/01_MWK_to_ZMW_PRIMARY/raw_messages.json --resign 0-19`
-- [ ] `mla_forwarded_total` = 2 each of `QUOTE`/`FXQUOTE`/`TRANSFER`/`FXTRANSFER` (8 total)
-- [ ] `mla_ppa_delivery_outcomes_total{outcome="success"}` = 8, no `client-error`/`server-error`/
-      `timeout`/`tls-handshake-failure`/`network-error`
-- [ ] `mla_skipped_total` (`egress` + `party-lookup`) + 8 forwarded = 20 (every fed record
-      accounted for)
-- [ ] `mla_tokenization_failures_total` = 0
-- [ ] `mla_consumer_lag` = 0 on every partition once the run settles
-- [ ] MLA's logs show each of the 8 as `Forwarded <EVENTTYPE> (id=...)` with a distinct
-      `correlationId`
+- [x] `npm run feeder -- --file __tests__/fixtures/DRPP_Kafka_E2E_Pack/01_MWK_to_ZMW_PRIMARY/raw_messages.json --resign 0-19`
+      — fed 20 records, 6 skipped by `--resign` itself as expected (structural egress/party-lookup)
+- [x] `mla_forwarded_total` = 2 each of `QUOTE`/`FXQUOTE`/`TRANSFER`/`FXTRANSFER` (8 total) — exact
+      match
+- [x] `mla_ppa_delivery_outcomes_total{outcome="success"}` = 8, no other outcome present
+- [x] `mla_skipped_total{reason="egress"}=11`, `{reason="party-lookup"}=1` — `11+1+8=20`, every fed
+      record accounted for
+- [x] `mla_tokenization_failures_total` = 0
+- [x] `mla_consumer_lag` = 0 on all 12 partitions once the run settled
+- [x] MLA's logs show each of the 8 as `Forwarded <EVENTTYPE> (id=...)`, each carrying a distinct
+      `correlationId` as structured log metadata (visible in the raw pino JSON; not shown in the
+      pretty-printed message text, which only omits it from display — confirmed by reading
+      `ingestion-outcome-logging.service.ts`'s own call site)
 
 **Now checkable for the first time — PPA's own store (`e2e-testing/checklist.md` §3.1–§3.4,
-previously `[local-stack]`/blocked)**
+previously `[local-stack]`/blocked) — done, live-verified [2026-09-21]**
 
-- [ ] `docker compose exec postgres psql -U ppa -d ppa -c "select id, msg_type, status from write_ahead;"`
-      — all 8 envelopes present, `status` reflecting each one's actual pipeline outcome
-- [ ] `docker compose exec valkey valkey-cli keys '*'` — FXQUOTE/FXTRANSFER correlation state
-      present, keyed by `conversionRequestId`/`commitRequestId`
+- [x] `docker exec cch-ppa-postgres-1 psql -U ppa -d ppa -c "select id, event_type, msg_type, status, iso_message_type from write_ahead order by created_at;"`
+      — all 8 rows present. **Real finding, not a setup error**: `QUOTE` (`pain.001`/`pain.013`) and
+      `TRANSFER`'s `pacs.008` leg show `status=failed` with `LOCAL_VALIDATION_FAILED` — missing
+      required ISO fields (`PmtMtd`, `ReqdAdvcTp`, `RmtInf`, `ChrgBr`, `Purp`, etc.) — this is
+      exactly the gap `cch-ppa/README.md`'s own "Status" section already documents (those three
+      message types' field mapping is not yet schema-complete), now confirmed live for the first
+      time rather than only known from reading the source. `TRANSFER`'s `pacs.002` leg then failed
+      with a *different*, more interesting code — `IDENTITY_UNRESOLVED`, "refusing to synthesize a
+      pacs.002 (R-04)" — a correct downstream consequence of `pacs.008` never reaching the step that
+      writes its identifier mapping, not a separate bug: the R-04 "never synthesize" protection
+      working exactly as designed. `FXQUOTE`/`FXTRANSFER` both show `status=completed` (they carry
+      no ISO message of their own to translate — they only cache and fold into the other four).
+- [x] `docker exec cch-ppa-valkey-1 valkey-cli keys '*'` — **first attempt genuinely came back empty**;
+      root cause was sequencing, not a bug: 13 minutes elapsed between feeding and checking, past the
+      default 300s (`CACHE_CORRELATION_TTL_SECONDS`) correlation TTL, so the state had already expired
+      naturally. Re-fed the same corridor and checked immediately: `correlation:<transferId>`,
+      `quote-id-map:<quoteId>`, `fxtransfer-id-map:<fxTransferId>` all present.
+      `hgetall correlation:<transferId>` showed the single accumulating hash holding every merged
+      field for the transaction — `quote`, `quoteCallback`, `fxQuote`, `fxQuoteCallback`,
+      `fxTransfer`, plus `pain001Pin`/`pain013Pin`/`pacs008Pin` (correctly no `pacs002Pin`, since
+      that leg failed) — exceeding what this checklist item originally asked for. PII fields inside
+      the cached `quote` (`payee`/`payer`/`personalInfo`) all carry `tkn_...` prefixes, confirming
+      tokenization survived intact all the way into PPA's own cache. **Lesson for next time: check
+      ValKey immediately after feeding, before any Postgres/write_ahead investigation that eats into
+      the TTL window** — the first, empty read was a sequencing mistake in this session, not a
+      finding about the system.
 
 ---
 
