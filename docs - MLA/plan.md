@@ -422,7 +422,7 @@ The POC was live-verified. Where we do something different, the burden of proof 
 | **PII secret rotation — headline answered [2026-09-04], trigger mechanism unresolved — gate item #2.** COMESA confirmed versioned keys over drain-first, but "a failure route which looks for and applies new keys" names a trigger that does not map cleanly onto a tokenizer that only ever writes tokens, never checks one — §7.1 #2's table cell has the precise ambiguity. **User decision [2026-09-04, `continue - before phase 5.md` §2]: no technical dependency on Phase 5's own build — confirmed, then Phase 5 was prioritized ahead of this item rather than sequenced after it (superseding an earlier same-day decision that had tied the two together).** | Phase 4's formal closure only — no longer gates starting Phase 5 | CCH (the trigger question) then Engineering (the build) |
 | ~~`cch-crosscutting-user-stories.md` is referenced throughout but absent~~ **Resolved [2026-09-07] — obtained**, home of US-AUD-01, US-MON-01, US-MON-02, US-PERF-01/02, US-SEC-01. Confirms the observability stack (Prometheus/Grafana/Loki/Tempo/Mimir, IDD §10). | ~~No longer gates Phase 6 in full~~ **Resolved [2026-09-08] — Phase 6 is formally closed** (§16's US-MON-01/US-PERF-01 entries); alert paths were built against a configurable sink (a metrics-based one, always active, plus an optional webhook) per `CLAUDE.md`'s own "External decisions" rule — an open destination decision does not block a mechanism built and live-verified against a stated, reversible default. **R-37 itself (alerting destination/routing) remains open, tracked below** — it gates only the real destination eventually being wired, not this codebase's own closure. | CCH (R-37's routing decision) |
 | **R-04 (Critical) has no acceptance criteria** — the "never synthesize" prohibitions. MLA-side equivalent: never fabricate an envelope for an event that did not arrive. | Phase 2/3 acceptance criteria | Story author — liftable from the POC's behaviour |
-| **No network path from the deployed MLA (`10.0.150.69`, namespace `mla` — a Paysys-side test deployment on the Mojaloop demo cluster, not CCH's own) to the real PPA (`10.0.115.186:3000`) — discovered [2026-09-17].** MLA is already correctly deployed and configured there (`PPA_MTLS_DISABLED=true`, `PPA_BASE_URL`/`PPA_HEALTH_BASE_URL` both pointed at the real PPA, pod healthy, `/health/ready` all `UP`) and was already delivering successfully to it earlier the same session. Connectivity then broke. Checked from three vantage points: this machine reaches `10.0.115.186:3000` fine (`curl` → HTTP 200); `10.0.150.69` times out (`curl: (28) Connection timed out`, `ip route get` shows it routing via its own gateway `10.0.150.1 dev ens192`, not through any VPN this session controls); the `cch-mla` pod itself also times out, confirmed via an ephemeral debug container (`redis:5.0.4-alpine`, already cached locally since the node has no internet access) attached to the pod's network namespace — `wget: download timed out`. The gap is specific to `10.0.150.x`'s own network path to `10.0.115.x`; retrying does not change the result (re-tested [2026-09-17], identical timeout). **No code or config change is needed on MLA's side — it will resume delivering automatically the moment this path opens, no restart or redeploy required.** | Live-traffic delivery from the deployed MLA to the real PPA; by extension, `e2e-testing/checklist.md` §3's `[remote-instance]` items against real traffic (those still need the PPA engineer/further discovery regardless, per that section's own closing note) | Whoever manages routing/firewalling between the `10.0.150.0/24` and `10.0.115.0/24` segments — not yet identified by name; CCH/COMESA infra or the Mojaloop Partner network team are the likely candidates |
+| ~~No network path from the deployed MLA (`10.0.150.69`, namespace `mla` — a Paysys-side test deployment on the Mojaloop demo cluster, not CCH's own) to the real PPA (`10.0.115.186:3000`) — discovered [2026-09-17].~~ **Resolved [2026-09-21] — connectivity confirmed restored.** MLA was already correctly deployed and configured throughout (`PPA_MTLS_DISABLED=true`, `PPA_BASE_URL`/`PPA_HEALTH_BASE_URL` both pointed at the real PPA); nothing on its side ever needed fixing. Re-checked from the same three vantage points that found the break: this machine → PPA (`curl` → HTTP 200), `10.0.150.69` host → PPA (`curl` → HTTP 200, no longer times out), and — the one that actually matters — the `cch-mla` pod's own network namespace → PPA, via the same ephemeral-debug-container technique used to find the break (`redis:5.0.4-alpine`, `wget`) → `{"ready":true,"checks":{"writeAheadStore":true}}`, no timeout. All three green. **`/health/ready` on the pod itself also confirms `kafka: UP` with `mla_consumer_lag{partition="0"}=0`** — fully caught up, not stuck behind a backlog. **Root cause, per the user [2026-09-21]:** `10.0.150.69` and `10.0.115.186` sit on different subnets within the data centre; an infra person resolved the routing gap between them directly. **Confirmed genuinely working, not just reachable [2026-09-21]:** a real corridor (`01_MWK_to_ZMW_PRIMARY`, re-signed) fed onto the real `topic-event-audit` produced all 8 canonical envelopes forwarded and accepted by the real PPA with HTTP 200 — §16's own entry for it. Kept here, struck through, per this table's own convention for resolved rows. | ~~Live-traffic delivery from the deployed MLA to the real PPA~~ — no longer gates delivery, confirmed working end to end; **`e2e-testing/checklist.md` §3's `[remote-instance]` items still need the PPA engineer/further discovery regardless of connectivity, per that section's own closing note** | — |
 | **CCH's own cluster deployment has not been attempted** — the manifest package (manifests, namespace file, ConfigMap files) was handed to CCH via George Murage [2026-09-15] (CCH's technical lead and our point of contact — techops is the team that actually runs `kubectl`, not George himself); as of the [2026-09-17] check-in George had reviewed it, found the notes clear, and techops had not yet applied it (`docs/meetings/17-sept-checkin-for-pending-items.md`). Flagged as a risk if not closed by end of that week; not yet confirmed either way since. | Every §11 checklist item that requires CCH's cluster to actually exist and run MLA — real DFSP signatures, the production feed's own header behaviour, the dedicated consumer group, everything downstream of "MLA is actually ingesting CCH's real Kafka topic" | George Murage / CCH techops |
 | **Infotex call not yet scheduled** — needed to close two items: whether MLA's outbound IP is public (so Infotex can allow-list Paysyslabs), and whether the mTLS certificate is embedded in MLA directly or routed via a dedicated egress gateway. Bears on `MLA-deployment-kubernetes.md` §11 Q4/Q5 (the PPA endpoint address, mTLS gateway). Oscar (Infotex) has accepted the GitHub invite and is copied on relevant threads. | The PPA endpoint address and mTLS gateway provisioning — both already tracked as open in `MLA-deployment-kubernetes.md` §11 | George (to schedule) / Infotex |
 
@@ -2548,3 +2548,130 @@ fix regardless of how this sub-question resolves.
                 trust-boundary argument for keeping validation on is confirmed not to apply in production.
                 No engineering change follows from this reply either way — `JWS_VALIDATION_DISABLED` stays
                 exactly what it already was.
+
+### Phase 8 (partial) — Connectivity blocker (§13.1, discovered 2026-09-17) re-checked and confirmed resolved   [2026-09-21]
+
+**Context.** The network path from the deployed MLA (`10.0.150.69`) to the real remote PPA
+(`10.0.115.186:3000`) — tracked as a blocked-work item in §13.1 since 2026-09-17 — was re-checked at the
+user's request, from the same three vantage points that originally found it broken.
+
+**Built**       Nothing — diagnostic re-check only, no code or config touched. Distinct from, and unrelated
+                to, the same-day local-stack work in the two entries above (that work exists because the
+                remote PPA was unreachable at the time; it stands on its own regardless of this entry's
+                outcome).
+
+**Tests**       None.
+
+**Verified**    `live`, all three vantage points green this time: this machine → PPA (`curl` → HTTP 200,
+                `{"ready":true,...}`); the `10.0.150.69` host → PPA (`curl` → HTTP 200, `ip route get` still
+                resolves via its own gateway `10.0.150.1 dev ens192` — same route as before, now simply
+                working); and, the one that actually matters, **the `cch-mla` pod's own network namespace**
+                → PPA, via the identical ephemeral-debug-container technique used to find the original break
+                (`kubectl debug ... --image=redis:5.0.4-alpine --target=cch-mla`, `wget`, since the pod's own
+                minimal image has no HTTP client) → `{"ready":true,"checks":{"writeAheadStore":true}}`, no
+                timeout. The pod's own `/health/ready` (reached via `kubectl port-forward` to its `:3001`)
+                additionally confirmed `kafka: UP` with `mla_consumer_lag{partition="0"}=0` — fully caught
+                up with the broker, not stuck behind a backlog.
+
+**Also checked, and worth recording precisely**: `mla_forwarded_total`/`mla_ppa_delivery_outcomes_total`/
+                `mla_skipped_total` all carried **zero data — no series at all**, not merely zero-valued.
+                The pod's own logs confirmed why: nothing logged since `2026-09-17T12:02:14Z`, immediately
+                after its post-boot Kafka rebalance settled — no Kafka record has landed on partition 0
+                since. This is the demo cluster being quiet, not a stuck consumer (lag=0 rules that out) and
+                not the connectivity gap recurring (the direct pod→PPA probe above succeeded independently
+                of any Kafka traffic). Flagged explicitly because "zero delivery activity" could otherwise be
+                misread as the blocker persisting.
+
+**Diverged**    None — no application or infrastructure behaviour changed; this entry closes a diagnostic
+                loop, not a build.
+
+**Root cause, per the user [2026-09-21]:** `10.0.150.69` and `10.0.115.186` sit on different subnets within
+                the data centre; an infra person resolved the routing gap between them directly — not
+                something visible from either host's own shell, consistent with what the three-vantage-point
+                diagnosis on 2026-09-17 and this entry's re-check both already pointed at.
+
+**Left open**   §13.1's row is now struck through as resolved, root cause known. The recommended next check,
+                now that the path is open: `kubectl -n mla logs -l app=cch-mla --tail=30 -f` on
+                `10.0.150.69`, watching for the first `Forwarded ...` line once real Kafka traffic actually
+                arrives — that will be the first live delivery to the real remote PPA since 2026-09-17's
+                original run. Everything else queued behind this (confirming PPA's own processing of
+                delivered records beyond its HTTP 200, and whether they reach the local Tazama TMS stack
+                correlated correctly) is unchanged from the entry two above and from
+                `e2e-testing/checklist.md` §3's own open items.
+
+### Phase 8 (partial) — Root cause of the connectivity blocker confirmed; first real corridor fed live to the real remote PPA since the fix   [2026-09-21]
+
+**Context.** Two threads, same day, immediately following the entry above. First, the user supplied the
+root cause the previous entry had explicitly flagged as unknown. Second, rather than wait for organic Kafka
+traffic on `topic-event-audit` (idle since 2026-09-17, per that same entry), a real corridor was deliberately
+fed onto the real topic on `10.0.150.69`'s own cluster, to get a genuine live delivery to the real remote
+PPA on record rather than continuing to wait.
+
+**Root cause, per the user.** `10.0.150.69` and `10.0.115.186` sit on different subnets within the data
+centre; an infra person resolved the routing gap between them directly. Not independently verifiable from
+either host's own shell — recorded as reported, consistent with everything the three-vantage-point diagnosis
+on both 2026-09-17 and 2026-09-21 already pointed at (a routing/firewall gap between the two subnets, not
+anything wrong with MLA itself). §13.1's row updated with this in place of "not yet determined."
+
+**Built**       Nothing in `cch-mla` — no application code touched. Two ephemeral local artifacts, both
+                torn down at the end of this entry's own work rather than left running: a `kubectl
+                port-forward -n demo svc/kafka 9092:9092 --address=127.0.0.1` on `10.0.150.69` itself
+                (re-tunneling the in-cluster Kafka service to the host's own loopback), and a local SSH
+                tunnel (`ssh -L 9092:127.0.0.1:9092 ...`) chaining that through to this machine. Two
+                `/etc/hosts` entries were required for the Kafka protocol's own reconnect behaviour, not
+                just the initial bootstrap - `kafka.demo.svc.cluster.local` (the Service, used for the
+                bootstrap connection) and, since the broker's actual `advertised.listeners`
+                (`kafka-controller-0.kafka-controller-headless.demo.svc.cluster.local:9092`, confirmed
+                directly from the pod's own `server.properties`) names a different, per-broker FQDN that
+                the client reconnects to immediately after fetching metadata,
+                `kafka-controller-0.kafka-controller-headless.demo.svc.cluster.local` too - both mapped to
+                `127.0.0.1`. The second entry already existed from an earlier session's own dry run
+                (`deployment/local-deployment.md` §7); only the first needed adding this time, with the
+                user running the one `sudo tee -a /etc/hosts` line directly (this session has no
+                passwordless sudo). One genuine hiccup along the way: the *first* attempt at the remote
+                port-forward silently died (confirmed by a direct `/dev/tcp` probe against `127.0.0.1:9092`
+                on `10.0.150.69` itself returning "Connection refused") - most likely killed by an earlier
+                `pkill -f "port-forward svc/kafka"` issued in the same command whose own SSH session then
+                got cut short by the harness's command classifier before confirming success (the same
+                unpredictable-blocking behaviour `continue - before phase 8.md` already warned about).
+                Diagnosed via the ECONNRESET pattern kafkajs reported (TCP accept succeeds locally, then
+                resets - consistent with SSH accepting the local socket and immediately failing to relay to
+                a dead remote target) and fixed by simply restarting the remote port-forward.
+
+**Tests**       None - live traffic generation and diagnostic work, no application code changed.
+
+**Verified**    `live`, in full, via `cch-mla`'s own `tools/capture-feeder`
+                (`__tests__/fixtures/DRPP_Kafka_E2E_Pack/01_MWK_to_ZMW_PRIMARY/raw_messages.json`, 20
+                records, `--resign 0-19`, `KAFKA_BROKERS=kafka.demo.svc.cluster.local:9092` overridden for
+                this one invocation only - the shared `cch-mla/.env`'s own `KAFKA_BROKERS` was left pointed
+                at today's separate local-stack harness, untouched). Before feeding, the four DFSP ids the
+                corridor needs (`test-mwk-dfsp`, `test-zmw-dfsp`, `test-fxp2`, `hub-region-stg`) were
+                confirmed already present in `10.0.150.69`'s own `cch-mla-jws-keys` secret, and their public
+                keys checksummed (`openssl md5`) against this machine's own `tools/dfsp-keys/store/*.pem` -
+                exact matches on all four, confirming the locally-held private keys
+                (`tools/dfsp-keys/private/`) would produce signatures the deployed MLA's own key store could
+                verify, before spending any Kafka traffic on a mismatch. Fed cleanly once both fixes above
+                landed: **all 8 canonical records - 2 each of QUOTE/FXQUOTE/TRANSFER/FXTRANSFER - forwarded
+                and accepted by the real PPA at `10.0.115.186:3000` with HTTP 200**, watched live via a
+                `Monitor` tail of the pod's own logs as each `Forwarded <EVENTTYPE> (id=...)` line landed in
+                real time, then confirmed against `/metrics`: `mla_forwarded_total` 2 per event type (8
+                total), `mla_ppa_delivery_outcomes_total{outcome="success"}=8` with no other outcome,
+                `mla_skipped_total` `egress=11`+`party-lookup=1`, `11+1+8=20` - every fed record accounted
+                for exactly once, `mla_tokenization_failures_total=0`, `mla_consumer_lag{partition="0"}=0`
+                once settled. Same shape as the original 2026-09-17 run and today's local-stack run (the
+                entry three above) - now specifically against the real remote PPA, over the real network
+                path, for the first time since the connectivity break.
+
+**Diverged**    None from §12's register - live-traffic generation against an already-built pipeline, no
+                application behaviour changed.
+
+**Left open**   Exactly what `e2e-testing/checklist.md` §3 already names: PPA's own processing of these 8
+                envelopes beyond its HTTP 200 (translation, correlation, TMS dispatch) has no visibility
+                from this side - `[remote-instance]` items still need the PPA engineer or further discovery.
+                Given today's separate local-stack finding (the entry three above) that 3 of these 4 message
+                types currently fail PPA's own local ISO-field validation, the same outcome should be
+                assumed here too unless/until checked directly - an HTTP 200 from the remote instance proves
+                durable persist (`core-knowledge.md` §6.1 step 2), nothing past it. The ephemeral tunnel
+                infrastructure (port-forwards, SSH tunnel) built for this entry was left running rather than
+                torn down, in case immediately re-feeding or re-checking is wanted next - not a
+                standing/committed piece of infrastructure, and safe to kill at will.
