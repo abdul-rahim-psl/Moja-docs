@@ -1,7 +1,7 @@
 # US-PII-01 — Classify and Tokenize Party Identity Fields Within MLA: Executive Summary
 
 **Epic:** EPIC-PII — PII Tokenization
-**Status:** mechanism built, tested, and live-verified. This story's own open item — the fail-mode decision — is now **resolved and implemented** (see "Update — gate item #1" below). The other gating decision (secret rotation, US-PII-02's own concern, not this story's to carry) is now resolved too [2026-09-18, spec confirmed 2026-09-22] — no rotation, a long-lived key; see US-PII-02's own executive summary and `plan.md` §16's "gate item #2 reversed" entry. **Date:** 2026-09-04, updated same day for gate item #1.
+**Status:** **formally closed [2026-09-22]**, as part of EPIC-PII's closure. Mechanism built, tested, and live-verified. This story's own open item — the fail-mode decision — is **resolved and implemented** (see "Update — gate item #1" below). The other gating decision (secret rotation, US-PII-02's own concern, not this story's to carry) is resolved too [2026-09-18, spec confirmed 2026-09-22] — no rotation, a long-lived key; see US-PII-02's own executive summary and `plan.md` §16's "gate item #2 reversed" and closure entries. **Date:** 2026-09-04, updated same day for gate item #1, closed 2026-09-22.
 
 ---
 

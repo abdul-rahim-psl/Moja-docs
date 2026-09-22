@@ -164,15 +164,15 @@ update above and [`connectivity-options.md`](connectivity-options.md). The diagr
 current design:
 
 ```
-┌─────────────────────────────────────┐         ┌──────────────────────────────────┐
-│   CCH DRPP (COMESA's cluster)        │         │  Multi-tenant (our cluster)       │
-│                                       │  Public │                                    │
-│   Kafka (topic-event-audit)          │   IP,   │   Ingress gateway (mTLS) ──▶ PPA   │
-│        │                             │ allow-  │    ▲                    ──ISO 20022──▶ Tazama TMS
-│        ▼                             │ listed  │    │                              │
-│   MLA (cross-border flow)  ──────────┼─────────┼────┘                              │
-│                                       │         │                                    │
-└─────────────────────────────────────┘         └──────────────────────────────────┘
+┌──────────────────────────────────────┐                ┌────────────────────────────────────┐
+│   CCH DRPP (COMESA's cluster)        │                │  Multi-tenant (our cluster)        │
+│                                      │  Public IP     │                                    │
+│   Kafka (topic-event-audit)          │                │   Ingress gateway (mTLS) ──▶ PPA   │
+│        │                             │ allow-         │    ▲                    ──ISO 20022────────▶ Tazama TMS
+│        ▼                             │ listed         │    │                               │
+│   MLA (cross-border flow)  ──────────┼─────────────────────┘                               │
+│                                      │                │                                    │
+└──────────────────────────────────────┘                └────────────────────────────────────┘
 ```
 
 - **MLA is deployed inside CCH's own cluster**, alongside (or at least network-adjacent to) the Kafka
