@@ -29,7 +29,7 @@ pause-and-recover on a PPA outage, no restart required to resume) was independen
 just read off the code.
 
 **Update, 15 September 2026 — image pushed, real manifests written.** The 2026-09-14 meeting with George
-(`docs/meetings/14-sept-deployment-meeting.md`) answered most of §11 live. Acting on that: the real
+(`docs/meetings and emails/14-sept-deployment-meeting.md`) answered most of §11 live. Acting on that: the real
 `cch-mla` image (branch `paysys-QA-F11-onwards` @ `a0437cd`) is now built and pushed to
 **`10.0.70.91:5005/open-frms/cch-frms/cch-mla`** (GitLab Container Registry, same self-hosted instance
 already hosting this repo — §6 is no longer open), and the real manifest set lives at
@@ -274,7 +274,7 @@ Derived directly from `cch-mla/.env.template`, the single source of truth for ML
 | `PPA_TIMEOUT_MS`, `PPA_MAX_RETRIES`, `PPA_RETRY_BASE_MS`, `PPA_CIRCUIT_BREAKER_THRESHOLD`, `PPA_REPROBE_INTERVAL_MS` | ConfigMap | Settled — carry the decided defaults from `.env.template` forward unchanged. |
 | `PPA_CLIENT_CERT_PATH`, `PPA_CLIENT_KEY_PATH`, `PPA_CA_CERT_PATH` | Secret volume mount | **Open — provisioning mechanism (§8).** File paths, not values — the app reads these from disk, so they map to a mounted Secret volume, not `envFrom`. |
 | `JWS_PUBLIC_KEY_DIR` | Secret/ConfigMap volume | **Open — mechanism itself is open (§8)**, pending the MCM question from the 2026-09-09 meeting. |
-| `PII_SECRET_PATH` | Secret volume mount | **Open — provisioning and rotation (gate item #2, still with CCH, `plan.md` §7.1 #2).** |
+| `PII_SECRET_PATH` | Secret volume mount | **Settled [2026-09-18, spec confirmed 2026-09-22].** No rotation (`plan.md` §7.1 #2) — a single, long-lived key: HMAC-SHA-256, 256-bit base64-encoded, in a Kubernetes Secret named `cch-mla-pii-secret` — already the exact name this manifest's own `volumes` section uses below, confirmed to match by coincidence, not by having been checked against CCH's answer at the time it was written. |
 | `PII_MAX_RETRIES`, `PII_RETRY_BASE_MS`, `PII_CIRCUIT_BREAKER_THRESHOLD`, `PII_REPROBE_INTERVAL_MS` | ConfigMap | Settled — carry the decided defaults forward unchanged. |
 | `ALERT_WEBHOOK_URL` | ConfigMap/Secret (optional) | **Deliberately left unset by default.** R-37 (alerting destination/routing) is still open with CCH; the metrics-based sink (`mla_alerts_total`, `/metrics`) is active regardless and needs no destination decided to be useful. |
 | `ALERT_WEBHOOK_TIMEOUT_MS` | ConfigMap | Settled — `3000`. |
@@ -396,12 +396,12 @@ Three genuinely different secrets, each with its own open provisioning question:
    manifest (a `ConfigMap` for the MCM URL, possibly a bearer credential) rather than a Secret volume.
    **Do not build the Secret-volume version as final** until this is resolved; it remains this section's
    stated default only because it is what the code does today.
-3. **The PII tokenization secret (`PII_SECRET_PATH`).** Gate item #2 (secret rotation trigger) is still
-   open with CCH (`plan.md` §7.1 #2) — COMESA confirmed versioned keys over drain-first, but the failure
-   route that would apply a new key has no counterpart in MLA today (the tokenizer only ever writes
-   tokens, never checks one). The initial secret still needs a provisioning mechanism regardless of how
-   rotation eventually works — a `Secret` mounted at startup, sourced from wherever CCH's own secret
-   management lives (Vault, Sealed Secrets, or a manually created `Secret` object).
+3. **The PII tokenization secret (`PII_SECRET_PATH`).** Gate item #2 (secret rotation) is resolved
+   [2026-09-18, spec confirmed 2026-09-22, `plan.md` §7.1 #2] — no rotation, a long-lived key: HMAC-SHA-256,
+   a 256-bit base64-encoded key, held in a Kubernetes Secret named `cch-mla-pii-secret`. A `Secret` mounted
+   at startup under that name, sourced from wherever CCH's own secret management lives (Vault, Sealed
+   Secrets, or a manually created `Secret` object), is the provisioning mechanism in full — there is no
+   further rotation machinery to design.
 
 ---
 
@@ -538,7 +538,7 @@ to CCH and what stayed open, not a full epic/story pair).
 ## 11. Open questions for CCH
 
 Consolidated from every "Open" row above. Six were asked; the 2026-09-14 meeting with George
-(`docs/meetings/14-sept-deployment-meeting.md`) answered four live:
+(`docs/meetings and emails/14-sept-deployment-meeting.md`) answered four live:
 
 1. **Format.** **Still unanswered.** Plain Kubernetes manifests applied with `kubectl apply -f` (what
    this document assumes, §1), or a Helm chart? The meeting didn't raise it; proceeding on the plain-

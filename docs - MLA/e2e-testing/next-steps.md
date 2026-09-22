@@ -31,7 +31,7 @@ way the dated `continue/` files or `plan.md` §16 entries are meant to be.
    engineer's repo — worth flagging before starting, not a unilateral change to make quietly.
 3. **`TxSts: "ABOR"` translation gap.** Add the missing row to the `TxSts` translation table and the missing
    branch in `isTransferRejection` for the payee-DFSP-rejection shape Sam supplied
-   (`docs/meetings/sam-email-2026-09-16-rejection-samples.md`, `plan.md` §14 item 3). Currently falls through
+   (`docs/meetings and emails/sam-email-2026-09-16-rejection-samples.md`, `plan.md` §14 item 3). Currently falls through
    silently to Tazama's `PDNG` default — a silent-failure class `strategy.md` §7 specifically warns about.
 
 ## B. Requires a CCH/story-author decision first, but a reversible default can be built now
@@ -40,10 +40,12 @@ way the dated `continue/` files or `plan.md` §16 entries are meant to be.
    Fields-to-Tokenize table (`plan.md` §16's [2026-09-21] SSH-access entry; `core-knowledge.md` §13.3). Per
    `CLAUDE.md`'s external-decisions rule, a reversible default (tokenize it) could be built now while the
    question is put to CCH/the story author, rather than waiting.
-5. **PII secret rotation trigger mechanism** (Phase 4 gate item #2, `plan.md` §7.1 #2 / §13.1). COMESA
-   answered the headline (versioned keys over drain-first) but the trigger mechanism itself is ambiguous — a
-   concrete design could be proposed against the stated default without waiting for CCH to resolve the exact
-   wording.
+
+~~5. PII secret rotation trigger mechanism~~ **Resolved [2026-09-18], spec confirmed [2026-09-22]** —
+`docs/meetings and emails/tokenization-feedback.md`; `plan.md` §16's "gate item #2 reversed" entry. No
+rotation, a long-lived key; the trigger question is moot and no code change is needed. Removed from this
+menu per its own convention (a closed option is removed, not struck through) — kept visible here once, this
+edit, as the record of why it left the list.
 
 ## C. Documentation / decision-support work, no code
 
@@ -51,9 +53,9 @@ way the dated `continue/` files or `plan.md` §16 entries are meant to be.
    surviving tamper-evidence argument — corruption/truncation on the switch-to-Kafka hop, distinct from the
    foreign-producer question he already answered) before CCH decides whether to authorize removal. Explicitly
    not yet actioned; §9 of that document lists exactly which decisions are not engineering's to make alone.
-7. **Formally close Phase 4.** Gate item #1 (fail-mode) is resolved; write up its closure cleanly and keep
-   gate item #2 (rotation trigger) visibly separate, so the phase's status doc doesn't read as fully open
-   when only one item is.
+7. **Formally close Phase 4.** Both gate items are now resolved (#1 fail-mode, #2 secret rotation — no
+   rotation, a long-lived key) — this is now a single closure write-up, not two items to keep visibly
+   separate.
 
 ## D. Coordination / drafting for someone else to act on
 

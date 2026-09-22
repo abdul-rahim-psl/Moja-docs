@@ -42,7 +42,7 @@ From here, the now-tokenized body moves on to envelope construction and dispatch
 ## Assumptions
 
 - The secret used for tokenization is held in a securely managed, rotatable store — a mounted Kubernetes Secret or equivalent is sufficient; nothing here requires standing up a new, separately-deployed secrets service.
-- Changing the secret changes every token produced afterward for the same input. Anything already correlated under the old secret (in-flight cached state, parked entries awaiting a late-arriving event) will no longer match new tokens once the secret changes. How rotation should be handled — versioning old and new tokens, or treating a rotation as an event that requires draining in-flight correlation first — is not yet decided.
+- Changing the secret changes every token produced afterward for the same input. Anything already correlated under the old secret (in-flight cached state, parked entries awaiting a late-arriving event) will no longer match new tokens once the secret changes. **This is no longer a live concern — COMESA confirmed [2026-09-18], spec confirmed [2026-09-22], that the secret does not rotate at all**: rotating it would break Tazama's own fraud rules, which match the same MSISDN/bank-account values across transaction history. A single, long-lived key is the requirement (`docs/meetings and emails/tokenization-feedback.md`; `plan.md` §7.1 #2, §16).
 - Whether "protected" here needs to mean someone can look the original value back up when authorized, or simply that the value can't be reversed without also holding the secret, is not yet decided. This affects data-protection/legal sign-off and should be confirmed with CCH Legal before this is considered final.
 - Ownership of the secret itself — who holds it, who can rotate it, and on what schedule — has not yet been assigned to a named team.
 
@@ -50,7 +50,7 @@ From here, the now-tokenized body moves on to envelope construction and dispatch
 
 1. **Wire up secret provisioning** — where the secret is mounted, how it's loaded at startup, and what happens if it's missing (the service should refuse to start rather than run unprotected).
 2. **Write a test** (Jest, 95% coverage target) confirming every token carries its marker and is verifiably produced by the keyed method (not a bare hash).
-3. **Decide and document the key rotation approach** before a rotation schedule is set.
+3. ~~Decide and document the key rotation approach before a rotation schedule is set.~~ **Resolved [2026-09-18]: no rotation, a long-lived key.** No approach or schedule to document beyond that.
 4. **Get CCH Legal's decision** on what "protected" needs to mean for this data (reversible-by-lookup vs. reversible-only-with-the-secret).
-5. **Assign named ownership** of the secret and its rotation policy.
+5. **Assign named ownership** of the secret (no rotation policy to own, per item 3 above).
 6. **Wire secret-load status into the service's own readiness endpoint**, following US-MON-02's instance-local readiness pattern.
