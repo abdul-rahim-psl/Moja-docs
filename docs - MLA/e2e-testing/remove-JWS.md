@@ -2,7 +2,7 @@
 
 # Removing JWS Validation from MLA — End-to-End Plan
 
-**Status:** built and live-verified on `cch-mla` branch `paysys-remove-JWS` [2026-09-23]; formal closure pending the two closure-blocking sign-offs in §9. §11 records where the build departed from this plan; `plan.md` §16's [2026-09-23] entry records what was verified.
+**Status:** built and live-verified on `cch-mla` branch `paysys-remove-JWS` [2026-09-23]; both closure-blocking sign-offs in §9 confirmed [2026-09-23]. §11 records where the build departed from this plan; `plan.md` §16's [2026-09-23] entries record what was verified and the sign-off.
 
 **Purpose:** a complete plan for removing DFSP JWS signature validation from MLA — every code path, config
 key, metric, health input, test, and governing document it touches — while leaving the business flow
@@ -288,16 +288,16 @@ Per `CLAUDE.md`'s external-decisions rule, surfaced explicitly rather than built
 
 | Decision | Owner | Blocks what |
 | --- | --- | --- |
-| **Removing US-MLA-05 from scope** | CCH / the story author | The source user stories are the requirements authority. Engineering cannot retire a story by editing code. **Blocks formally closing this work**, though not prototyping it on a branch. |
-| **Retiring N3, a stated non-negotiable** | The engineering-rules owner (and CCH, as the security posture changes) | A binding rules document. Editing a non-negotiable because a code change would otherwise violate it is backwards. **Blocks closure.** |
-| **Whether to put the narrower tamper-evidence argument (§1.1) to Michael first** | The user | Michael asked a direct question and it has not been answered. Removing validation without replying leaves his question hanging. **Does not block engineering; does affect whether this removal is the right answer at all.** |
-| **Reducing US-MON-01's signal set** | CCH (monitoring owner) | Changes MLA's published metric surface and any dashboard built on it. |
-| **Accepting the residual risk** | CCH (security posture) | The switch validates and the boundary is shared — but MLA would no longer independently detect an altered record produced *inside* that boundary. |
+| **Removing US-MLA-05 from scope** | CCH / the story author | **Confirmed [2026-09-23]** — all parties agree JWS validation is not needed. The source stories themselves are not yet edited to reflect this (`core-knowledge.md`, `cch-mla-user-stories.md` still describe the requirement, annotated as removed). |
+| **Retiring N3, a stated non-negotiable** | The engineering-rules owner (and CCH, as the security posture changes) | **Confirmed [2026-09-23]**, alongside the above. `engineering-rules.md` N3 is marked retired. |
+| **Whether to put the narrower tamper-evidence argument (§1.1) to Michael first** | The user | **Settled [2026-09-23]: no reply will be sent.** Michael's point — nothing reaches MLA without the switch having already validated it — was accepted as sufficient. |
+| **Reducing US-MON-01's signal set** | CCH (monitoring owner) | Still open. Changes MLA's published metric surface and any dashboard built on it. |
+| **Accepting the residual risk** | CCH (security posture) | Still open. The switch validates and the boundary is shared — but MLA would no longer independently detect an altered record produced *inside* that boundary. |
 
-**Recommended default while these are open:** do the work on a branch, verify it fully, and **leave it
-unmerged** pending the two closure-blocking sign-offs. This mirrors how Phase 3 and Phase 4 handled their
-own open decisions — build against a stated, reversible default, and never record the decision as silently
-resolved.
+**Both closure-blocking decisions above are now confirmed [2026-09-23], per the user.** The work has moved
+past a branch held open pending sign-off — a post-removal image is built, pushed to GHCR, and pinned in
+`03-mla-deployment.yaml`. The two still-open rows (monitoring signal set, residual-risk acceptance) do not
+block engineering and were never claimed to.
 
 **What this plan deliberately does not recommend:** flipping `JWS_VALIDATION_DISABLED` to `true` as a
 standing production default. That leaves the entire key-distribution problem, the config surface, and the
@@ -336,5 +336,5 @@ Where the build departed from §4–§8, and why:
 
 **Rollback is still a `git revert`.** Every deleted tracked file is in git history. The generated DFSP keypairs were gitignored local artefacts; after a revert they are regenerated with the restored `npm run keys:generate`.
 
-**Deployment precondition.** `deploy/kubernetes/03-mla-deployment.yaml` still pins the pre-removal image digest (`sha256:1e99…`, tag `a0437cd`), which refuses to boot without `JWS_PUBLIC_KEY_DIR`. The JWS-stripped manifests on this branch must not be applied until the digest points at a post-removal build — the §4.4 one-way door, in the manifest file itself.
+**Deployment precondition — resolved [2026-09-23].** `deploy/kubernetes/03-mla-deployment.yaml` now pins a post-removal image (`ghcr.io/psl-izyane-cch-frms/cch-mla@sha256:0907…`, tag `1e7610e`, built from this branch's tip) instead of the pre-removal `a0437cd`/`sha256:1e99…` build. Boot-tested standalone against a real PII secret: `/health/ready` returns `{"status":"UP","service":"cch-mla","kafka":"DISABLED","piiSecret":"UP"}` with no `jwsKeyStore` field and zero JWS/keystore series in `/metrics`. The §4.4 one-way door no longer applies to this reference — nothing has consumed CCH's cluster yet, so the manifests are ready to apply, not yet applied.
 

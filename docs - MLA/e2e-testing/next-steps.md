@@ -65,7 +65,7 @@ These need someone to actually send them — flagged here as live gaps, not draf
    whether techops has applied it since the [2026-09-17] check-in (`plan.md` §13.1).
 9. **Chase the Infotex call.** Still not scheduled — needed to settle MLA's outbound IP and mTLS certificate
    routing (`plan.md` §13.1, `deployment/MLA-deployment-kubernetes.md` §11 Q4/Q5).
-10. ~~**Chase DFSP keys / JWKS / the MCM onboarding video.**~~ **Dissolved [2026-09-23]** by the JWS removal (pending sign-off). Original item: Pending from Sam since the [2026-09-09] meeting
+10. ~~**Chase DFSP keys / JWKS / the MCM onboarding video.**~~ **Dissolved [2026-09-23]** by the JWS removal (sign-off confirmed). Original item: Pending from Sam since the [2026-09-09] meeting
     (`plan.md` §13.1, §14 item 1) — the single highest-value unblock for Phase 3's genuine-signature
     verification, and the item `remove-JWS.md` §1.2 notes would dissolve entirely if JWS is removed instead.
 11. **Ask George for his annotated event table.** Covering the ~52% of the 500-record export not yet

@@ -58,8 +58,9 @@ Outcomes:
    that nothing reaches the audit topic unvalidated and that the topic shares the switch's trust boundary
    (`plan.md` §16). The removal is built and live-verified on `cch-mla` branch `paysys-remove-JWS`
    (`e2e-testing/remove-JWS.md`); `JWS_VALIDATION_DISABLED`, every other `JWS_*` variable and the
-   `cch-mla-jws-keys` Secret are no longer used. Formal closure is pending story-author sign-off on
-   US-MLA-05's removal and the rules owner's/CCH's sign-off on retiring N3.
+   `cch-mla-jws-keys` Secret are no longer used. Both sign-offs — removing US-MLA-05 from scope and
+   retiring N3 — are confirmed [2026-09-23]. A post-removal image is built, pushed to GHCR, and
+   pinned in `03-mla-deployment.yaml`.
 3. **Connectivity + mTLS — one combined decision, accepted.** Two documents George shared
    ([`connectivity-options.md`](connectivity-options.md); [`certificate-setup-proposal.md`](certificate-setup-proposal.md))
    describe a single architecture: a public endpoint on the Paysys side, IP allow-listed (not an IPsec
@@ -582,9 +583,10 @@ items already being tracked, not new asks created by this deployment work.
    is still a follow-up, not a blocker.
 3. Replace the remaining `<ANGLE-BRACKET>` placeholders in `cch-mla/deploy/kubernetes/02-env-configmap.yaml`
    (`KAFKA_BROKERS`, `PPA_BASE_URL`) once the allow-listed endpoint's address exchange lands, and create
-   `cch-mla-pii-secret` per the confirmed spec (§8 item 3). **Before applying the JWS-stripped manifests,
-   bump `03-mla-deployment.yaml`'s pinned image digest to a post-removal build** — the currently pinned
-   image (`a0437cd`) refuses to boot without `JWS_PUBLIC_KEY_DIR` (`e2e-testing/remove-JWS.md` §11).
+   `cch-mla-pii-secret` per the confirmed spec (§8 item 3). ~~Before applying the JWS-stripped manifests,
+   bump `03-mla-deployment.yaml`'s pinned image digest to a post-removal build.~~ **Done [2026-09-23]** —
+   `03-mla-deployment.yaml` now pins `sha256:0907…` (tag `1e7610e`), pushed to GHCR and boot-tested
+   standalone (`e2e-testing/remove-JWS.md` §11, `plan.md` §16's [2026-09-23] entries).
 4. Stand up the agreed ingress-gateway architecture on the Paysys side
    ([`certificate-setup-proposal.md`](certificate-setup-proposal.md)) and reissue MLA's client certificate
    under the gateway's own Interconnect CA, retiring the interim CA once that's live.

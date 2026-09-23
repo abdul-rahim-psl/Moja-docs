@@ -455,7 +455,7 @@ These are not two versions of the same thing, and it would be easy to mistake th
 | What is transformed | the **payload itself** — party identity fields in `body` | **only what reaches a log line or the audit store** |
 | What TMS receives | tokenized values | **unmasked, by design** — TMS needs real party data to build its graph |
 | Method | keyed hash + **recognizable prefix** | keyed HMAC-SHA256, deterministic |
-| Ordering constraint | **after** JWS validation, enforced by a test that fails if reordered — moot in the implementation since MLA's JWS validation was removed [2026-09-23], pending story-author sign-off | n/a — no signature validation exists |
+| Ordering constraint | **after** JWS validation, enforced by a test that fails if reordered — moot in the implementation since MLA's JWS validation was removed [2026-09-23], confirmed by all parties | n/a — no signature validation exists |
 | ILP-carried fields | explicitly exempt (cryptographically bound) | same conclusion — "cannot be masked at all without breaking the payment" |
 | Secret handling | loaded at startup; **readiness fails if it did not load** | `PII_MASK_KEY`, warns loudly at first use if left at the POC default, but **still starts** |
 | Failure mode if it cannot run | undecided — needs a CCH decision before go-live | n/a |
