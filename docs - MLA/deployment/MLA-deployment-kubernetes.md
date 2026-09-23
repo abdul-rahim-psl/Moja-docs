@@ -53,13 +53,13 @@ Outcomes:
    George also asked whether to use IP allow-listing instead of an IPsec VPN — see point 3, the two
    questions turned out to be one architectural decision.
 2. **JWS signature validation.** George proposed disabling MLA's own signature verification entirely,
-   reasoning the hub already validates every message. **Not accepted as a permanent change** — this
-   removes a security control `engineering-rules.md` treats as non-negotiable, and F-04 of this QA
-   workstream specifically hardened it (bound-claims checking). **Accepted only as a scoped, reversible,
-   loudly-observable testing default**: `JWS_VALIDATION_DISABLED` (env var, default `false`), built
-   2026-09-15, live-verified (boot-time `WARN` log + `mla_jws_validation_bypassed` metric, both confirmed
-   against a running process). Must never run `true` outside an explicitly agreed testing window; the
-   real fix is still real DFSP keys landing, not a permanent bypass.
+   reasoning the hub already validates every message. **Outcome [2026-09-23]: validation removed from
+   MLA outright**, rather than bypassed by a flag. Michael (Mojaloop Foundation) confirmed on 2026-09-21
+   that nothing reaches the audit topic unvalidated and that the topic shares the switch's trust boundary
+   (`plan.md` §16). The removal is built and live-verified on `cch-mla` branch `paysys-remove-JWS`
+   (`e2e-testing/remove-JWS.md`); `JWS_VALIDATION_DISABLED`, every other `JWS_*` variable and the
+   `cch-mla-jws-keys` Secret are no longer used. Formal closure is pending story-author sign-off on
+   US-MLA-05's removal and the rules owner's/CCH's sign-off on retiring N3.
 3. **Connectivity + mTLS — one combined decision, accepted.** Two documents George shared
    ([`connectivity-options.md`](connectivity-options.md); [`certificate-setup-proposal.md`](certificate-setup-proposal.md))
    describe a single architecture: a public endpoint on the Paysys side, IP allow-listed (not an IPsec
@@ -219,12 +219,12 @@ current design:
 - ~~Which registry their cluster's nodes can pull from (§6).~~ **Resolved 2026-09-14/15** — George is
   flexible on location and only needs a URL plus a valid auth token; GitLab Container Registry chosen
   (§6), image pushed, deploy token minted.
-- Real DFSP JWS public keys, and — per the 2026-09-09 meeting — whether MLA should be pointed at MCM
-  instead of a static mounted key directory (§8). **Still open**, untouched by this deployment thread.
+- ~~Real DFSP JWS public keys, and whether MLA should be pointed at MCM (§8).~~ **Dissolved [2026-09-23]**
+  — MLA no longer validates signatures and needs no DFSP keys (item 2 of the 15 September update above).
 
 `CLAUDE.md`'s rule applies directly here: the mechanism (manifests, config surface, image) can and should
 be built now, against a stated default where one is needed; **this piece of work cannot be called done
-while `PPA_BASE_URL`, mTLS provisioning and the JWS key question are still open**, and that must stay
+while `PPA_BASE_URL` and mTLS provisioning are still open**, and that must stay
 visible rather than get quietly resolved with a guess.
 
 ---
@@ -238,7 +238,7 @@ What CCH's `kubectl apply -f` needs to cover, as four Kubernetes objects:
 | **Deployment** | The `cch-mla` container, its probes, resource requests/limits, and volume mounts for the three secret-backed paths in §8. |
 | **Service** | `ClusterIP`, port 3001 — exposes `/health/live`, `/health/ready`, `/metrics` to whatever inside CCH's cluster scrapes them (Prometheus, or a liveness/readiness check from the cluster itself). **No Ingress** — MLA has no externally-facing HTTP surface; all payment traffic arrives over Kafka (`.env.template`'s own comment on this). |
 | **ConfigMap** | Every non-secret variable in §5 — broker address, topic, group ID, PPA URL, timeouts, retry/breaker thresholds, log level. |
-| **Secret(s)** | The three file-mounted, security-relevant paths: MLA's mTLS client identity for PPA, the JWS public-key directory, and the PII tokenization secret. Per `engineering-rules.md` §8: "certificates and keys are mounted, not embedded" and "secrets are mounted, loaded once at startup, never network-fetched per event." |
+| **Secret(s)** | The two file-mounted, security-relevant paths: MLA's mTLS client identity for PPA and the PII tokenization secret. Per `engineering-rules.md` §8: "certificates and keys are mounted, not embedded" and "secrets are mounted, loaded once at startup, never network-fetched per event." |
 
 **Probes — the distinction matters and is already load-bearing in the code**
 (`src/services/health.service.ts`):
@@ -273,7 +273,6 @@ Derived directly from `cch-mla/.env.template`, the single source of truth for ML
 | `PPA_BASE_URL` | ConfigMap | **Open — depends on the P2P VPN's resulting address.** Must be the single stable PPA service address, never an individual replica (`core-knowledge.md` §3.4). |
 | `PPA_TIMEOUT_MS`, `PPA_MAX_RETRIES`, `PPA_RETRY_BASE_MS`, `PPA_CIRCUIT_BREAKER_THRESHOLD`, `PPA_REPROBE_INTERVAL_MS` | ConfigMap | Settled — carry the decided defaults from `.env.template` forward unchanged. |
 | `PPA_CLIENT_CERT_PATH`, `PPA_CLIENT_KEY_PATH`, `PPA_CA_CERT_PATH` | Secret volume mount | **Open — provisioning mechanism (§8).** File paths, not values — the app reads these from disk, so they map to a mounted Secret volume, not `envFrom`. |
-| `JWS_PUBLIC_KEY_DIR` | Secret/ConfigMap volume | **Open — mechanism itself is open (§8)**, pending the MCM question from the 2026-09-09 meeting. |
 | `PII_SECRET_PATH` | Secret volume mount | **Settled [2026-09-18, spec confirmed 2026-09-22].** No rotation (`plan.md` §7.1 #2) — a single, long-lived key: HMAC-SHA-256, 256-bit base64-encoded, in a Kubernetes Secret named `cch-mla-pii-secret` — already the exact name this manifest's own `volumes` section uses below, confirmed to match by coincidence, not by having been checked against CCH's answer at the time it was written. |
 | `PII_MAX_RETRIES`, `PII_RETRY_BASE_MS`, `PII_CIRCUIT_BREAKER_THRESHOLD`, `PII_REPROBE_INTERVAL_MS` | ConfigMap | Settled — carry the decided defaults forward unchanged. |
 | `ALERT_WEBHOOK_URL` | ConfigMap/Secret (optional) | **Deliberately left unset by default.** R-37 (alerting destination/routing) is still open with CCH; the metrics-based sink (`mla_alerts_total`, `/metrics`) is active regardless and needs no destination decided to be useful. |
@@ -388,7 +387,7 @@ Three genuinely different secrets, each with its own open provisioning question:
    (never `client.key`, never `ca.key`) were shared with George the same day. Paysys's own `client.key`/
    `ca.key` are held locally, not committed to any repository, consistent with this section's existing
    rule.
-2. **DFSP JWS public keys (`JWS_PUBLIC_KEY_DIR`).** The current mechanism is a watched directory of
+2. ~~**DFSP JWS public keys (`JWS_PUBLIC_KEY_DIR`).**~~ **Dissolved [2026-09-23]** — MLA no longer validates DFSP signatures, so there is no key directory to provision. Original item: the mechanism is a watched directory of
    `<dfspId>.pem` files, chosen so adding a key never requires a restart (`engineering-rules.md` §8). At
    the 2026-09-09 meeting, Sam (Mojoloop Foundation) recommended MLA interface with **MCM (Mojaloop
    Connection Manager)** instead of managing keys manually — if that holds, the deployment shape here
@@ -469,9 +468,6 @@ spec:
             - name: ppa-mtls
               mountPath: /secrets/ppa-mtls
               readOnly: true
-            - name: jws-keys
-              mountPath: /secrets/jws-keys
-              readOnly: true
             - name: pii-secret
               mountPath: /secrets/pii-secret
               readOnly: true
@@ -482,8 +478,6 @@ spec:
               value: /secrets/ppa-mtls/client.key
             - name: PPA_CA_CERT_PATH
               value: /secrets/ppa-mtls/ca.crt
-            - name: JWS_PUBLIC_KEY_DIR
-              value: /secrets/jws-keys
             - name: PII_SECRET_PATH
               value: /secrets/pii-secret/secret
           livenessProbe:
@@ -500,8 +494,6 @@ spec:
       volumes:
         - name: ppa-mtls
           secret: { secretName: cch-mla-ppa-mtls }
-        - name: jws-keys
-          secret: { secretName: cch-mla-jws-keys } # or an MCM-backed config — see §8 item 2
         - name: pii-secret
           secret: { secretName: cch-mla-pii-secret }
 ---
@@ -590,8 +582,9 @@ items already being tracked, not new asks created by this deployment work.
    is still a follow-up, not a blocker.
 3. Replace the remaining `<ANGLE-BRACKET>` placeholders in `cch-mla/deploy/kubernetes/02-env-configmap.yaml`
    (`KAFKA_BROKERS`, `PPA_BASE_URL`) once the allow-listed endpoint's address exchange lands, and create
-   `cch-mla-jws-keys` / `cch-mla-pii-secret` once CCH/Infotex delivers real keys and the PII rotation
-   answer resolves.
+   `cch-mla-pii-secret` per the confirmed spec (§8 item 3). **Before applying the JWS-stripped manifests,
+   bump `03-mla-deployment.yaml`'s pinned image digest to a post-removal build** — the currently pinned
+   image (`a0437cd`) refuses to boot without `JWS_PUBLIC_KEY_DIR` (`e2e-testing/remove-JWS.md` §11).
 4. Stand up the agreed ingress-gateway architecture on the Paysys side
    ([`certificate-setup-proposal.md`](certificate-setup-proposal.md)) and reissue MLA's client certificate
    under the gateway's own Interconnect CA, retiring the interim CA once that's live.

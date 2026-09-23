@@ -455,7 +455,7 @@ These are not two versions of the same thing, and it would be easy to mistake th
 | What is transformed | the **payload itself** — party identity fields in `body` | **only what reaches a log line or the audit store** |
 | What TMS receives | tokenized values | **unmasked, by design** — TMS needs real party data to build its graph |
 | Method | keyed hash + **recognizable prefix** | keyed HMAC-SHA256, deterministic |
-| Ordering constraint | **after** JWS validation, enforced by a test that fails if reordered | n/a — no signature validation exists |
+| Ordering constraint | **after** JWS validation, enforced by a test that fails if reordered — moot in the implementation since MLA's JWS validation was removed [2026-09-23], pending story-author sign-off | n/a — no signature validation exists |
 | ILP-carried fields | explicitly exempt (cryptographically bound) | same conclusion — "cannot be masked at all without breaking the payment" |
 | Secret handling | loaded at startup; **readiness fails if it did not load** | `PII_MASK_KEY`, warns loudly at first use if left at the POC default, but **still starts** |
 | Failure mode if it cannot run | undecided — needs a CCH decision before go-live | n/a |
@@ -465,6 +465,8 @@ These are not two versions of the same thing, and it would be easy to mistake th
 One factual note for the story set: the POC observes the captures carry **unmasked MSISDNs and full names throughout** — consistent with the tokenization component sitting upstream of the topic, but never independently confirmed to have been running. The stories' US-PII-01 note that "the forensic audit topic's own persisted record predates this step" is the same observation, and both are right to flag it to whoever owns that forensic record.
 
 ### 9.2 🟡 JWS
+
+**Implementation status [2026-09-23]:** MLA's cryptographic verification was built (Phase 3) and then removed — the switch validates every signature before a record reaches the audit topic, inside MLA's own trust boundary. The implementation now matches the POC's position of not verifying, with no header-presence check either. Pending story-author sign-off on US-MLA-05's removal; `e2e-testing/remove-JWS.md` has the reasoning.
 
 POC: `hasFspiopSignature` — **header presence only**, explicitly not cryptographic. Stories: full RS256/384/512 verification against the sending DFSP's registered key, on every event type, no exemptions, with configurable key lookup that does not require a restart.
 
@@ -539,7 +541,7 @@ Three of these (7, 8, and the `reserveFxTransfer` drop in §3.1) were found **on
 | `isTransferRejection` / `isFxQuoteRejection` / `extractRejectionError` | **Reuse.** No story reproduces this and both are needed. |
 | `resolveAnchorId` + the chaining maps | **Reuse only if the anchor model is kept**, and move the maps out of process. §4 |
 | `buildEnvelope` | **Revise** — `id` scheme (§4), `msgType` (§5.2), and the `error` field's fate (§5.3). |
-| `hasFspiopSignature` | **Replace** with real verification. |
+| `hasFspiopSignature` | **Replaced** with real verification (Phase 3), since removed entirely [2026-09-23] — see §9.2. |
 | `dispatchToPpa` + `tripAndPause` | **Reuse the shape; add the N-threshold.** §8.3 |
 | `ppa/src/clients/cache.ts` (Lua merge, `restoreState`) | **Reuse wholesale.** The strongest-evidenced module in the POC. §6.6 |
 | `claimSentGuard` | **Delete.** Replace with the durable pre-translation check-and-set. §6.3 |

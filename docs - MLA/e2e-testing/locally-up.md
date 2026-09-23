@@ -195,13 +195,9 @@ Work from `/home/abdul-rahim/mojaloop/cch-mla`.
 
 1. **`npm run harness:up`** — brings up the Redpanda broker and creates `topic-event-audit` at 12
    partitions (`docker-compose.dev.yml`).
-2. **`npm run keys:generate -- test-mwk-dfsp test-zmw-dfsp test-fxp2 hub-region-stg`** (or whichever
-   DFSP ids the chosen fixture uses) — throwaway JWS keypairs, needed because the captured
-   signatures in any real fixture belong to real DFSPs whose private keys aren't held, so an
-   unmodified feed fails JWS verification by design. `capture-feeder --resign` re-signs against
-   these.
-3. **`npm run pii-secret:generate`** — the local PII tokenization secret.
-4. **Configure `.env`** (from `.env.template`), the one deviation from that template's own
+2. **`npm run pii-secret:generate`** — the local PII tokenization secret. No DFSP keypairs are needed:
+   MLA does not validate signatures (`e2e-testing/remove-JWS.md`), so captured records are fed as-is.
+3. **Configure `.env`** (from `.env.template`), the one deviation from that template's own
    defaults being the PPA target:
    ```
    PPA_BASE_URL=http://localhost:3000
@@ -213,9 +209,9 @@ Work from `/home/abdul-rahim/mojaloop/cch-mla`.
    `PPA_MTLS_DISABLED=true` pairs with PPA's own `DOCS_INSECURE_HTTP=true` from §2 — both sides
    agreeing to speak plain HTTP for this local run, the same pairing already live-verified against
    the real remote PPA on [2026-09-17].
-5. **`npm run dev`** (or `npm run build && npm start`) to boot MLA. Confirm
-   `curl http://localhost:3001/health/ready` shows `kafka: UP` and the other checks green before
-   feeding anything.
+4. **`npm run dev`** (or `npm run build && npm start`) to boot MLA. Confirm
+   `curl http://localhost:3001/health/ready` returns `{"status":"UP","service":"cch-mla","kafka":"UP","piiSecret":"UP"}`
+   before feeding anything.
 
 ---
 
@@ -225,8 +221,11 @@ Once both are up, this is the same run `e2e-testing/checklist.md` §1 already di
 remote PPA — just against `localhost` instead of `10.0.115.186:3000`:
 
 ```
-npm run feeder -- --file __tests__/fixtures/DRPP_Kafka_E2E_Pack/01_MWK_to_ZMW_PRIMARY/raw_messages.json --resign 0-19
+npm run feeder -- --file __tests__/fixtures/DRPP_Kafka_E2E_Pack/01_MWK_to_ZMW_PRIMARY/raw_messages.json
 ```
+
+(§2's checklist records the [2026-09-21] run, which predates the JWS removal and therefore used
+`--resign 0-19`; that flag no longer exists.)
 
 Confirm on MLA's side exactly as before — `mla_forwarded_total` by event type,
 `mla_ppa_delivery_outcomes_total{outcome="success"}`, `mla_skipped_total` accounting for every fed

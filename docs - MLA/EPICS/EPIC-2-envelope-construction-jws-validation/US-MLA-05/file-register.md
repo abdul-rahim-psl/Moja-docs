@@ -14,3 +14,15 @@ Shared integration files (`envelope-pipeline.service.ts`, `ingestion-consumer.se
 | `package.json` | Adds the `keys:generate` script. |
 | `__tests__/jws-verification.service.test.ts` | 15 tests, genuinely generated RSA keypairs and real `crypto.sign`/`crypto.verify`: all three algorithms, tampered body, wrong key, missing/malformed/shape-invalid header, key-outage vs. not-found vs. unsupported-alg, and a malformed key making `crypto.verify` throw. |
 | `__tests__/public-key-store.client.test.ts` | 6 tests against a real temporary directory — loads keys at construction, `not-found` vs. directory-missing `unavailable`, ignores non-`.pem` files, and the genuine `fs.watch` hot-reload. |
+
+## Removed [2026-09-23]
+
+Every file this story added was deleted when MLA's JWS validation was removed (branch `paysys-remove-JWS`; `plan.md` §16's [2026-09-23] entry; `e2e-testing/remove-JWS.md` §4 and §11):
+
+| File | Status |
+| --- | --- |
+| `src/services/jws-verification.service.ts` | Deleted — nothing verifies signatures any more. |
+| `src/clients/public-key-store.client.ts` | Deleted — no DFSP keys are needed. |
+| `src/interfaces/jws.interface.ts` | Deleted with its only two consumers. |
+| `__tests__/jws-verification.service.test.ts`, `__tests__/public-key-store.client.test.ts` | Deleted with the code they tested. |
+| `tools/capture-feeder/resign.ts`, `tools/dfsp-keys/generate-keys.ts` | Deleted — nothing reads the signature a re-sign would produce. |

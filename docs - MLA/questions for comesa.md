@@ -2,7 +2,7 @@
 
 **All five were put to CCH and the Mojaloop Foundation at the 2026-09-09 meeting** (`docs/meetings and emails/9-sept.md`). Answers are summarized against each question below; `plan.md` §13.1 and §14 carry the full, maintained record — this file is kept as what was actually asked, not re-derived from the answers.
 
-1. **Can we have the DFSP public keys, or a JWKS endpoint?** Without them, JWS verification cannot be proven against real traffic — only against fixtures we sign ourselves. This is the single highest-value unblock available. **Answered in part, not yet delivered:** the 19 ids resolve to 8 DFSPs, 2 FXPs and 9 regional hubs; George is obtaining the keys via Infotex and checking for a JWKS endpoint. Separately, MLA should interface with Mojaloop Connection Manager (MCM) rather than hold its own key store — Sam to share an onboarding video.
+1. ~~**Can we have the DFSP public keys, or a JWKS endpoint?**~~ **Dissolved [2026-09-23] — no longer needed:** MLA no longer validates DFSP signatures (`e2e-testing/remove-JWS.md`, pending story-author sign-off), so it needs no keys. Original question: Without them, JWS verification cannot be proven against real traffic — only against fixtures we sign ourselves. This is the single highest-value unblock available. **Answered in part, not yet delivered:** the 19 ids resolve to 8 DFSPs, 2 FXPs and 9 regional hubs; George is obtaining the keys via Infotex and checking for a JWKS endpoint. Separately, MLA should interface with Mojaloop Connection Manager (MCM) rather than hold its own key store — Sam to share an onboarding video.
 2. ~~Is the per-operation canonical-record shape a stable contract, or an artefact of this capture window?~~ **Resolved — yes, by design across all environments**, per both George (CCH) and Michael (Mojaloop Foundation). The evidentiary framing below (641 records, two independent captures) is also superseded: the 141-record set is a confirmed subset of the 500-record export, not a second window. Zero exceptions across **641 records** and two independent captures (141 in `DRPP_Kafka_E2E_Pack` — five 20-record transactions plus the 41-record partition-2 slice — and 500 in `raw_export_500.json`), corroborated by signature presence. But that is still two capture windows, not a guarantee.
 
    *What this refers to, concretely:* the audit topic does not write every operation the same way. This is a table we built directly from the captures, one row per operation, stating which single record is authoritative for that operation — not a blanket "always keep the first copy" rule. For most operations, the audit topic writes each one twice — once as the request goes in (`start`), once as the response comes back (`egress`) — and for those, the authoritative copy the table keeps is `start`. But three operations we've observed are written **only** once, as `egress` (`commitTransfer`, `reserveFxTransfer`, `notifyFxTransfer`) — there is no `start` copy for those at all, so the table keeps their sole `egress` record instead.
@@ -30,6 +30,8 @@
 ## How to ask each one
 
 ### 1. DFSP public keys / JWKS endpoint
+
+**Dissolved [2026-09-23]** — see item 1 above. Kept as the record of how it was asked.
 
 **Context.** We hold 286 real `fspiop-signature` values from `raw_export_500.json`, across 19 distinct DFSP ids (11 of which appear on canonical, forwarded records), and we hold none of the public keys — so every signature verification to date is against fixtures we re-signed ourselves.
 
@@ -193,8 +195,9 @@ validation is tamper-evidence for the specific switch-to-Kafka hop, distinct fro
 validation Michael's answer addresses, and would catch corruption or truncation on that hop that
 trust-boundary confirmation alone does not rule out. Whether to send this is not yet decided.
 
-**Standing position, unchanged by this reply.** `george-reply-2026-09-15.md` item 2's original proposal to
-disable MLA's own JWS validation permanently remains **not accepted as a permanent change**
-(`MLA-deployment-kubernetes.md` §6) — `engineering-rules.md` treats DFSP signature verification as
-non-negotiable, and F-04 of the QA workstream specifically hardened it. `JWS_VALIDATION_DISABLED` stays a
-scoped, reversible, loudly-observable testing-only bypass, default off — this reply does not change that.
+**Outcome [2026-09-23].** MLA's JWS validation has been removed outright — built and live-verified on
+`cch-mla` branch `paysys-remove-JWS` (`e2e-testing/remove-JWS.md`), with `JWS_VALIDATION_DISABLED` removed
+along with it. Formal closure is pending story-author sign-off on US-MLA-05 and the rules owner's/CCH's
+sign-off on retiring `engineering-rules.md` N3. Michael's question back ("what use case are they guarding
+against?") is still unanswered; whether to send the narrower tamper-evidence point above remains the
+user's call.

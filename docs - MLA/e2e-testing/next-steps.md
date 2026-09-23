@@ -49,7 +49,7 @@ edit, as the record of why it left the list.
 
 ## C. Documentation / decision-support work, no code
 
-6. **Advance `e2e-testing/remove-JWS.md`.** E.g. draft the narrower follow-up question to Michael (§1.1's
+6. ~~**Advance `e2e-testing/remove-JWS.md`.**~~ **Built and live-verified [2026-09-23]** on `cch-mla` branch `paysys-remove-JWS`, closure pending that document's §9 sign-offs. Still open from this item: e.g. draft the narrower follow-up question to Michael (§1.1's
    surviving tamper-evidence argument — corruption/truncation on the switch-to-Kafka hop, distinct from the
    foreign-producer question he already answered) before CCH decides whether to authorize removal. Explicitly
    not yet actioned; §9 of that document lists exactly which decisions are not engineering's to make alone.
@@ -65,7 +65,7 @@ These need someone to actually send them — flagged here as live gaps, not draf
    whether techops has applied it since the [2026-09-17] check-in (`plan.md` §13.1).
 9. **Chase the Infotex call.** Still not scheduled — needed to settle MLA's outbound IP and mTLS certificate
    routing (`plan.md` §13.1, `deployment/MLA-deployment-kubernetes.md` §11 Q4/Q5).
-10. **Chase DFSP keys / JWKS / the MCM onboarding video.** Pending from Sam since the [2026-09-09] meeting
+10. ~~**Chase DFSP keys / JWKS / the MCM onboarding video.**~~ **Dissolved [2026-09-23]** by the JWS removal (pending sign-off). Original item: Pending from Sam since the [2026-09-09] meeting
     (`plan.md` §13.1, §14 item 1) — the single highest-value unblock for Phase 3's genuine-signature
     verification, and the item `remove-JWS.md` §1.2 notes would dissolve entirely if JWS is removed instead.
 11. **Ask George for his annotated event table.** Covering the ~52% of the 500-record export not yet

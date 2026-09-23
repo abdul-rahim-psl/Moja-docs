@@ -43,8 +43,8 @@ Mojaloop audit topic (Kafka)
    · consume `start` records                          · write-ahead persist, then ack
    · classify event type                              · idempotency, classify, cache
    · base64-decode transfer bodies                    · correlate in ValKey
-   · validate JWS                                     · translate to ISO 20022
-   · tokenize PII                                     · schema-validate, dispatch
+   · tokenize PII                                     · translate to ISO 20022
+                                                      · schema-validate, dispatch
    · build envelope, POST to PPA                      · DLQ, park/retrieve, replay
    · commit offset only on PPA 200
 ```
@@ -150,25 +150,19 @@ MLA's job is transport-boundary work only: consume, filter, classify, decode, au
 
 ### 3.2 Processing order — a hard requirement
 
-The order below is not stylistic. Two steps are ordering-critical and one of them is enforceable by test:
+The order below is not stylistic — decode precedes any field extraction, and the offset commits only after PPA confirms:
 
 ```
 1. consume ──▶ 2. filter start/egress ──▶ 3. decode (transfer bodies) ──▶ 4. classify
-                                                                              │
-   ┌──────────────────────────────────────────────────────────────────────────┘
    ▼
-5. VALIDATE JWS SIGNATURE  ──── against the payload exactly as received ────┐
-   ▼                                                                        │
-6. TOKENIZE PII  ◀── must run strictly after step 5 ─────────────────────────┘
-   ▼
-7. build envelope ──▶ 8. POST to PPA ──▶ 9. commit offset only on HTTP 200
+5. TOKENIZE PII ──▶ 6. build envelope ──▶ 7. POST to PPA ──▶ 8. commit offset only on HTTP 200
 ```
 
-**Why 5 must precede 6:** the DFSP signed the event as originally sent. Validating a signature against an already-tokenized payload fails every time. US-PII-01 requires a **test that fails if tokenization is moved ahead of validation**, so the ordering is enforced automatically rather than by convention.
-
-*(Note: US-PII-01's own Method lists classify before validate-signature; US-MLA-02/03 place decode and classify ahead of envelope construction. The invariant that both documents assert without ambiguity is **validate-then-tokenize**, and that decode precedes any field extraction. The exact placement of classify relative to signature validation is not decided by either document — see §14.)*
+**No signature-validation step.** The source stories place a JWS validation step between classify and tokenize, with a validate-then-tokenize ordering invariant (US-MLA-05, US-PII-01). **Removed from MLA's implementation [2026-09-23] — pending story-author sign-off.** The source story (US-MLA-05) still specifies it; `e2e-testing/remove-JWS.md` and `plan.md` §16's [2026-09-23] entry record why and what was verified. The switch validates every DFSP signature before a record reaches the audit topic, inside the same trust boundary as MLA's consumer, so the ordering invariant has no remaining step to order against.
 
 ### 3.3 JWS validation (US-MLA-05)
+
+**Removed from MLA's implementation [2026-09-23] — pending story-author sign-off.** The source story (US-MLA-05) still specifies it; `e2e-testing/remove-JWS.md` and `plan.md` §16's [2026-09-23] entry record why and what was verified. What the story specifies, for reference:
 
 - Validate `FSPIOP-Signature` (RS256/384/512) against the sending DFSP's registered public key, on **every** event type including the fulfil leg. **No exemption applies** — there is no genuinely switch-generated event on this topic to exempt.
 - Extract the header **before** any decoding or field extraction changes the body; verify against the original, untouched payload.
@@ -549,7 +543,6 @@ therefore:  the Kafka offset + 7-day audit-topic retention is the recovery buffe
 | Party-discovery records | MLA | logged |
 | Unclassifiable events | MLA | logged, offset advanced |
 | Unreadable payloads (bad base64/JSON) | MLA | logged + alert |
-| Failed/missing JWS | MLA | security log + alert |
 | Duplicate `{id}:{isoMessageType}` | PPA | silently dropped |
 | Domestic transfers | PPA | **counter metric only** — no DLQ, no alert |
 
@@ -563,8 +556,8 @@ therefore:  the Kafka offset + 7-day audit-topic retention is the recovery buffe
 
 | Boundary | Control |
 | --- | --- |
-| DFSP → audit topic → MLA | **JWS `FSPIOP-Signature`** (RS256/384/512), validated on **every** event, no exemptions, against the untouched original payload |
-| Inside MLA | **PII tokenization** — keyed hash, deterministic, prefixed, secret loaded at startup, strictly **after** signature validation |
+| DFSP → switch → audit topic | **JWS `FSPIOP-Signature`**, validated by the **switch** before a record reaches the topic. MLA's consumer sits inside the same trust boundary and does not re-validate (removed from MLA's implementation [2026-09-23], pending story-author sign-off) |
+| Inside MLA | **PII tokenization** — keyed hash, deterministic, prefixed, secret loaded at startup |
 | MLA → PPA | **Mutual TLS**, TLS 1.2+, allow-list of exactly one client certificate |
 | PPA → TMS | **HTTPS + mutual TLS + Keycloak bearer token**, both present on every request |
 | Logs / DLQ / audit | **PII masking** per §10.3 — the only protection the ILP-exempt cleartext fields ever get |
@@ -638,10 +631,10 @@ There is no separately-published event to deduplicate, so the component has no r
 | # | Question | Bites |
 | --- | --- | --- |
 | **#1** | Agree MLA→PPA and PPA→TMS **timeout / retry budget values** | US-MLA-06, US-MLA-07, US-PPA-13 (R-31) |
-| **#3** | Does the **`FSPIOP-Signature` header survive** the DFSP → switch → Kafka → audit-topic chain, in particular the base64 data-URI re-serialisation on transfer topics? | **US-MLA-05 cannot be closed without this.** If it doesn't survive, JWS validation as specified is unimplementable and an alternative (e.g. topic-level auth) must be agreed. |
+| **#3** | Does the **`FSPIOP-Signature` header survive** the DFSP → switch → Kafka → audit-topic chain, in particular the base64 data-URI re-serialisation on transfer topics? | **Moot for MLA [2026-09-23]** — MLA no longer validates signatures (§3.2). Originally: **US-MLA-05 cannot be closed without this.** If it doesn't survive, JWS validation as specified is unimplementable and an alternative (e.g. topic-level auth) must be agreed. |
 | **#4** | Payee display name has no source | US-PPA-08 — MSISDN fallback is the accepted answer |
 | **#7** | The **audit-topic feed mechanism** (mirroring vs. in-process publishing), and whether `operation` / `Content-Type` / `FSPIOP-HTTP-Method` survive identically in CCH production as in the staging capture | **US-MLA-02's classification rule cannot be finalized without this.** MLA's consumer contract does not otherwise depend on the feed mechanism. |
-| **#8** | Confirm the **offset-advance-on-permanent-failure** policy for 4xx and JWS rejections | US-MLA-07 |
+| **#8** | Confirm the **offset-advance-on-permanent-failure** policy for 4xx rejections | US-MLA-07 |
 | **#9** | The residual scenario where **PPA was down long enough to never park anything** | US-PPA-16 — needs separate handling confirmed with Paysys |
 
 *(Items #2, #5 and #6 are closed — see §12.1 and R-09.)*
@@ -677,7 +670,7 @@ There is no separately-published event to deduplicate, so the component has no r
 - **Payee legal name is not tokenized** — `payee.personalInfo.complexName` sits raw in the Event Envelope for Quote request. The Fields-to-Tokenize table (§4.1, `cch-pii-user-stories.md`) lists only "Payer legal name" for that message, with no corresponding payee row or stated rationale (unlike the three ILP-packet exemptions, which all cite the cryptographic-binding constraint). Confirmed live on both the local stack and the real remote PPA [2026-09-21], now persisted in a real (if test) deployed instance's own DLQ. Flagged to CCH/the story author — whether the table should gain a "Payee legal name" row is not engineering's to decide. See `plan.md` §16's last entry.
 - **What "protected" must legally mean** — reversible-by-authorized-lookup, or merely irreversible-without-the-secret? **CCH Legal.**
 - **Named ownership of the tokenization secret** and its rotation schedule — unassigned.
-- **How MLA sources DFSP public keys** — synced local store vs. live lookup service, and how a key-source outage is distinguished from a genuine signature failure. **[2026-09-09 meeting, `docs/meetings and emails/9-sept.md`]:** Sam (Mojaloop Foundation) confirmed Mojaloop Connection Manager (MCM) manages DFSP key distribution automatically during onboarding — **MLA should interface with MCM rather than maintain its own key store**; an onboarding video is pending from Sam. The key-source-outage classification itself is already built (Phase 3's distinct `key-source-unavailable` outcome) and is unaffected by which source eventually supplies the keys.
+- ~~**How MLA sources DFSP public keys**~~ **Dissolved, not resolved [2026-09-23]:** MLA no longer validates signatures, so it needs no DFSP public keys (pending story-author sign-off on US-MLA-05's removal). Original item — synced local store vs. live lookup service, and how a key-source outage is distinguished from a genuine signature failure. **[2026-09-09 meeting, `docs/meetings and emails/9-sept.md`]:** Sam (Mojaloop Foundation) confirmed Mojaloop Connection Manager (MCM) manages DFSP key distribution automatically during onboarding — **MLA should interface with MCM rather than maintain its own key store**; an onboarding video is pending from Sam. The key-source-outage classification itself is already built (Phase 3's distinct `key-source-unavailable` outcome) and is unaffected by which source eventually supplies the keys.
 - **Alerting destination and routing** (Slack / PagerDuty / email, and the mechanism wiring a condition to it) — the observability stack is confirmed, the destination is not (R-37). Affects every alert path in both services. **A SIEM/log-aggregation platform is a separate, also-unconfirmed item** (IDD Open Item #8), relevant to audit-log and security-alert output (US-AUD-01) rather than to metrics.
 - **Write-ahead store technology** — pending the hosting-location decision (FSD §4.7).
 - **The pinned `tms-service` commit** for the four ajv schemas — must be identified and documented **before implementation begins**.
@@ -692,7 +685,7 @@ Worth knowing before treating these five documents as complete:
 1. ~~`cch-crosscutting-user-stories.md` is referenced repeatedly but is not present in `docs - MLA/user stories/`.~~ **Resolved [2026-09-07] — obtained and cross-referenced into this revision.** It is the home of **US-AUD-01** (audit-log PII masking, PPA-side), **US-MON-01** (monitoring/alerting), **US-MON-02** (readiness scoping), **US-PERF-01/02** (latency and ValKey sizing), and **US-SEC-01** (mTLS certificate lifecycle) — Epics 11–12, dated 18 August 2026 like the other four. It confirms the observability stack (§12.2 above) and leaves R-37 (alerting destination/routing, §13.2) as the residual open item.
 2. **Epic numbering still has holes.** MLA covers Epics 1–3, dedup Epic 4, PPA Epics 6–10, crosscutting Epics 11–12. **Epic 5 remains unaccounted for** — the crosscutting document's own arrival ruled out "the crosscutting epic" as the answer, since it turned out to be Epics 11–12, not 5.
 3. **US-PPA-14 no longer exists** — merged into US-PPA-04 (R-28). Do not look for it.
-4. **The classify-vs-validate-signature ordering is not settled** between US-PII-01's Method (classify at step 3, validate at step 4) and the MLA stories' framing. The **validate-then-tokenize** invariant *is* settled and is the one that matters. See §3.2.
+4. ~~**The classify-vs-validate-signature ordering is not settled**~~ **Moot [2026-09-23]:** MLA has no signature-validation step (§3.2).
 5. **The story documents are dated 18 August 2026 and carry open Actions with named owners.** Some findings are marked Resolved in the finding table while the corresponding Action row is still Open, and vice versa — read both.
 6. **Externally-cited sources are not in this repository:** the FSD (`CCH_FSD_MessageIngestion`), the IID / IDD, `DRPP_Kafka_E2E_Pack`, and `Message_NotificationDedup_OpenItems_Resolution.md`. Every claim attributed to them here is a **reported** claim, not one this document independently verifies.
 
@@ -706,7 +699,7 @@ Worth knowing before treating these five documents as complete:
 | US-MLA-02 | Distinguish event types within the stream | MLA |
 | US-MLA-03 | Decode base64-encoded transfer payloads | MLA |
 | US-MLA-04 | Construct a standard Event Envelope | MLA |
-| US-MLA-05 | Validate JWS signatures on DFSP-originated events | MLA |
+| US-MLA-05 | Validate JWS signatures on DFSP-originated events — **removed from the implementation [2026-09-23], pending story-author sign-off** (§3.2) | MLA |
 | US-MLA-06 | Deliver envelopes to PPA via per-action endpoints | MLA |
 | US-MLA-07 | Retry and circuit-break on PPA failures | MLA |
 | US-PII-01 | Classify and tokenize party identity fields within MLA | MLA |

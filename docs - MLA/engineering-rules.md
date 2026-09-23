@@ -33,7 +33,7 @@ Break any of these and the change does not ship, regardless of how well the rest
 | --- | --- |
 | **N1** | **Never acknowledge what is not durable.** MLA commits an offset only on PPA HTTP 200. PPA returns 200 only after a durable write-ahead write. No code path may weaken either link. |
 | **N2** | **Never synthesize a message.** No fabricated `pacs.002`, no fabricated `pain.013`. If the source event did not arrive, no message is emitted. *(Core knowledge §9; R-04.)* |
-| **N3** | **Validate the JWS signature before mutating the payload.** Tokenization, decoding into new structures, or any field rewrite that precedes validation is a defect. This ordering is enforced by a test that fails if the steps are reordered. |
+| **N3** | **Retired [2026-09-23] — pending sign-off by the rules owner and CCH.** MLA does not validate DFSP JWS signatures: the switch validates every record before it reaches `topic-event-audit`, inside the same trust boundary as MLA's consumer (`e2e-testing/remove-JWS.md` §1). With no validation step in the pipeline there is no ordering left for this rule to protect. The number is kept so existing references stay resolvable. |
 | **N4** | **Every mutation of shared state is atomic.** ValKey merges are Lua compare-and-merge. Idempotency is a single check-and-set. A read followed by a write is a defect, not a style choice. |
 | **N5** | **Retries resend the byte-identical message**, with the same pinned `GrpHdr.MsgId`. Never rebuild on retry. |
 | **N6** | **No secret, key, certificate, endpoint, TTL, threshold or timeout is hardcoded.** All come from configuration. |
@@ -235,7 +235,7 @@ Every operator question below must be answerable **from telemetry alone**, witho
 - **Structured logging (`pino`), never `console.log`.** Every line carries `correlationId`, `eventType`, and the pipeline step.
 - **A metric for every decision the code makes silently.** Anything dropped without an alert must still be counted — a domestic transfer produces no alert *by design*, so its counter is the only visibility that exists.
 - **Alerts are actionable.** An alert nobody can act on gets deleted or downgraded to a metric.
-- **A log line is not an alert and an alert is not a log line.** Security events (missing/invalid JWS) and DLQ writes alert. Structural skips do not.
+- **A log line is not an alert and an alert is not a log line.** Permanent rejections, retry exhaustion, breaker trips and DLQ writes alert. Structural skips do not.
 
 ---
 
@@ -252,8 +252,8 @@ But **coverage is a floor, not the goal.** 96% coverage of the happy path with n
 | Category | Requirement |
 | --- | --- |
 | **Every table row** | Every row of the classification table, the routing table, the trigger/cache table, the `TxSts` translation table, and each ISO message's field mapping has its own test. A table with an untested row is an untested table. |
-| **Every failure path** | Missing header, invalid signature, malformed base64, unparseable JSON, unknown `eventType`, unclassifiable combination, ValKey down, store down, store write failure, 4xx, 5xx, timeout, TLS handshake failure, retry exhaustion, breaker trip and resume. |
-| **Every ordering constraint** | A test that **fails if tokenization is moved ahead of signature validation**. Ordering requirements are enforced by tests, not by hoping the code stays correct. |
+| **Every failure path** | Missing header, malformed base64, unparseable JSON, unknown `eventType`, unclassifiable combination, ValKey down, store down, store write failure, 4xx, 5xx, timeout, TLS handshake failure, retry exhaustion, breaker trip and resume. |
+| **Every ordering constraint** | Each ordering requirement the pipeline has is enforced by a test that fails if the steps are reordered, not by hoping the code stays correct. |
 | **Every idempotency path** | First event processed, repeat dropped — for every event type, including a transfer terminal-state repeat carrying a *different* `TxSts`. |
 | **Every concurrency path** | Concurrent-replica merge correctness for both trigger and non-trigger events; a concurrent check-and-set race on the same key. |
 | **Every degraded path** | Each fallback in the degraded table, asserting the degraded flag is actually set. |

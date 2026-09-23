@@ -105,7 +105,6 @@ Reads a capture file and produces each record onto `topic-event-audit`. Each fai
 | `--duplicate <idx>` | re-emit a record | at-least-once handling, dedup |
 | `--drop <operation>` | omit a record | the missing-event paths |
 | `--corrupt <idx>` | emit malformed JSON | the unreadable-message skip |
-| `--strip-signature <idx>` | remove `fspiop-signature` | US-MLA-05's security-alert path |
 | `--loop` | repeat indefinitely | sustained load, memory behaviour |
 
 Every flag maps to an acceptance criterion that otherwise has **no way to be exercised at all**. None is speculative.
@@ -132,7 +131,7 @@ This is cheap, and it targets the exact failure class that hurt the POC twice: *
 
 Stated plainly so the phase exit criteria in [`plan.md`](plan.md) stay honest:
 
-- **Real DFSP signatures cannot be cryptographically verified.** The captures carry 286 real `fspiop-signature` headers, but we do not have COMESA's DFSP **public keys**. We can prove the verification *mechanism* by re-signing real capture bodies with a locally generated keypair and verifying against it — we cannot prove we can verify a genuine production signature until we have the keys or a JWKS endpoint. **[2026-09-09 meeting, `docs/meetings and emails/9-sept.md`]:** George is liaising with Infotex to obtain the 19 DFSP/FXP/hub public keys and to check for a JWKS endpoint; Sam confirmed Mojaloop Connection Manager (MCM) manages key distribution at onboarding and that MLA should interface with MCM rather than hold its own synced store. None of this changes what the harness can prove until the keys are actually in hand.
+- ~~**Real DFSP signatures cannot be cryptographically verified.**~~ **No longer applies [2026-09-23]** — MLA does not validate DFSP signatures (`e2e-testing/remove-JWS.md`). Original limitation: The captures carry 286 real `fspiop-signature` headers, but we do not have COMESA's DFSP **public keys**. We can prove the verification *mechanism* by re-signing real capture bodies with a locally generated keypair and verifying against it — we cannot prove we can verify a genuine production signature until we have the keys or a JWKS endpoint. **[2026-09-09 meeting, `docs/meetings and emails/9-sept.md`]:** George is liaising with Infotex to obtain the 19 DFSP/FXP/hub public keys and to check for a JWKS endpoint; Sam confirmed Mojaloop Connection Manager (MCM) manages key distribution at onboarding and that MLA should interface with MCM rather than hold its own synced store. None of this changes what the harness can prove until the keys are actually in hand.
 - **The stub asserts the contract, not PPA's durability.** PPA's `200` is specified to mean "durably written to the write-ahead store" (US-MLA-06's assumption). The stub cannot evidence that; only the real PPA can.
 - **Throughput numbers are local, not representative.** We can measure against 125 TPS peak locally, but that says nothing about production infrastructure.
 - **No rebalance realism at scale.** Two local MLA instances against 12 partitions exercise group rebalance, but not the failure modes of a real multi-node cluster.
@@ -144,7 +143,7 @@ Stated plainly so the phase exit criteria in [`plan.md`](plan.md) stay honest:
 
 In priority order. The first is the highest-value unblock available to this project.
 
-1. **The DFSP public keys, or a JWKS endpoint.** Without them, JWS verification can only ever be proven against fixtures we sign ourselves. **In progress since the 2026-09-09 meeting** — George is obtaining them via Infotex; not yet received.
+1. ~~**The DFSP public keys, or a JWKS endpoint.**~~ **Dissolved [2026-09-23]** — MLA no longer validates signatures and needs no keys. Original item: without them, JWS verification can only ever be proven against fixtures we sign ourselves. **In progress since the 2026-09-09 meeting** — George is obtaining them via Infotex; not yet received.
 2. ~~Confirmation that the per-operation canonical-record shape is a stable contract, not an artefact of this capture window.~~ **Answered [2026-09-09 meeting]** — CCH and the Mojaloop Foundation confirmed it is by design across all environments (`plan.md` §14 Q2).
 3. **The environment itself** — at which point everything in §4 becomes testable and Phase 8 begins.
 
@@ -195,7 +194,7 @@ What it buys is that **every subsequent piece of work can be proven, the day it 
 
 This does not replace the real environment, and we are not claiming it does. Three things still require COMESA:
 
-1. **We cannot verify a single real digital signature.** The recordings contain 286 genuine signatures, and we hold none of the corresponding public keys. We can prove our verification works using keys we generate ourselves — we cannot confirm we can validate COMESA's own until they supply the keys. **This is the single most valuable thing they can give us, and it is a small request.**
+1. ~~**We cannot verify a single real digital signature.**~~ **No longer applies [2026-09-23]** — MLA does not validate signatures; the switch does, before records reach the topic. Original point: The recordings contain 286 genuine signatures, and we hold none of the corresponding public keys. We can prove our verification works using keys we generate ourselves — we cannot confirm we can validate COMESA's own until they supply the keys. **This is the single most valuable thing they can give us, and it is a small request.**
 2. **We cannot confirm the downstream system's storage guarantee** — only that we talk to it correctly.
 3. **Performance figures are local**, and say nothing about production infrastructure.
 

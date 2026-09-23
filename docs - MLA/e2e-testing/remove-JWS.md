@@ -2,7 +2,7 @@
 
 # Removing JWS Validation from MLA — End-to-End Plan
 
-**Status:** proposal, not yet actioned. No code changed as of this document's own date [2026-09-22].
+**Status:** built and live-verified on `cch-mla` branch `paysys-remove-JWS` [2026-09-23]; formal closure pending the two closure-blocking sign-offs in §9. §11 records where the build departed from this plan; `plan.md` §16's [2026-09-23] entry records what was verified.
 
 **Purpose:** a complete plan for removing DFSP JWS signature validation from MLA — every code path, config
 key, metric, health input, test, and governing document it touches — while leaving the business flow
@@ -319,3 +319,22 @@ removing it properly.
 4. **Is the audit topic's ACL actually restrictive?** Michael's statement is architectural. If a
    defence-in-depth argument is ever wanted, the concrete question is who holds write access to
    `topic-event-audit` — a CCH/Infotex infrastructure question, not an MLA one.
+
+---
+
+## 11. As built [2026-09-23]
+
+Where the build departed from §4–§8, and why:
+
+| Plan said | As built | Why |
+| --- | --- | --- |
+| §4.5: keep `resign.ts`, `tools/dfsp-keys/`, `npm run keys:generate` | **Removed**, together with the feeder's `--resign`, `--strip-signature` and `--tamper-body` flags and the scenario harness's DFSP-key bootstrap | The user's decision: no JWS references left behind. Nothing in MLA reads `fspiop-signature` any more, so signing a replayed record changes nothing it does. |
+| §4.5: fixtures untouched | **Kept, byte-identical** (27 golden and fixture files hashed before and after) | Captured ground truth — the captures still carry the `fspiop-signature` header DRPP really sends. |
+| §4.2's edit list | Also removed `Alert.raiseSecurityAlert` (alert type `signature`) | Its only callers were the two deleted signature-failure branches; §4.2 missed it. |
+| §5: keep every PII test | Also **ported two F-10 tests** from the deleted key-store block to the PII domain (reprobe re-arms from `finally` when the tick and logger both throw; `parkRegistry` tracks the park end to end) | They had no PII counterpart, so deleting them would have dropped coverage of the shared transient-park machinery. |
+| §7 step 9: regression run *with* `--resign` | Replaced by a feed with the header **stripped entirely**, alongside the as-captured feed | `--resign` no longer exists. Header present-but-invalid and header absent are the two cases that can still differ; both forwarded all 8. |
+
+**Rollback is still a `git revert`.** Every deleted tracked file is in git history. The generated DFSP keypairs were gitignored local artefacts; after a revert they are regenerated with the restored `npm run keys:generate`.
+
+**Deployment precondition.** `deploy/kubernetes/03-mla-deployment.yaml` still pins the pre-removal image digest (`sha256:1e99…`, tag `a0437cd`), which refuses to boot without `JWS_PUBLIC_KEY_DIR`. The JWS-stripped manifests on this branch must not be applied until the digest points at a post-removal build — the §4.4 one-way door, in the manifest file itself.
+
