@@ -19,9 +19,14 @@ way the dated `continue/` files or `plan.md` §16 entries are meant to be.
 
 ## A. Pure engineering — no external blocker, can start immediately
 
-1. **F-11 through F-22 QA findings.** Medium/Low severity, on `paysys-QA-F11-onwards` (the current working
-   branch). `bugs/qa-review-findings.md` has each finding; `bugs/qa-review-remediation.md` has the proposed
-   fix, in suggested order. Fully self-contained — no CCH/COMESA dependency.
+1. **F-11 through F-22 QA findings.** Medium/Low severity. In progress on `paysys-remaining-bugs-f11-onwards`
+   (cut fresh from `main` [2026-09-23], post-JWS-removal — `paysys-QA-F11-onwards` was left stale, 5 commits
+   behind `main`, and is superseded by this branch). `bugs/qa-review-findings.md` has each finding, one fix
+   per prompt by the user's cadence; `bugs/qa-review-remediation.md` has the proposed fix, in suggested order.
+   Fully self-contained — no CCH/COMESA dependency. **F-11 done** [2026-09-23] — see `plan.md` §16.
+   **Ships as one combined image** once F-11 through F-22 are all done, to both `10.0.150.69` and GHCR
+   (re-pinning `03-mla-deployment.yaml`'s digest), with its own follow-up email to George — see item 8 below
+   for why this is now separate from the JWS-removal email already sent.
 2. **`cch-ppa` schema-completeness fix.** Add the missing ISO fields (`RmtInf`, `SttlmInf`, `ChrgBr`, `Purp`,
    `PmtMtd`, `ReqdAdvcTp`, `Dbtr`/`Cdtr`/`DbtrAcct`/`CdtrAcct`, and others) to the `pain.001`/`pain.013`/
    `pacs.008` translations so local schema validation stops rejecting them. **The single highest-leverage fix
@@ -61,16 +66,23 @@ edit, as the record of why it left the list.
 
 These need someone to actually send them — flagged here as live gaps, not drafted or sent by this document.
 
-8. **Push CCH/techops on the manifest `kubectl apply`.** Handed to George Murage [2026-09-15]; unconfirmed
-   whether techops has applied it since the [2026-09-17] check-in (`plan.md` §13.1).
-9. **Chase the Infotex call.** Still not scheduled — needed to settle MLA's outbound IP and mTLS certificate
-   routing (`plan.md` §13.1, `deployment/MLA-deployment-kubernetes.md` §11 Q4/Q5).
-10. ~~**Chase DFSP keys / JWKS / the MCM onboarding video.**~~ **Dissolved [2026-09-23]** by the JWS removal (sign-off confirmed). Original item: Pending from Sam since the [2026-09-09] meeting
+8. ~~**Tell George about the JWS removal.**~~ **Sent [2026-09-23]** —
+   `docs/meetings and emails/george-email-2026-09-23-jws-removal.md`; `plan.md` §16's own entry. Sent as its
+   own email, ahead of the F-11+ QA fixes rather than combined with them (the plan at onboarding expected one
+   combined email) — the user's deliberate sequencing choice, sent while item 1's bugfix work was still
+   in progress. **A second, later email to George is still owed** once the F-11+ combined image ships,
+   covering the bugfixes.
+10. **Push CCH/techops on the manifest `kubectl apply`.** Handed to George Murage [2026-09-15]; unconfirmed
+    whether techops has applied it since the [2026-09-17] check-in (`plan.md` §13.1). The JWS-removal email
+    above (item 8) asked directly whether anything is blocking this.
+11. **Chase the Infotex call.** Still not scheduled — needed to settle MLA's outbound IP and mTLS certificate
+    routing (`plan.md` §13.1, `deployment/MLA-deployment-kubernetes.md` §11 Q4/Q5).
+12. ~~**Chase DFSP keys / JWKS / the MCM onboarding video.**~~ **Dissolved [2026-09-23]** by the JWS removal (sign-off confirmed). Original item: Pending from Sam since the [2026-09-09] meeting
     (`plan.md` §13.1, §14 item 1) — the single highest-value unblock for Phase 3's genuine-signature
     verification, and the item `remove-JWS.md` §1.2 notes would dissolve entirely if JWS is removed instead.
-11. **Ask George for his annotated event table.** Covering the ~52% of the 500-record export not yet
+13. **Ask George for his annotated event table.** Covering the ~52% of the 500-record export not yet
     reflected in the per-operation model (`plan.md` §14 item 2's follow-up, not yet received).
-12. **Ask Sam for a genuine FX-side rejection/timeout sample.** Still missing — every FX-labelled folder in
+14. **Ask Sam for a genuine FX-side rejection/timeout sample.** Still missing — every FX-labelled folder in
     the [2026-09-16] report either hides the raw shape behind an SDK abstraction or returns `202` with no
     visible failure callback (`plan.md` §14 item 3).
 

@@ -2965,6 +2965,110 @@ what `ssh-keygen`/`ssh-copy-id` each do, the parallel to the CSR exchange in the
                 as sufficient; no reply is being sent. This closes the two items that blocked
                 formal closure per the previous entry's own bar (`plan.md` §7.2-style: only the
                 monitoring-signal reduction and the residual-risk acceptance, both CCH's, remain).
-                **Not yet done:** the four commits are not pushed to the remote; the manifests
-                referencing the new digest have not been applied to CCH's cluster (10.0.150.69 or
-                any other); the `cch-mla-jws-keys` Secret has not been deleted anywhere.
+                **Not yet done at the time of this entry:** the four commits were not yet pushed to
+                the remote; the manifests referencing the new digest had not been applied to CCH's
+                cluster (10.0.150.69 or any other); the `cch-mla-jws-keys` Secret had not been
+                deleted anywhere. **Superseded by the next entry** on the push/merge point — the
+                commits were pushed and merged to `main` before the next entry's session started.
+
+### George Murage emailed — JWS removal only, ahead of the QA-bugfix combined ship   [2026-09-23]
+
+**Built**       No code change. `cch-mla`'s JWS-removal commits (`21d7851`…`7b2a92e`) are confirmed
+                merged to `main` and pushed to `origin/main` — the previous entry's "not yet done"
+                push item is resolved. A new working branch, `paysys-remaining-bugs-f11-onwards`, is
+                cut from this `main` for the F-11+ QA fixes; `paysys-QA-F11-onwards` is left as-is
+                (stale, 5 commits behind `main`, superseded by the new branch).
+**Sent**        The user emailed George Murage (CCH's technical lead) directly, without waiting for
+                the F-11+ bugfix work to finish — a deliberate change from the plan recorded in the
+                previous entry and in `e2e-testing/next-steps.md`'s original framing, which expected
+                one combined email covering both the JWS removal and the QA bugfixes. Full text:
+                `docs/meetings and emails/george-email-2026-09-23-jws-removal.md`. Content: the JWS
+                removal, the trust-boundary rationale, that a new image (`ghcr.io/psl-izyane-cch-frms/cch-mla`,
+                tag `1e7610e`, the same digest already pinned in `03-mla-deployment.yaml`) is pushed
+                to GHCR and needs no action beyond CCH's already-pending `kubectl apply`, that the
+                `cch-mla-jws-keys` Secret is no longer required, and that Kafka/PPA/PII config is
+                unchanged. States the image was tested standalone before pushing (per the previous
+                entries' live verification).
+**Verified**    Not applicable — a sent email, not a code or infrastructure change.
+**Diverged**    From the plan as understood at onboarding (`next-steps.md`, the earlier `plan.md`
+                entries): the JWS-removal news is now sent to CCH on its own, ahead of the F-11+ QA
+                fixes rather than combined with them. **The QA bugfixes will still ship as a second,
+                later image** — built once F-11 onwards are done, pushed to both `10.0.150.69` and
+                GHCR (re-pinning `03-mla-deployment.yaml`'s digest again), with its own follow-up
+                communication to George at that point. This is a sequencing change only: the
+                combined-image intent for the *bugfixes themselves* (one image for F-11 through F-22,
+                not one per fix) is unchanged.
+**Left open**   The manifest `kubectl apply` on CCH's cluster is still unconfirmed either way (last
+                check-in [2026-09-17], §13.1). The `10.0.150.69` test-rig deployment has not been
+                updated with the JWS-removal image — it was deliberately left on the pre-removal
+                image, by the user's earlier choice (previous entries), and is now also the target
+                the F-11+ combined image will ship to once ready. F-11 (park timers/shutdown exit
+                code) is built, tested and live-verified this session — see the F-11 entry below;
+                F-12 onwards are not yet started.
+
+### F-11 — Detached park timers survive `shutdown()`; shutdown exits 0 on failure   [2026-09-23]
+
+**Built**       On `paysys-remaining-bugs-f11-onwards` (cut from `main` post-JWS-removal). Before
+                any change, a correctness baseline was established and recorded: 25/25 suites,
+                427/427 tests, 100% statements, 97.86% branches, clean build, and a live corridor
+                (local Redpanda + `cch-ppa` + Postgres + ValKey) delivering 8/8 canonical envelopes
+                with 0 rejections — matching the state recorded in the entries above exactly.
+                `park-registry.service.ts`: `ParkState` gained an optional `pendingTimer` field; two
+                new methods, `registerTimer(partition, timer)` (called by a reprobe loop right after
+                scheduling its next `setTimeout`, replacing any previous handle for that partition)
+                and `cancelAll()` (clears every tracked timer via `clearTimeout` and empties the
+                registry). `ingestion-consumer.service.ts`: all four `setTimeout` call sites across
+                `parkAndReprobeTransient` and `parkAndReprobePpa` (the initial schedule and the
+                re-arm in each `finally`, plus the commit-retry timer in `resolvePartition`'s
+                advance-failure path) now call `parkRegistry.registerTimer` with the handle. `index.ts`:
+                `shutdown()` calls `service.parkRegistry.cancelAll()` before `kafka.disconnect()` (a
+                parked record's offset is uncommitted by design, so cancelling its reprobe loses
+                nothing — the next instance redelivers it); the `try/catch` that previously swallowed
+                every shutdown error now rethrows after logging, so `registerSignalHandlers`'s
+                `.catch` branch fires and exits `EXIT_CODE_ERROR` instead of always reaching `.then`'s
+                `EXIT_CODE_OK`. `bootstrap()`'s auto-run call is guarded behind
+                `require.main === module` and `shutdown`/`Service` are exported, so a test can import
+                the module and exercise `shutdown` directly without the import itself booting a real
+                Kafka connection and HTTP listener as a side effect.
+**Tests**       12 new: 6 in `park-registry.service.test.ts` (`registerTimer` on an unregistered
+                partition is a no-op; `cancelAll` clears every pending timer, fake-timer-advanced
+                1000ms with zero callbacks firing and `jest.getTimerCount()` at 0; `cancelAll` on an
+                empty registry is a no-op; the single-slot overwrite behaviour of `registerTimer`
+                documented explicitly). 6 new in a new `index.test.ts` (previously no test file
+                existed for `index.ts` at all): shutdown's step ordering (watchdog stop → cancelAll →
+                kafka.disconnect → server.close); a registered park's timer is confirmed not to fire
+                after `shutdown` returns; cleanup runs with no kafka/watchdog configured; a
+                `kafka.disconnect` failure is logged **and rethrown** rather than swallowed; the same
+                for a `server.close` failure; park timers are still cancelled even when a later step
+                throws. Full suite after: 26/26 suites (up from 25), 437/437 tests (up from 427),
+                100% statements/functions/lines, 97.88% branches (up from 97.86%, still above the 96%
+                gate), 0 lint errors (216 warnings, unchanged from baseline — all pre-existing magic-
+                number warnings), Prettier clean.
+**Verified**    `live — local stack (Redpanda, local PPA + Postgres + ValKey)`, before and after, plus
+                a dedicated shutdown probe. Before: baseline corridor as above. After the fix: rebuilt
+                clean (`tsc`, 0 errors); booted MLA, `/health/ready` unchanged
+                (`{"status":"UP","kafka":"UP","piiSecret":"UP"}`); stopped `cch-ppa` to force a
+                transient failure, fed the corridor, confirmed the park via
+                `mla_partition_paused{partition="2"}=1` and a climbing `mla_park_age_seconds`;
+                `SIGTERM`'d mid-park — the process logged "Received SIGTERM, shutting down", exited
+                within ~3.5s (Kafka's own graceful in-flight wait), exit code confirmed `0` via a
+                shell wrapper capturing `$?` directly (not `wait`, which returned a false `127` on a
+                detached background job), and produced zero "Unhandled failure reprobing" log lines in
+                the shutdown window. A plain clean shutdown with no park active was separately
+                confirmed at exit code `0`. The rethrow-on-failure branch could not be forced live —
+                kafkajs's real `disconnect()` resolves even against a broker stopped moments earlier
+                (verified by stopping `cch-mla-redpanda` before `SIGTERM`: still exited `0`, correctly,
+                since `disconnect` did not actually throw) — that branch is proven by the mocked unit
+                tests instead, which is the more deterministic proof for it regardless. Restored PPA
+                and Redpanda afterward; confirmed no stray MLA processes remained.
+**Diverged**    From `qa-review-remediation.md`'s F-11 proposal: its plan assumed an `AbortSignal`
+                threaded through `IngestionHandlerDeps` as the primary mechanism, with "the F-10
+                registry gives shutdown the list to cancel if a signal is not preferred" as a
+                fallback. Since F-10's `ParkRegistry` already existed and already owns every park's
+                lifecycle, the registry-owns-the-timers fallback was built directly rather than adding
+                a parallel `AbortSignal` plumbing path — smaller surface, same guarantee. The
+                remediation's suggestion to fold F-05/F-08/F-10/F-11 into one combined refactor was not
+                followed, per the user's explicit one-finding-per-prompt cadence for this workstream;
+                F-10 was already done (merged via `epic-QA`) and F-11 is scoped to exactly what its own
+                finding describes.
+**Left open**   Nothing specific to F-11. `qa-review-findings.md`'s F-12 is next.
