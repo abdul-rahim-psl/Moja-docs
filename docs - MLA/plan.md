@@ -3188,3 +3188,91 @@ what `ssh-keygen`/`ssh-copy-id` each do, the parallel to the CSR exchange in the
 **Diverged**    Nothing from the remediation doc's own proposed fix, beyond the port-explicitness
                 item noted above (left out, not in scope for this finding's own claim).
 **Left open**   Nothing specific to F-13. `qa-review-findings.md`'s F-14 is next.
+
+### F-14 — Explicit TLS policy and connection reuse (scope: agent reuse + explicit TLS policy only)   [2026-09-24]
+
+**Built**       On `paysys-remaining-bugs-f11-onwards`. Correctness baseline re-confirmed before
+                starting: 26/26 suites, 448/448 tests, 100% statements, 97.92% branches, clean
+                build, `git status` clean (F-13 already committed as `56e3f66` by the user). **Scope
+                decision, made with the user before starting:** the remediation doc's own three-part
+                proposal (connection reuse, hot-reload-without-restart, an expiry metric) was
+                narrowed to the first part alone. Certificate hot-reload was left out because
+                US-SEC-01 explicitly leaves the rotation *mechanism* (hot-reload vs. rolling restart)
+                as CCH's decision, not yet confirmed - building it now would solve a problem nobody
+                has confirmed needs solving that way. The expiry metric was treated as a separate,
+                smaller nice-to-have, also left out. `HttpsPpaClient` now builds its connection
+                agents once, at construction: one `https.Agent` (mTLS enabled) or `http.Agent` (mtls
+                disabled) for delivery, reused by every `deliver()` call instead of a fresh TLS
+                handshake per request; a second, independent agent for the health probe, since it
+                never presents a client certificate even when delivery does. Both agents carry
+                `keepAlive: true` and a new, bounded `maxSockets` (`PPA_MAX_SOCKETS`, default 32,
+                bounds 1-256, wired through `config.interface.ts`/`config.service.ts` the same way
+                every other PPA numeric setting is). The mTLS agent also carries `minVersion:
+                'TLSv1.2'` and `rejectUnauthorized: true` explicitly, rather than left to Node's own
+                defaults. `deliver()`/`probeReady()` now pass `agent: this.agent` /
+                `agent: this.healthAgent` instead of spreading TLS material onto each call's own
+                request options. **A related correctness fix, not itself the finding's headline
+                claim but necessary once sockets are reused**: `classifyTransportError`'s TCP-
+                connected detection previously relied solely on the `'connect'` event, which a
+                keep-alive socket handed back from the pool never fires again (it already
+                connected on a prior request) - a mid-request failure on a reused socket would have
+                been misclassified as `network-error` (never connected) instead of
+                `tls-handshake-failure`. Fixed by checking `socket.connecting` at the moment the
+                `'socket'` event fires: already `false` means already connected, so `tcpConnected` is
+                set immediately rather than waiting on an event that will not come again.
+                `.env.template` and `deploy/kubernetes/01-configmap.yaml` both gained
+                `PPA_MAX_SOCKETS=32` alongside the existing PPA settings.
+**Tests**       11 new: 5 in `ppa.client.test.ts` (a new `describe('connection reuse and TLS
+                policy', ...)` block) - the agent is constructed once with `keepAlive`, the
+                configured ceiling, `minVersion: 'TLSv1.2'`, `rejectUnauthorized: true`; the same
+                agent instance is reused across two sequential `deliver()` calls, not rebuilt per
+                call; no key/cert/ca appear on the per-call request options any more, only on the
+                agent; a reused (`connecting: false`) socket that fails mid-request classifies as
+                `tls-handshake-failure`, not `network-error`; `mtlsDisabled` builds a plain
+                `http.Agent` with no TLS policy, shared by both delivery and the health probe. The
+                existing `FakeSocket` test double gained a `connecting` field, defaulting to `true`
+                like a real freshly-dialled socket and flipped to `false` at the same point Node's
+                own socket does (right when `'connect'` fires) - this also corrected a latent gap in
+                every *existing* socket-lifecycle test, which had never actually exercised the
+                "still connecting" branch of the new check (a socket double with `connecting`
+                `undefined` is falsy either way) until this update gave the double a real value to
+                flip. One pre-existing test (asserting `options.ca` directly on the per-call request
+                options) was updated to assert on the agent's own construction options instead - the
+                behaviour it checks (server verification, no client cert, on the health probe) is
+                unchanged, only where that data now lives. 5 new in `config.service.test.ts`:
+                `PPA_MAX_SOCKETS` bound rejection (0, 257, a non-integer), its default (32) appearing
+                in the full-object equality check, and an explicit-value assertion in the
+                "every supplied value" test. All 39 pre-existing tests across both files passed
+                unmodified beyond the one call-site update above. Full suite: 26/26 suites, 456/456
+                tests (up from 448), 100% statements/functions/lines, 97.93% branches (up from
+                97.92%, above the 96% gate), 0 lint errors (216 warnings, unchanged), Prettier clean,
+                `ppa.client.ts` 100% statements/lines, `config.service.ts` 100% statements/lines.
+**Verified**    `live — local stack (Redpanda, local PPA + Postgres + ValKey)`. **Regression with the
+                real, unmodified `.env`** (mTLS disabled locally, `PPA_MAX_SOCKETS` unset - the
+                default-config path): booted clean, fed the standard corridor twice in a row (16
+                total deliveries across the two runs) - 8, then 16 cumulative, forwarded/success,
+                0 rejections. **Direct proof of connection reuse**: `ss -tnp` against PPA's port
+                showed exactly **3 established connections** after the first corridor and still
+                exactly 3 after the second, sixteen deliveries total sharing the same small pool
+                rather than opening (and leaving open) one socket per request. **The health-probe
+                path, separately**: stopped PPA to force a park and a breaker trip, restored it, and
+                confirmed the full backlog recovered and drained (`mla_partition_paused` back to 0,
+                every parked and subsequent record forwarded) - proving `probeReady()`'s own,
+                independently-constructed agent still worked correctly through a real recovery cycle.
+                Clean `SIGTERM` shutdown afterward, exit code 0. **The fatal-refusal path**: ran the
+                compiled entrypoint directly with `PPA_MAX_SOCKETS=0` - logged the exact bound
+                message, real process exit code confirmed `1`. Real mTLS handshakes (the `https.Agent`
+                branch with `minVersion`/`rejectUnauthorized`) were not separately exercised live -
+                this deployment target runs `PPA_MTLS_DISABLED=true` locally by design, same as every
+                prior session in this workstream, since the local PPA does not terminate mTLS; that
+                branch's correctness rests on the 5 dedicated unit tests instead, which assert the
+                exact agent-construction options directly. No stray MLA processes remained afterward;
+                stack confirmed healthy.
+**Diverged**    Scoped to agent reuse and explicit TLS policy only, per the decision recorded under
+                **Built** above - certificate hot-reload and the expiry metric are both left for
+                later, gated on US-SEC-01's outstanding rotation-mechanism decision (the former) or
+                simply out of scope for this pass (the latter).
+**Left open**   Certificate hot-reload without restart - genuinely blocked on CCH confirming the
+                rotation mechanism (US-SEC-01), not on anything this session could resolve. The
+                expiry metric (`mla_client_cert_expiry_seconds`) is a small, independent follow-up,
+                not picked up here. `qa-review-findings.md`'s F-15 is next.
