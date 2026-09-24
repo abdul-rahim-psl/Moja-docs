@@ -3072,3 +3072,60 @@ what `ssh-keygen`/`ssh-copy-id` each do, the parallel to the CSR exchange in the
                 F-10 was already done (merged via `epic-QA`) and F-11 is scoped to exactly what its own
                 finding describes.
 **Left open**   Nothing specific to F-11. `qa-review-findings.md`'s F-12 is next.
+
+### F-12 — `KafkaClient.isConnected()` never becomes `false` on a broker disconnect   [2026-09-23]
+
+**Built**       On `paysys-remaining-bugs-f11-onwards`. Correctness baseline re-confirmed before
+                starting: 26/26 suites, 437/437 tests, 100% statements, 97.88% branches, clean
+                build, `git status` clean (F-11's changes were already committed as `c7b319d` by the
+                user between prompts). `kafka.client.ts`'s
+                constructor now subscribes to kafkajs's own `consumer.events.CONNECT`/`DISCONNECT`/
+                `CRASH` (event names and payload shapes confirmed directly against
+                `node_modules/kafkajs/types/index.d.ts` lines 907-910, 960-964, matching
+                `qa-review-remediation.md`'s own citation exactly): `CONNECT` sets `connected = true`,
+                `DISCONNECT` sets it `false`, `CRASH` sets it `false` and logs the real
+                `payload.error` via a new `KafkaClient.crash` log line. `connect()`/`disconnect()` no
+                longer set the flag themselves - it now reflects kafkajs's own reported state, not
+                just this class's own method-call boundaries. `GROUP_JOIN`-triggered stale-park
+                clearing (the remediation doc's adjacent suggestion) was deliberately **not** built -
+                out of scope for this finding, per the user's one-issue-per-prompt cadence; flagged
+                as a possible separate follow-up if wanted.
+**Tests**       6 new/changed in `kafka.client.test.ts`. The mock consumer gained a real, minimal
+                event-emitter shape (`events` + `on`, backed by a module-level listener map cleared
+                in `beforeEach`) rather than the previous plain jest.fn() stand-in, since
+                `kafka.client.ts` now genuinely registers and later invokes these listeners. Two
+                existing tests ("reports connected once...", "reports disconnected after
+                disconnecting") were rewritten to emit the real `CONNECT`/`DISCONNECT` events rather
+                than asserting on `connect()`/`disconnect()` alone - the old assertions no longer
+                held once the flag stopped being set at those call sites. Four new: `isConnected()`
+                stays `false` immediately after `connect()` resolves, only flipping once `CONNECT` is
+                actually emitted; a broker-initiated `DISCONNECT` mid-session flips `isConnected()`
+                to `false` with neither `connect()` nor `disconnect()` called again; `CRASH` flips it
+                `false` and logs `payload.error` distinctly from a clean disconnect; listeners are
+                registered exactly once, at construction, not once per `connect()` call. Full suite:
+                26/26 suites, 440/440 tests (up from 437), 100% statements/functions/lines, 97.89%
+                branches (up from 97.88%, above the 96% gate), 0 lint errors (216 warnings,
+                unchanged), Prettier clean, `kafka.client.ts` itself 100% covered.
+**Verified**    `live — local stack (Redpanda, local PPA + Postgres + ValKey)`. Booted MLA;
+                `/health/ready` showed `kafka: "UP"` as before. Fed the corridor to confirm no
+                regression: 8/8 delivered (cumulative counters incremented cleanly). **Then
+                `docker stop cch-mla-redpanda` while MLA stayed running and connected** - the real
+                bug this closes: `/health/ready` flipped to `{"status":"DOWN","kafka":"DOWN",...}`
+                within the same poll interval and **stayed `DOWN` across six consecutive 5-second
+                checks** for the full outage, with the log showing repeated genuine `"Kafka consumer
+                crashed"` lines from the new `CRASH` handler as kafkajs's own reconnect attempts
+                failed. Pre-fix, this same outage would have left `/health/ready` reporting
+                `kafka: "UP"` throughout, per the finding's own claim - confirmed by inspection of the
+                old code (no listener existed to flip it). **Restored the broker** -
+                `/health/ready` returned to `UP` within seconds with no MLA restart, on kafkajs's own
+                auto-reconnect firing `CONNECT`. Fed the corridor again post-recovery: 8 more
+                delivered cleanly (cumulative counters incremented correctly, no loss, no
+                duplication). `SIGTERM`'d afterward - exited cleanly, exit code 0, confirming F-11's
+                shutdown fix and F-12's connection tracking do not interact badly with each other.
+                Confirmed no stray MLA processes and the stack healthy afterward.
+**Diverged**    Nothing from the remediation doc's core proposal. The doc's adjacent
+                `GROUP_JOIN`-clears-stale-parks suggestion was read and understood but not built (see
+                **Built**, above) - a deliberate scope decision for this prompt, not an oversight.
+**Left open**   Nothing specific to F-12. Whether `GROUP_JOIN`-triggered stale-park clearing is worth
+                building as its own follow-up is an open question for the user, not decided here.
+                `qa-review-findings.md`'s F-13 is next.
