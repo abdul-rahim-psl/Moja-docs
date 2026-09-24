@@ -3362,3 +3362,30 @@ what `ssh-keygen`/`ssh-copy-id` each do, the parallel to the CSR exchange in the
 **Left open**   Nothing specific to F-15. The AC-vs-N7 conflict itself is now resolved by the user's
                 ruling (AC wording unchanged, behaviour fixed) - not left open. `qa-review-findings.md`'s
                 F-16 is next.
+
+### F-16 — pre-implementation decision, not yet built   [2026-09-24]
+
+**Discussed**   Before starting F-16 (alert webhook fan-out is unbounded), the user asked whether
+                dropping a new alert once the in-flight cap is reached is actually the right
+                trade-off versus queuing it. **Decision: drop, not queue.** Reasoning discussed and
+                agreed: `ALERT_WEBHOOK_URL` is a secondary, best-effort notification path, never the
+                system of record for whether an alert fired - the metrics-based sink
+                (`mla_alerts_total{type,severity}`, always incremented unconditionally) is what a
+                real alerting rule (Alertmanager, PagerDuty, whatever CCH eventually wires up per
+                R-37) actually watches. So the real choice is "drop a webhook POST" vs. "queue a
+                webhook POST," not "lose the alert" vs. "keep it" - the alert itself is never lost.
+                Queuing was rejected: unbounded memory growth during exactly the moment things are
+                already going wrong (a burst of failures); queued alerts arrive late and out of
+                order relative to when they happened; and queuing couples the pipeline's own health
+                to the webhook destination's health, the exact coupling this codebase's breakers and
+                health-probe split (F-05) have deliberately avoided everywhere else. Dropping keeps
+                that coupling severed. A drop must stay visible on its own - `mla_alerts_dropped_total
+                {type}` plus a rate-limited log line (once per type per minute, not once per drop, so
+                an operator is not flooded during the exact burst already causing trouble).
+**Still open**  Whether the cap applies uniformly to every alert type, or whether per-attempt alerts
+                that fire repeatedly during an outage (tokenization-failure, the remediation doc's
+                own example) should be coalesced separately from one-off per-record alerts
+                (breaker-trip, rejection) that each lose a distinct fact if dropped. Not decided -
+                to be settled before or during F-16's build, not assumed either way.
+**Left open**   No code written yet - implementation starts in a fresh session. `git`: F-15 is
+                committed (`a38fe61`), tree clean, nothing pending.

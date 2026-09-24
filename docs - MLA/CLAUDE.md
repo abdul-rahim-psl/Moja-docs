@@ -47,6 +47,15 @@ We go one story at a time. A story is not started until the previous one is done
 
 **Update the checklist itself as you go, not only at the end.** After roughly every 1-2 checklist bullets' worth of work within a story, go back to both the current phase's checklist in `plan.md` (the numbered phase section, e.g. §6 for Phase 3) and its own `continue - before <phase>.md` copy, and mark which bullets now have code behind them. This is a distinct, smaller update from steps 5-7 above: it tracks *what has been written*, not what has been tested, live-verified, or is ready to call done. Never let a checked box imply more than that without saying so — annotate each one with its real state (e.g. "built, not yet tested/live-verified") rather than checking it the way a fully-closed story's checklist is checked. The full `plan.md` §16 entry and the epic documents still wait for the story to actually close (steps 5-7); this rule exists so a mid-story reader — including a fresh session — sees accurate in-progress state in the one place they'd naturally look, instead of a checklist that still reads "nothing built yet" partway through.
 
+## How a QA finding gets built
+
+The `bugs/qa-review-findings.md` workstream (F-01 onward) runs one finding at a time, the same discipline as a story but reported differently — a chat summary, not a `plan.md` §16 entry, closes each one. Before moving to the next finding:
+
+1. **Close out the finding just finished** with a short summary in the chat — not a written doc, a few sentences: the problem in short, then the solution in short. Include that it was live-verified, not just unit-tested.
+2. **Preview the next finding** in the same message — problem in short, a little context, and the planned fix in short — then wait for explicit go-ahead before writing any code.
+
+This is a standing cadence for every finding in this workstream, not a one-off request — apply it without being asked again each time. It is distinct from `plan.md` §16, which still gets the fuller, permanent record of what was built, tested, and left open; this summary is the short version for the person driving the session in real time.
+
 ## Epic and story documentation
 
 **Every piece of work under `EPICS/` produces the same two documents, at both levels: `executive-summary.md` and `file-register.md`.**
