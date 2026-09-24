@@ -12,12 +12,17 @@
 | --- | --- | --- | --- | --- |
 | Payer MSISDN | Quote request | `payer.partyIdInfo.partyIdentifier` | **Yes** | Plain JSON body, no ILP packet on this message |
 | Payee MSISDN | Quote request | `payee.partyIdInfo.partyIdentifier` | **Yes** | |
-| Payer legal name | Quote request | `personalInfo.complexName` | **Yes** | |
+| Payer legal name | Quote request | `payer.personalInfo.complexName` | **Yes** | |
+| Payee legal name | Quote request | `payee.personalInfo.complexName` | **Yes** | |
+| Payer display name | Quote request | `payer.name` | **Yes** | A separate field from `personalInfo.complexName`; both identify the same person |
+| Payee display name | Quote request | `payee.name` | **Yes** | Where present |
+| Payer date of birth | Quote request | `payer.personalInfo.dateOfBirth` | **No** | Not independently identifying |
 | Payer MSISDN | FXQuote request/callback | equivalent `partyIdInfo` field | **Yes** | Where present |
 | Payee MSISDN | FXQuote request/callback | equivalent `partyIdInfo` field | **Yes** | Where present |
 | Payer MSISDN | Transfer prepare (decoded ILP packet) | inside the ILP packet | **No — exempt** | Cryptographically bound into `condition`; rewriting breaks the transfer |
 | Payee MSISDN | Transfer prepare (decoded ILP packet) | inside the ILP packet | **No — exempt** | Same reason |
 | Payer display name | Transfer prepare (decoded ILP packet) | inside the ILP packet | **No — exempt** | Same reason |
+| Payer/payee identity | Quote callback (`putQuotesByID`) `ilpPacket` | inside the ILP packet | **Not yet — separate follow-up** | Structurally the same as the Transfer exemption above, but unlike Transfer's, PPA never reads this packet's contents on this leg — no correctness dependency blocks tokenizing it. Requires decoding the packet first, which the two rows above do not; tracked separately rather than folded into this pass |
 | Transaction amount (all stages) | Quote, FXQuote, Transfer, FXTransfer | e.g. `amount`, `IntrBkSttlmAmt` | **No** | Must stay clear for Tazama's threshold/velocity rules |
 
 ---

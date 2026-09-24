@@ -218,15 +218,20 @@ Tokenization is **part of MLA's own processing pipeline, not a separately deploy
 | --- | --- | --- | --- | --- |
 | Payer MSISDN | Quote request | `payer.partyIdInfo.partyIdentifier` | **Yes** | Plain JSON body, no ILP packet |
 | Payee MSISDN | Quote request | `payee.partyIdInfo.partyIdentifier` | **Yes** | |
-| Payer legal name | Quote request | `personalInfo.complexName` | **Yes** | |
+| Payer legal name | Quote request | `payer.personalInfo.complexName` | **Yes** | |
+| Payee legal name | Quote request | `payee.personalInfo.complexName` | **Yes** | |
+| Payer display name | Quote request | `payer.name` | **Yes** | Separate from `personalInfo.complexName`; both identify the same person |
+| Payee display name | Quote request | `payee.name` | **Yes** | Where present |
+| Payer date of birth | Quote request | `payer.personalInfo.dateOfBirth` | **No** | Not independently identifying |
 | Payer MSISDN | FXQuote request/callback | equivalent `partyIdInfo` | **Yes** | Where present |
 | Payee MSISDN | FXQuote request/callback | equivalent `partyIdInfo` | **Yes** | Where present |
 | Payer MSISDN | Transfer prepare (decoded ILP) | inside the ILP packet | **No — exempt** | Cryptographically bound into `condition`; rewriting breaks the transfer |
 | Payee MSISDN | Transfer prepare (decoded ILP) | inside the ILP packet | **No — exempt** | Same |
 | Payer display name | Transfer prepare (decoded ILP) | inside the ILP packet | **No — exempt** | Same |
+| Payer/payee identity | Quote callback `ilpPacket` | inside the ILP packet | **Not yet — separate follow-up** | Same packet format as the Transfer exemption, but PPA never reads this packet's contents on the quote-callback leg — no correctness dependency blocks tokenizing it, only that it needs decoding first (tracked separately, see F-28 in `bugs/qa-sweep-2-findings.md`) |
 | Transaction amount (all stages) | Quote, FXQuote, Transfer, FXTransfer | `amount`, `IntrBkSttlmAmt`, … | **No** | Must stay clear for Tazama's threshold/velocity rules |
 
-The ILP-exempt fields reach PPA and TMS **in cleartext**. What protects them is PPA's own audit-log masking (US-AUD-01, §10.3's rules) — not this story.
+The ILP-exempt fields (Transfer prepare, and the quote-callback `ilpPacket` until its follow-up lands) reach PPA and TMS **in cleartext**. What protects them is PPA's own audit-log masking (US-AUD-01, §10.3's rules) — not this story.
 
 ### 4.2 Token construction (US-PII-02)
 
@@ -667,7 +672,7 @@ There is no separately-published event to deduplicate, so the component has no r
 
 - ~~**PII fail-mode** — if tokenization can't run, block the event or let it through unprotected?~~ **Resolved [2026-09-04]**: COMESA confirmed fail-closed, transient (fail the transaction and retry) — built, tested, and live-verified the same day. See `plan.md` §16's US-PII-01 entry.
 - **PII secret rotation strategy** — version old and new tokens, or treat rotation as an event requiring in-flight correlation to drain first?
-- **Payee legal name is not tokenized** — `payee.personalInfo.complexName` sits raw in the Event Envelope for Quote request. The Fields-to-Tokenize table (§4.1, `cch-pii-user-stories.md`) lists only "Payer legal name" for that message, with no corresponding payee row or stated rationale (unlike the three ILP-packet exemptions, which all cite the cryptographic-binding constraint). Confirmed live on both the local stack and the real remote PPA [2026-09-21], now persisted in a real (if test) deployed instance's own DLQ. Flagged to CCH/the story author — whether the table should gain a "Payee legal name" row is not engineering's to decide. See `plan.md` §16's last entry.
+- ~~**Payee legal name is not tokenized**~~ **Resolved [2026-09-24]:** the user, as story author, confirmed `payer.name`, `payee.name` and `payee.personalInfo.complexName` should be added to the tokenize table (`payer.personalInfo.dateOfBirth` explicitly excluded — not independently identifying). Built, tested, and live-verified the same day against the real local PPA. See `plan.md` §16's F-28 entry.
 - **What "protected" must legally mean** — reversible-by-authorized-lookup, or merely irreversible-without-the-secret? **CCH Legal.**
 - **Named ownership of the tokenization secret** and its rotation schedule — unassigned.
 - ~~**How MLA sources DFSP public keys**~~ **Dissolved, not resolved [2026-09-23]:** MLA no longer validates signatures, so it needs no DFSP public keys (US-MLA-05's removal is confirmed by all parties). Original item — synced local store vs. live lookup service, and how a key-source outage is distinguished from a genuine signature failure. **[2026-09-09 meeting, `docs/meetings and emails/9-sept.md`]:** Sam (Mojaloop Foundation) confirmed Mojaloop Connection Manager (MCM) manages DFSP key distribution automatically during onboarding — **MLA should interface with MCM rather than maintain its own key store**; an onboarding video is pending from Sam. The key-source-outage classification itself is already built (Phase 3's distinct `key-source-unavailable` outcome) and is unaffected by which source eventually supplies the keys.
