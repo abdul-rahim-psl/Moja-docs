@@ -3276,3 +3276,89 @@ what `ssh-keygen`/`ssh-copy-id` each do, the parallel to the CSR exchange in the
                 rotation mechanism (US-SEC-01), not on anything this session could resolve. The
                 expiry metric (`mla_client_cert_expiry_seconds`) is a small, independent follow-up,
                 not picked up here. `qa-review-findings.md`'s F-15 is next.
+
+### F-15 — A PPA 4xx logs the full envelope, including cleartext PII on transfer bodies   [2026-09-24]
+
+**Built**       On `paysys-remaining-bugs-f11-onwards`. Correctness baseline re-confirmed before
+                starting: 26/26 suites, 456/456 tests, 100% statements, 97.93% branches, clean
+                build, `git status` clean (F-14 already committed as `1230af0` by the user).
+                **The decision the finding itself flags as not engineering's** - US-MLA-07's own AC
+                text ("log the full envelope as an error") conflicting with N7 ("no raw PII in any
+                log") - was put to the user directly. **User's ruling: the AC wording stays
+                unchanged; fix the logging behaviour.** The remediation doc's own proposal included
+                a `LOG_REJECTED_ENVELOPE_MODE=masked|full` config toggle so CCH could later flip
+                back to full logging; also put to the user and **declined** - masked logging is now
+                the fixed, non-configurable behaviour, no new config surface added. A new
+                `maskEnvelopeForLog(envelope): EventEnvelope` in `ingestion-outcome-logging.service.ts`
+                returns a shallow copy of the envelope with: `body.ilpPacket` replaced with
+                `'<redacted ilpPacket>'` (the ILP packet is exempt from tokenization by design -
+                cryptographically bound into the transfer - so it reaches this function in
+                cleartext and is masked here instead); `payer`/`payee`'s `personalInfo` replaced
+                with `'<redacted personalInfo>'` whole (covers the legal name and, per
+                `core-knowledge.md` §4.1's own table, the date of birth - neither of which the
+                tokenization table covers even on an already-"tokenized" QUOTE); `partyIdInfo.
+                partyIdentifier` replaced with `'<redacted partyIdentifier>'` **unless** it already
+                carries the `tkn_` prefix (an already-tokenized value is safe to log verbatim, and
+                distinguishing the two means a TRANSFER/FXTRANSFER body - never tokenized at all -
+                and a QUOTE/FXQUOTE body - tokenized before this ever runs - both come out correctly
+                masked without the function needing to know which event type it was given). Every
+                other body field - amounts, currencies, fees, ids, headers, `error` - passes through
+                untouched, since that is what an operator needs to diagnose a 4xx.
+                `logPpaPermanentRejection` now logs `maskEnvelopeForLog(envelope)` instead of the raw
+                envelope; the original object is never mutated, so `deliver()`'s own already-sent
+                real body is unaffected - this only touches what reaches the log line.
+**Tests**       20 new: a new, dedicated `ingestion-outcome-logging.service.test.ts` (the module had
+                no test file of its own before this - previously exercised only indirectly via the
+                consumer tests), 11 tests covering `maskEnvelopeForLog` directly (a raw identifier
+                redacted, an already-tokenized one left alone; `personalInfo` redacted whole,
+                including a name and DOB that must not survive into the masked JSON; the ILP packet
+                redacted; every non-PII field untouched; the original envelope proven unmutated; a
+                body with no payer/payee/ilpPacket at all passes through as a no-op; a
+                payer/payee/partyIdInfo present but not an object - a malformed record - passes
+                through rather than throwing) and 2 covering `logPpaPermanentRejection`'s own
+                integration of it (the logged line excludes the raw identifier and includes the
+                masked marker; the rejection metric and alert are unaffected, the alert still
+                carrying no part of the body). 1 existing test in `ingestion-consumer.service.test.ts`
+                (the real end-to-end 4xx path, through the genuine pipeline) strengthened rather
+                than just kept passing: it now captures the real envelope actually handed to
+                `ppaClient.deliver`, and asserts that if that envelope carries `personalInfo` or an
+                un-tokenized `partyIdentifier`, the corresponding masked marker appears in the log
+                line and the raw value does not. Full suite: 27/27 suites (up from 26, the new test
+                file), 467/467 tests (up from 456), 100% statements/functions/lines, 98.02% branches
+                (up from 97.93%, above the 96% gate), 0 lint errors (216 warnings, unchanged),
+                Prettier clean, `ingestion-outcome-logging.service.ts` itself 100% across every
+                metric including branches.
+**Verified**    `live — local stack (Redpanda, local PPA + Postgres + ValKey)` for the regression,
+                plus a direct run of the real compiled build artifact for the fix itself. **Regression**:
+                booted MLA against the real, unmodified `.env`, fed the standard corridor - 8/8
+                forwarded, 8/8 PPA success, 0 rejections, identical to every prior baseline in this
+                workstream. Clean `SIGTERM` shutdown, exit code 0. **The fix, against the compiled
+                `build/services/ingestion-outcome-logging.service.js`, not just the TS source**: ran
+                `maskEnvelopeForLog` directly against a realistically-shaped QUOTE envelope carrying
+                a real-looking MSISDN, legal name, and date of birth - the masked output contained
+                none of the three cleartext values, while the (non-PII) amount field remained
+                visible, and the original object handed in was confirmed unmutated afterward. Ran
+                `logPpaPermanentRejection` directly against a realistically-shaped TRANSFER envelope
+                carrying a real-looking ILP packet string and a real transfer id - the exact log
+                line that would be written for a genuine 4xx was printed and inspected: the ILP
+                packet value did not appear anywhere in it, while the transfer id (needed for
+                diagnosis) did. **Not separately reproduced against a genuine live PPA 400 response**:
+                forcing a real permanent rejection through the whole real pipeline against the real
+                local PPA was judged lower-value than directly exercising the compiled masking logic
+                against realistic data, since the masking function itself is pure and its correctness
+                does not depend on how the 4xx was actually produced - the strengthened integration
+                test in `ingestion-consumer.service.test.ts` already proves the wiring through the
+                real envelope-building/tokenization pipeline, with only the final HTTP outcome
+                mocked. No stray MLA processes remained afterward; stack confirmed healthy.
+**Diverged**    From the remediation doc's own proposal: no `LOG_REJECTED_ENVELOPE_MODE` config
+                toggle was built - the user declined it and made masked logging the fixed behaviour
+                instead of a reversible default. Everything else in the interim it proposed (the
+                exact set of masked fields, the token-prefix check, leaving everything else
+                verbatim) was built as specified. The doc's own suggestion to also log
+                `sha256(JSON.stringify(envelope))` alongside the masked line, so an operator could
+                match it byte-for-byte to PPA's stored write-ahead record, was **not** built - not
+                requested, and PPA's own write-ahead record is keyed and retrievable by
+                `correlationId`/`id` already logged, which was judged sufficient.
+**Left open**   Nothing specific to F-15. The AC-vs-N7 conflict itself is now resolved by the user's
+                ruling (AC wording unchanged, behaviour fixed) - not left open. `qa-review-findings.md`'s
+                F-16 is next.
