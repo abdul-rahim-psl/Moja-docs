@@ -20,13 +20,13 @@ Each headline is labelled against the five source documents in [`user stories/`]
 - **Context:** The startup `catch` just logs and returns; liveness is hardcoded `UP` regardless, so Kubernetes never restarts the pod. Verified live: broker down then recovered — MLA stayed dead.
 - **Solution:** Exit non-zero on startup failure and on a `CRASH` with `restart: false`, so Kubernetes' own restart becomes the recovery path (F-09 precedent). Set `connected` only once `run()` succeeds, not on `CONNECT`.
 
-### F-25 — High — PII secret is read once; the PII reprobe path can never heal; a pod without its secret still takes partitions — US-PII-02
+### F-25 — High — PII secret is read once; the PII reprobe path can never heal; a pod without its secret still takes partitions — US-PII-02 — **DONE [2026-09-24]**
 
 - **Problem:** If the PII secret is unavailable at boot, no amount of retrying in-process can ever fix it, since the secret is loaded exactly once. Meanwhile a not-Ready pod still joins the consumer group and freezes partitions.
 - **Context:** The retry/park/reprobe machinery for this was built assuming secret rotation would eventually need a reload; rotation was later ruled out entirely, so the reprobe loop is now structurally dead weight.
 - **Solution:** Treat an unavailable/invalid PII secret as fatal at boot — refuse to start. Needs a quick check with the user that this satisfies COMESA's "fail the transaction and retry" gate answer before building.
 
-### F-26 — High — Secret content is never validated: empty file becomes an unkeyed hash; trailing newline changes every token — US-PII-02
+### F-26 — High — Secret content is never validated: empty file becomes an unkeyed hash; trailing newline changes every token — US-PII-02 — **DONE [2026-09-24]**
 
 - **Problem:** Any readable file is accepted as the PII secret as-is. An empty file produces a public, guessable hash; a stray trailing newline silently produces different tokens than the same secret without one.
 - **Context:** Verified live — empty secret gave a token an attacker could recompute; the same secret ± newline gave different tokens for the same input.
@@ -38,7 +38,7 @@ Each headline is labelled against the five source documents in [`user stories/`]
 - **Context:** No config option exists for this today, and it appears in no open-questions list anywhere in the docs.
 - **Solution:** **CCH's decision**, not engineering's. Meanwhile, add optional TLS/SASL config (off unless explicitly set, validated at boot) so the eventual answer is a config change, not a code change.
 
-### F-28 — High — Party PII outside the tokenize table reaches PPA/TMS in cleartext on QUOTE events — US-PII-01
+### F-28 — High — Party PII outside the tokenize table reaches PPA/TMS in cleartext on QUOTE events — US-PII-01 — **PARTIALLY DONE [2026-09-24]** (payer.name/payee.name/payee.complexName fixed; quote-callback ilpPacket deferred as F-28b)
 
 - **Problem:** Several real fields — `payer.name`, `payee.name`, `dateOfBirth`, `complexName`, and the quote callback's `ilpPacket` — aren't in the spec's tokenize table, so they reach PPA in cleartext even though the design intent is "PPA never sees raw PII".
 - **Context:** The code correctly implements the spec table as written; the table itself just doesn't cover everything the real messages carry. Verified live against captured records.
@@ -68,7 +68,7 @@ Each headline is labelled against the five source documents in [`user stories/`]
 - **Context:** Staleness is measured from tick *start*, not accounting for attempt duration; `retrigger` doesn't cancel the pending timer it's racing against; not reachable with today's defaults, but reachable within documented config bounds.
 - **Solution:** Measure staleness from tick end, have `retrigger` clear the pending timer before firing, and add a generation number per loop (shared mechanism with F-29) plus a boot-time check that timeout/interval bounds can't combine to trigger this.
 
-### F-33 — Medium — `complexName` tokens depend on JSON key order — US-PII-01, US-PII-02
+### F-33 — Medium — `complexName` tokens depend on JSON key order — US-PII-01, US-PII-02 — **CLOSED, NOT BUILT [2026-09-25]** (confirmed with user: no DFSP in scope varies field order, so the trigger doesn't occur)
 
 - **Problem:** The same person's name can tokenize to two different values depending on which order a DFSP happens to serialize the name fields in — breaking the "same input, same token" guarantee.
 - **Context:** Canonicalization is just `JSON.stringify`, which preserves incoming key order rather than normalizing it. Verified live: two key orders, two different tokens for the same name.

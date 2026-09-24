@@ -397,9 +397,9 @@ Per `CLAUDE.md` ("External decisions — build anyway, but never bury them"). Ea
 | Finding | Decision | Belongs to | Blocks | Recommended default meanwhile |
 | --- | --- | --- | --- | --- |
 | F-27 | Does the DRPP Kafka cluster require TLS and/or SASL for MLA's consumer, and with what credentials? | CCH infrastructure / techops (via George) | **Go-live**, and possibly MLA's first connection in CCH's cluster | Build optional TLS/SASL config, off unless configured, validated at boot |
-| F-28 | Tokenize `payer.name`, `payee.name`, `dateOfBirth`, `payee.personalInfo.complexName`? Does the ILP exemption extend to the quote callback's `ilpPacket`? | CCH / the PII story author | Closure of US-PII-01's "downstream never sees raw PII" intent | Unchanged code (it matches the current table). Raise as one question with the pending `complexName` item |
+| ~~F-28~~ | ~~Tokenize `payer.name`, `payee.name`, `dateOfBirth`, `payee.personalInfo.complexName`?~~ **Resolved [2026-09-24]:** the user, as story author, decided yes to `payer.name`/`payee.name`/`payee.personalInfo.complexName`, no to `dateOfBirth` ("not independently identifying"). Built and live-verified; see `plan.md` §16. The quote-callback `ilpPacket` sub-question remains open, tracked as F-28b, not blocked on a decision — it's a build-effort question (decode/tokenize/re-encode), not a policy one. | — | — | — |
 | F-33 (second half) | Should MSISDNs be normalised before hashing? | CCH / story author | Token determinism across DFSPs | No normalisation (current behaviour) |
-| F-25 | Is "refuse to start without a valid secret" an acceptable realization of COMESA's gate item #1 ("fail the transaction and retry")? | The user, and then COMESA if the user considers it a change | Only the choice of F-25's fix | Fail fast at boot. Still fail-closed, and nothing is dropped |
+| ~~F-25~~ | ~~Is "refuse to start without a valid secret" an acceptable realization of COMESA's gate item #1?~~ **Resolved [2026-09-24]:** yes, per the user. Built and live-verified; see `plan.md` §16. | — | — | — |
 | F-23 | Will the real PPA, or the ingress in front of it, ever expose an unauthenticated health endpoint? | The PPA engineer / CCH | Nothing. F-23's fix works either way | Present the client cert on the probe |
 
 ---
@@ -410,14 +410,14 @@ Per `CLAUDE.md` ("External decisions — build anyway, but never bury them"). Ea
 | --- | --- |
 | No test runs `probeReady` against a listener that requires a client certificate. The only probe tests use a plain or cert-less server. | F-23 |
 | No test covers a `connect`, `subscribe` or `run` failure followed by the broker becoming available, or a `CRASH` with `restart: false`. | F-24 |
-| No test builds the service with an unreadable secret and asserts the process refuses to start. The existing tests assert only readiness `DOWN`. | F-25 |
-| No test loads an empty, short or whitespace-padded secret file. | F-26 |
-| No test tokenizes a `postQuotes` body carrying `payer.name` or `dateOfBirth`, or a quote callback's `ilpPacket`. | F-28 |
+| ~~No test builds the service with an unreadable secret and asserts the process refuses to start.~~ **Closed [2026-09-24]** — `pii-secret.client.test.ts` now asserts the constructor throws. | F-25 |
+| ~~No test loads an empty, short or whitespace-padded secret file.~~ **Closed [2026-09-24]** — covered in `pii-secret.client.test.ts`'s content-validation block. | F-26 |
+| ~~No test tokenizes a `postQuotes` body carrying `payer.name`~~ **Closed [2026-09-24]** for `payer.name`/`payee.name`/`payee.personalInfo.complexName` — see `tokenization.service.test.ts`. `dateOfBirth` is out of scope by decision (not tokenized). A quote-callback `ilpPacket` test remains open, tracked under F-28b. | F-28 |
 | No test simulates a partition revoked while it is parked. | F-29 |
 | No test feeds a record whose `content.headers` is absent, and no test asserts the top-level `catch` increments anything. | F-30 |
 | No test asserts `allowAutoTopicCreation: false`, or checks the lag value for a group with no committed offset. | F-31 |
 | No test fires `retrigger` while a timer is pending and asserts a single chain survives. | F-32 |
-| No test tokenizes the same `complexName` with two key orders. | F-33 |
+| No test tokenizes the same `complexName` with two key orders. **Not being added** — F-33 was closed without a code change [2026-09-25]; this gap is moot until the finding is revisited. | F-33 |
 | No test makes `advance` throw on the PII recovery path and asserts `deliver` is not called again. | F-34 |
 | No test combines `PPA_MTLS_DISABLED` with an `https://` URL. | F-35 |
 | No test resets a pooled keep-alive socket and checks the classification, and no plain-HTTP transport error is tested. | F-36 |
@@ -430,15 +430,15 @@ Per `CLAUDE.md` ("External decisions — build anyway, but never bury them"). Ea
 | --- | --- | --- | --- |
 | F-23 | Critical | Health probe sends no client cert, and real PPA serves health behind mTLS, so a tripped partition never resumes | Parked [2026-09-24] — pending upstream PPA change to health-endpoint mTLS; see `plan.md` §16 |
 | F-24 | High | Kafka connect/subscribe/run failure at startup is never retried; liveness always UP | Open — verified-live |
-| F-25 | High | PII secret read once, so the PII reprobe can never heal, and a pod without its secret still takes partitions | Open — decision on fix shape (see Decisions) |
-| F-26 | High | Empty secret accepted (unkeyed hash); trailing newline silently changes every token | Open — verified-live |
+| F-25 | High | PII secret read once, so the PII reprobe can never heal, and a pod without its secret still takes partitions | **Fixed and live-verified** [2026-09-24] — see `plan.md` §16 |
+| F-26 | High | Empty secret accepted (unkeyed hash); trailing newline silently changes every token | **Fixed and live-verified** [2026-09-24] — see `plan.md` §16 |
 | F-27 | High | Kafka connection has no TLS/SASL support; never asked of CCH | Open — **CCH decision** |
-| F-28 | High | `payer.name`, `dateOfBirth`, quote-callback `ilpPacket` and others reach PPA in cleartext | Open — **CCH / story-author decision** |
+| F-28 | High | `payer.name`, `dateOfBirth`, quote-callback `ilpPacket` and others reach PPA in cleartext | **Partially fixed** [2026-09-24] — `payer.name`/`payee.name`/`payee.personalInfo.complexName` fixed and live-verified per the user's decision as story author (`dateOfBirth` excluded); quote-callback `ilpPacket` deferred as its own follow-up (F-28b). See `plan.md` §16 |
 | F-29 | Medium | No rebalance handling: stale reprobe loops, duplicate delivery, backward commits, stale metrics | Open |
 | F-30 | Medium | Top-level `catch` drops records unmetered; `content.headers` not validated | Open — verified-live |
 | F-31 | Medium | Typo'd topic is auto-created and reported healthy (lag 0, ready UP) | Open — verified-live |
 | F-32 | Medium | Watchdog `retrigger` leaves the pending timer, which can create two concurrent reprobe loops | Open |
-| F-33 | Medium | `complexName` token depends on JSON key order | Open — verified-live |
+| F-33 | Medium | `complexName` token depends on JSON key order | **Closed, not built** [2026-09-25] — user confirmed this deployment's DFSPs always emit a fixed field order, so the real-world trigger doesn't occur; see `plan.md` §16 |
 | F-34 | Medium | `plan.md` §16's F-17 entry says the recovery path retries only the commit; it re-delivers | Open — documentation |
 | F-35 | Medium | URL scheme not cross-checked against `PPA_MTLS_DISABLED`; one mismatch reproduces F-23 | Open — verified-live |
 | F-36 | Medium | Every post-connect transport error labelled `tls-handshake-failure`, even on plain HTTP | Open |

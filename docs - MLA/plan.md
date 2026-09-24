@@ -3501,3 +3501,140 @@ real PPA commit is visible. No test or code was written for F-23 in this session
                 different schemes. F-24 was proposed as the next finding to pick up in the
                 meantime, being High severity and fully self-contained with no external dependency;
                 not yet started.
+
+### F-25 — built, tested, live-verified   [2026-09-24]
+
+**The finding, precisely.** The PII secret was read once at boot, and an unavailable or unreadable
+secret was silently caught into an `unavailable` result rather than thrown - `build()` completed
+normally, Kafka connected and the pod joined the consumer group and took partitions regardless. The
+only runtime path to `pii-secret-unavailable` was unavailable-at-boot, and the PII retry/park/reprobe
+machinery built to recover from it could never succeed, since nothing about that state changes without
+a restart nothing prompts. A rolling update made this worse: a new pod whose secret failed to load
+never became Ready, so the old (healthy) and new (broken) pods both ran, and the rebalance handed the
+new pod roughly half the partitions, which it then froze permanently.
+
+**Fix, built.** `FilePiiSecretClient`'s constructor now throws on an unreadable secret instead of
+swallowing the error, matching `engineering-rules.md` §6.1's Fatal classification ("secret missing at
+startup" is the row's own stated example). Because the constructor is called directly and unguarded
+inside `index.ts`'s `build()`, the throw propagates straight into `bootstrap()`'s existing
+config-validation fatal-exit path with zero new code in `index.ts` - the process now exits non-zero
+before the HTTP server binds or Kafka ever connects, so a pod with a missing/unreadable secret never
+joins the consumer group at all.
+
+**Verified live.** With the real harness secret present, MLA boots clean and a fed corridor gives
+metrics identical to the pre-fix baseline (8 forwarded, 0 failures, same skip counts). With the secret
+renamed away, and separately with an 8-byte truncated secret, MLA now exits 1 immediately, logging the
+exact reason plus a "refusing to start" line, confirmed from the log's own stack trace to die before
+`connectKafka`/`server.listen` ever run. `scenario:all` run both before and after the fix: the same 4
+pre-existing, unrelated PPA-response-scenario failures (`ppa-503`, `ppa-4xx`, `ppa-timeout`,
+`ppa-flaky`) appear identically on both, confirming no regression. Full gate (unit suite, lint, both
+tsc configs, all 7 golden ingestion files including the 500-record capture) green before and after,
+zero diff.
+
+**Left open**   F-26 (secret content validation - length/format) and Q-03 (deleting the now-dead PII
+                transient-retry machinery this fix makes unreachable) were deliberately not folded in,
+                per the user's explicit instruction to keep scope to F-25 alone.
+
+### F-26 — built, tested, live-verified   [2026-09-24]
+
+**The finding, precisely.** Any readable file was accepted as the PII secret exactly as read, with no
+length or content validation. An empty file loaded as `available` with a 0-byte HMAC key - an unkeyed
+HMAC is a fixed, public function, so every token from it was recomputable by anyone with an MSISDN
+list. Separately, a secret written with a trailing newline (an `echo` or YAML block scalar's usual
+artefact) produced entirely different tokens than the same secret without one, silently breaking the
+determinism guarantee.
+
+**Fix, built.** `FilePiiSecretClient` now trims leading/trailing whitespace at the byte level (never a
+UTF-8 decode/re-encode round trip, so a genuinely random binary secret can never be corrupted by the
+trim), then rejects anything under 32 bytes post-trim - including empty or whitespace-only files - as
+fatal at boot, through the same path F-25 wired up. A short, non-reversible SHA-256 fingerprint of the
+loaded key is logged at `debug` level on success, so two environments' secrets can be confirmed to
+match or differ without exposing either. The secret's format (raw bytes, not base64) is now stated
+explicitly in `deploy/kubernetes/README.md`'s new "PII Tokenization Secret" section, resolved by
+reading the actual mount mechanism (`kubectl create secret generic --from-file`, a plain volume mount)
+rather than asked as an open question - base64 would add an unnecessary decode step for no benefit
+here.
+
+**Verified live.** The real harness secret (32 bytes, no boundary whitespace) passes the new checks
+unchanged and gives an identical live corridor result to every prior baseline. An empty secret and a
+truncated 8-byte secret both now fail fast with the specific byte-count logged. Full gate green before
+and after (27/27 suites, 490/492 - net +7 new tests - all green, 0 lint errors, both tsc configs clean,
+all 7 goldens unchanged). A latent flaky-test pattern in this story's own new tests (`randomBytes(32)`
+occasionally landing a whitespace byte at a boundary and tripping the trim) was found and fixed with
+pinned non-whitespace boundary bytes, confirmed stable across 5 repeated runs before closing.
+
+**Left open**   Nothing scoped to F-26 remains open.
+
+### F-28 — partially built: field-path rows done and live-verified; the quote-callback `ilpPacket` case deferred as its own follow-up (F-28b)   [2026-09-24]
+
+**The finding, precisely.** `payer.name`, `payee.name`, and `payee.personalInfo.complexName` on QUOTE
+requests reached PPA and TMS in cleartext, outside the Fields-to-Tokenize table, even though the
+design intent (US-PII-01) is that PPA and everything downstream never see raw PII. The quote
+callback's `ilpPacket` (`putQuotesByID`, verified against real captures to be a separate,
+top-level field distinct from the ISO-shaped `payload`'s `VrfctnOfTerms.IlpV4PrepPacket`) also carries
+payer/payee identity in a form no code anywhere in this repo decodes.
+
+**Decision on scope, made by the user as story author** [2026-09-24]: tokenize `payer.name`,
+`payee.name`, and `payee.personalInfo.complexName`; explicitly exclude `dateOfBirth` ("you cannot
+identify a person via date of birth"). This is the external decision `qa-sweep-2-findings.md` flagged
+as CCH/story-author's to make, not engineering's - recorded here as made, not silently resolved.
+
+**Fix, built (F-28a).** Three rows added to `TOKENIZE_PATHS_BY_EVENT_TYPE`'s QUOTE list in
+`tokenization.service.ts` - a pure table addition, the same "row, not a branch" shape as every
+existing entry, zero logic changes. `cch-pii-user-stories.md`'s Fields-to-Tokenize table and
+`core-knowledge.md` §4.1/§13.3 were corrected in the same pass to match, and §13.3's "payee legal name
+not tokenized" open item is now marked resolved, attributed to the user's decision above.
+
+**Verified live.** Unit tests directly against real capture data confirm the three fields tokenize
+correctly and nothing else moves (amount, quoteId, transactionId, the quote-callback leg, and the
+TRANSFER/FXTRANSFER ILP exemption all unchanged). A full 500-record capture replay, diffed field-by-
+field before vs. after the fix: exactly 10 of 116 forwarded envelopes changed, all `QUOTE`/`request`,
+and the diff is confined to exactly `payer.name` and `payee.personalInfo.complexName` (`payee.name`
+never appears as a changed path in this particular capture, since no record in it populates that
+field - the row is still correct and safe to have added, per the table's existing "where present"
+convention). Live corridor run against the real local PPA: fed a corridor, confirmed the usual 8
+forwarded / 0 failures, then queried PPA's own write-ahead Postgres store directly and confirmed
+`payer.name` and `payee.personalInfo.complexName` arrived `tkn_...`-prefixed, with `amount`/`quoteId`/
+MSISDN tokenization all still correct. Full gate green before and after (27/27 suites, 492/492 tests,
+0 lint errors, both tsc configs clean, all 7 golden ingestion files unchanged - correctly, since that
+golden covers Phase 2 selection/classification only, never tokenization). `scenario:all` was
+intermittently stalling on this machine at its own MLA cold-start step, twice, for reasons unrelated
+to this change (nothing in a 3-line table addition touches startup code); two separate runs that did
+get far enough showed the same known-good pattern as every prior baseline - the same 9 non-PPA-fault
+scenarios passing, the same 4 pre-existing unrelated PPA-response failures. `two-mla-instances` wasn't
+freshly re-completed today specifically for this fix, but passed cleanly on the two closest full runs
+(F-25, F-26) and this fix touches nothing related to multi-instance/rebalance behaviour.
+
+**Left open**   F-28b - tokenizing identity inside the quote callback's `ilpPacket` - is a genuinely
+                different, larger piece of work: decode the ILP v4 packet (structurally proven
+                feasible; `cch-ppa`'s own `ilp.service.ts` already does exactly this decode, using the
+                `ilp-packet` npm library, for a different leg), tokenize the identity fields inside,
+                then re-encode back to a valid packet. Lower risk than TRANSFER's own ILP exemption,
+                because PPA never reads this packet's contents on the quote-callback leg (confirmed by
+                reading `cch-ppa/src/services/translation.service.ts`: `decodeIlpPacketData` is only
+                ever called from `buildPacs008`, the TRANSFER leg) - so there is no correctness
+                dependency to protect here, unlike TRANSFER's. Needs its own preview and test-first
+                build when picked up; not started.
+
+### F-33 — investigated, not built: confirmed with the user that the real-world trigger does not occur   [2026-09-25]
+
+**The finding, precisely.** `complexName` is hashed via `JSON.stringify` before tokenizing
+(`canonicalize` in `tokenization.service.ts`), which preserves the incoming JSON's own key order
+rather than normalizing it. Verified live: the same name, built with its fields in two different key
+orders, produced two different tokens - a real defect in the mechanism, confirmed to reproduce.
+
+**Decision: close, do not build** [2026-09-25, user]. The finding's premise is that different DFSP
+implementations might serialize `{firstName, middleName, lastName}` in different orders. The user
+confirmed this deployment's actual requirements fix the field order (`firstName` then `middleName`
+then `lastName`, always), so the key-order-dependent mismatch the finding describes has no real-world
+trigger here - every DFSP integration in scope emits the same order. `PartyComplexName`'s own OpenAPI
+schema (`ml-core-test-harness/.../fspiop_2.0/api_spec.yaml`) defines it as a plain `object` with no
+order constraint of its own - object member order is never a JSON Schema/OpenAPI property - so this is
+a requirements-level guarantee specific to this deployment's DFSP integrations, not a spec-level one.
+Recorded as closed by decision, not by a code fix - the risk itself (`JSON.stringify`'s key-order
+dependence) still exists in the code exactly as it did, it is simply confirmed unreachable given how
+this deployment's DFSPs actually build the field.
+
+**Left open**   Nothing further planned. If a DFSP integration outside today's confirmed set is ever
+                onboarded, this finding's original fix (sort object keys recursively before hashing)
+                is still the documented remedy in `qa-sweep-2-findings.md` and can be revisited then.
