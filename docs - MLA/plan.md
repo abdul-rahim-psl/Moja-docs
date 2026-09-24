@@ -3363,29 +3363,105 @@ what `ssh-keygen`/`ssh-copy-id` each do, the parallel to the CSR exchange in the
                 ruling (AC wording unchanged, behaviour fixed) - not left open. `qa-review-findings.md`'s
                 F-16 is next.
 
-### F-16 — pre-implementation decision, not yet built   [2026-09-24]
+### F-16 — Alert webhook fan-out unbounded - fixed and live-verified   [2026-09-24]
 
-**Discussed**   Before starting F-16 (alert webhook fan-out is unbounded), the user asked whether
-                dropping a new alert once the in-flight cap is reached is actually the right
-                trade-off versus queuing it. **Decision: drop, not queue.** Reasoning discussed and
-                agreed: `ALERT_WEBHOOK_URL` is a secondary, best-effort notification path, never the
-                system of record for whether an alert fired - the metrics-based sink
-                (`mla_alerts_total{type,severity}`, always incremented unconditionally) is what a
-                real alerting rule (Alertmanager, PagerDuty, whatever CCH eventually wires up per
-                R-37) actually watches. So the real choice is "drop a webhook POST" vs. "queue a
-                webhook POST," not "lose the alert" vs. "keep it" - the alert itself is never lost.
-                Queuing was rejected: unbounded memory growth during exactly the moment things are
-                already going wrong (a burst of failures); queued alerts arrive late and out of
-                order relative to when they happened; and queuing couples the pipeline's own health
-                to the webhook destination's health, the exact coupling this codebase's breakers and
-                health-probe split (F-05) have deliberately avoided everywhere else. Dropping keeps
-                that coupling severed. A drop must stay visible on its own - `mla_alerts_dropped_total
-                {type}` plus a rate-limited log line (once per type per minute, not once per drop, so
-                an operator is not flooded during the exact burst already causing trouble).
-**Still open**  Whether the cap applies uniformly to every alert type, or whether per-attempt alerts
-                that fire repeatedly during an outage (tokenization-failure, the remediation doc's
-                own example) should be coalesced separately from one-off per-record alerts
-                (breaker-trip, rejection) that each lose a distinct fact if dropped. Not decided -
-                to be settled before or during F-16's build, not assumed either way.
-**Left open**   No code written yet - implementation starts in a fresh session. `git`: F-15 is
-                committed (`a38fe61`), tree clean, nothing pending.
+**Discussed**   Before starting the build, the user asked whether dropping a new alert once the
+                in-flight cap is reached is actually the right trade-off versus queuing it.
+                **Decision: drop, not queue.** Reasoning discussed and agreed: `ALERT_WEBHOOK_URL` is
+                a secondary, best-effort notification path, never the system of record for whether an
+                alert fired - the metrics-based sink (`mla_alerts_total{type,severity}`, always
+                incremented unconditionally) is what a real alerting rule (Alertmanager, PagerDuty,
+                whatever CCH eventually wires up per R-37) actually watches. So the real choice is
+                "drop a webhook POST" vs. "queue a webhook POST," not "lose the alert" vs. "keep it" -
+                the alert itself is never lost. Queuing was rejected: unbounded memory growth during
+                exactly the moment things are already going wrong (a burst of failures); queued alerts
+                arrive late and out of order relative to when they happened; and queuing couples the
+                pipeline's own health to the webhook destination's health, the exact coupling this
+                codebase's breakers and health-probe split (F-05) have deliberately avoided everywhere
+                else. Dropping keeps that coupling severed. **A second decision, also put to the user
+                directly**: whether the cap applies uniformly to every alert type, or whether
+                per-attempt alerts that fire repeatedly during an outage (tokenization-failure) should
+                be coalesced separately from one-off per-record alerts (breaker-trip, rejection) that
+                each lose a distinct fact if dropped. **Chosen: coalesce per-attempt alerts
+                separately** - the remediation doc's own proposed shape.
+**Built**       `WebhookAlertClient` (`alert.client.ts`) gained an in-flight cap
+                (`ALERT_WEBHOOK_MAX_IN_FLIGHT`, new config, default 8): beyond it, a new alert is
+                dropped, not queued - `mla_alerts_dropped_total{type}` (new counter) increments and a
+                `warn` logs at most once per type per minute (not once per drop, so a burst that fills
+                the cap doesn't also flood the log it's reporting to). `mla_alerts_total` is
+                unaffected either way. Separately, only `tokenization-failure` (the sole alert type
+                that fires once per attempt, including every retry) is coalesced within a window
+                (`ALERT_WEBHOOK_COALESCE_MS`, new config, default 10s): the first occurrence sends
+                immediately, every further occurrence within the window increments a count instead of
+                calling `fetch`, and one summary POST (`"... x N in the last Ns"`) fires at window end
+                only if anything was actually folded. The other four alert types are one-off,
+                per-record facts and are never coalesced - each still sends immediately, subject only
+                to the shared in-flight cap.
+**Tests**       16 new (483/483 total, up from 467): the in-flight cap dropping once full and freeing
+                a slot once a request resolves, the drop log's once-per-type-per-minute rate limit,
+                the cap being shared across alert types (one type's burst can cause another type to
+                drop), the coalesce window sending the first occurrence immediately, folding
+                subsequent occurrences into one summary at window end, opening a fresh window once the
+                prior one flushes, not sending a summary when nothing arrived during the window, and
+                confirming non-coalesced types still send immediately even during another type's
+                window. `alert.client.ts` and `config.service.ts` both 100% including branches; full
+                suite 100% statements/functions/lines, 98.08% branches (above the 96% gate), 0 lint
+                errors, Prettier clean.
+**Verified**    `live - local stack (Redpanda, local PPA + Postgres + ValKey)`, against real
+                backpressure, not just mocked timers. **Regression**: standard 8-record corridor fed
+                with the new alert client wired in and a fast local webhook sink listening - 8/8
+                forwarded and accepted exactly as every prior baseline, `mla_alerts_dropped_total`
+                absent entirely (zero drops) under normal load with the default cap of 8. **The fix
+                itself**: forced a real `pii-secret-unavailable` condition (moved the PII secret file
+                away, restarted MLA so the outage was the process's actual boot-time state, not a
+                mock), pointed `ALERT_WEBHOOK_URL` at a real local HTTP sink deliberately delayed 8s
+                per response, set the in-flight cap to 2 and the coalesce window to 5s, then fed a
+                corridor. The sink's own captured requests showed exactly the designed shape: the
+                first `tokenization-failure` POST sent immediately, the next three folded into one
+                `"... x3 in the last 5s"` summary, and real drops recorded
+                (`mla_alerts_dropped_total`) on both `tokenization-failure` and a `retry-exhaustion`
+                alert once the slow sink saturated the cap - with the exact rate-limited drop-warning
+                line appearing in the real process log. Clean `SIGTERM` shutdown confirmed on every
+                boot in this session; PII secret and `.env` restored to their pre-session state
+                afterward.
+**Left open**   Nothing specific to F-16. `qa-review-findings.md`'s F-17 is next - investigated this
+                session and deliberately deferred rather than built; see the entry immediately below.
+
+### F-17 — investigated, deliberately deferred (not built)   [2026-09-24]
+
+**The finding, precisely.** `ingestion-consumer.service.ts` has two distinct places that call
+`kafka.advance()` after a successful PPA delivery, and only one of them already handles a commit
+failure correctly:
+
+- **The parked/reprobe recovery path** (`resolvePartition`, ~line 561) **already wraps `advance()` in
+  its own try/catch** and, on failure, schedules a commit-only retry timer directly - it does not
+  call `deliver()` again. This half of the finding is already correct, apparently as a side effect of
+  earlier work in this workstream, not something this session built.
+- **The first-attempt path** (`resolveOutcome`, ~line 201) does not. When a fresh record (not a
+  recovering park) gets PPA's HTTP 200 on the very first try, the code falls through to a bare
+  `await kafka.advance(...)` with no try/catch. If that throws, the exception is not caught here or
+  anywhere between this call and the top-level `catch` in the `eachMessage` handler (~line 132), which
+  only logs "Unhandled failure processing partition..." and swallows it - no retry of the commit
+  happens at all. Because `eachMessage` then returns normally, kafkajs advances to the next message on
+  that partition, and cumulative offset commits happen to cover the failed one *if* another message
+  arrives soon on the same partition - correct by accident, not by design. If nothing else arrives, the
+  offset stays uncommitted until the next consumer restart or rebalance, at which point that partition
+  resumes from the last committed offset, re-reads the same record, and re-delivers it to PPA a second
+  time - the actual duplicate-POST scenario, triggered by a restart/rebalance racing a commit failure,
+  not by anything routine.
+**The fix, not yet built.** Give the first-attempt path the same shape `resolvePartition` already
+has: wrap the line-201 `advance()` in try/catch, and on failure retry only the commit on a timer -
+never call `deliver()` again, since the record is already durably accepted by PPA and there is
+nothing left to retry there. Open design question if/when this is picked up: bounded retry (e.g. a
+`PPA_COMMIT_RETRY_MAX`, then alert/park) versus retrying indefinitely, since giving up on committing
+an already-delivered record is arguably never correct.
+**Decision: park, do not build now** [2026-09-24, user]. Explicit reasoning: PPA's own
+`{id}:{isoMessageType}` idempotency check already absorbs a duplicate POST of an envelope it has
+already durably accepted - so today's gap produces a harmless duplicate delivery in a narrow,
+uncommon window (a commit failure that also loses the race against the next message's own commit,
+compounded by a restart/rebalance before that happens), not data loss or a wrong outcome. This is a
+hygiene/efficiency fix (an avoidable duplicate PPA call, and an offset the broker leaves briefly
+uncommitted), not a correctness gap PPA doesn't already cover. Documented here in full so the reasoning
+and the exact fix are on record; not scheduled, not abandoned.
+**Left open**   No code written. Whichever finding the user picks up next in this workstream should
+                get its own preview per `CLAUDE.md`'s "How a QA finding gets built".
