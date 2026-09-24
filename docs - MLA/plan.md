@@ -3465,3 +3465,39 @@ uncommitted), not a correctness gap PPA doesn't already cover. Documented here i
 and the exact fix are on record; not scheduled, not abandoned.
 **Left open**   No code written. Whichever finding the user picks up next in this workstream should
                 get its own preview per `CLAUDE.md`'s "How a QA finding gets built".
+
+### F-23 — investigated, previewed, then parked pending an upstream PPA change   [2026-09-24]
+
+**The finding, precisely.** `qa-sweep-2-findings.md`'s only Critical: MLA's PPA health probe
+(`ppa.client.ts:76-79`, `healthAgent`) presents no client certificate, but the real `cch-ppa`
+(`cch-ppa/src/clients/fastify.ts:100-109`, confirmed by reading that source) serves
+`/health/live` and `/health/ready` on the same TLS listener as its business routes, with
+`requestCert: true, rejectUnauthorized: true`. Once a PPA circuit breaker trips, every reprobe
+health check fails the TLS handshake, so the breaker can never untrip and that partition never
+resumes delivery - even after PPA has fully recovered. Masked today because every environment
+tested so far runs `PPA_MTLS_DISABLED=true`. Full detail, verified-live reproduction and fix
+direction (present the same client cert the delivery agent already loads) are in
+`qa-sweep-2-findings.md`'s F-23 section; not repeated here.
+**Decision: park, do not build now** [2026-09-24, user]. The finding was previewed in chat per
+`CLAUDE.md`'s "How a QA finding gets built" cadence, and go-ahead had not yet been given when the
+PPA-side engineer stated he is removing mTLS from PPA's health endpoint specifically. If that
+lands, the mismatch this finding describes (MLA assuming an unauthenticated health path, the real
+PPA requiring a cert on every path including health) reverts to matching the original
+`core-knowledge.md` §6.2 assumption, and MLA's current code may need no fix at all - or a narrower
+one, depending on exactly how the PPA change is shaped (a separate plain listener vs. the same
+listener with `requestCert: false` for health routes only). Building MLA's side first, against the
+assumption the PPA change hasn't landed, risks a change that has to be re-done or reverted once the
+real PPA commit is visible. No test or code was written for F-23 in this session.
+**Left open**   Waiting on the user to point this workstream at the actual `cch-ppa` commit once
+                pushed. At that point: read the real listener/route config directly (not the
+                stated intention), and decide whether F-23 is moot, needs a narrower fix (e.g.
+                wiring `PPA_HEALTH_BASE_URL` correctly for a split listener), or whether presenting
+                the client cert unconditionally is still the safer default regardless - the
+                Decisions table in `qa-sweep-2-findings.md` already notes an mTLS-terminating
+                ingress gateway (`deployment/certificate-setup-proposal.md`) could require a cert
+                on every path even if PPA's own health route stops requiring one. Also worth
+                checking whether the PPA change reopens F-35 (URL scheme never cross-checked
+                against `PPA_MTLS_DISABLED`) in a new shape, if health and delivery end up on
+                different schemes. F-24 was proposed as the next finding to pick up in the
+                meantime, being High severity and fully self-contained with no external dependency;
+                not yet started.

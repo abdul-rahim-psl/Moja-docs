@@ -121,6 +121,13 @@ This sweep uses the same scale as [`qa-review-findings.md`](qa-review-findings.m
 
 ### F-23 — The PPA health probe can never succeed against the real PPA, so a tripped partition never resumes
 
+**Status [2026-09-24]: parked, not built.** Previewed in chat per `CLAUDE.md`'s QA-finding cadence;
+before go-ahead was given, the PPA-side engineer stated he is removing mTLS from PPA's health
+endpoint specifically. If that lands, the premise below (the real PPA requiring a client cert on
+its health routes) may no longer hold, and MLA's fix may be unnecessary or narrower than described.
+Parked pending sight of the actual `cch-ppa` commit - see `plan.md` §16's F-23 entry for the full
+reasoning and what to check once it lands. Do not build against this section until then.
+
 **Where.** [`ppa.client.ts:76-79, 145-173`](../../../cch-mla/src/clients/ppa.client.ts) (the `healthAgent`, built with `ca` only and no client cert, and `probeReady`), gated at [`ingestion-consumer.service.ts:610`](../../../cch-mla/src/services/ingestion-consumer.service.ts) (`const canAttemptDelivery = !tripped || (await probeReady())`). The default comes from [`config.service.ts:173`](../../../cch-mla/src/services/config.service.ts): `PPA_HEALTH_BASE_URL` falls back to `PPA_BASE_URL`. The CCH manifests ([`deploy/kubernetes/01-configmap.yaml`](../../../cch-mla/deploy/kubernetes/01-configmap.yaml), `02-env-configmap.yaml`) do not set `PPA_HEALTH_BASE_URL`.
 
 **What happens.** F-05's fix gated every reprobe of a tripped breaker on `probeReady()`: a real delivery is attempted only after a probe succeeds. That design assumed `core-knowledge.md` §6.2's statement that PPA's health endpoints are "unauthenticated, on their own ingress", which `tools/ppa-stub` implements with a plain control port and a separate mTLS business port. **The real PPA is built differently.** [`cch-ppa/src/router.ts:74-75`](../../../cch-ppa/src/router.ts) registers `/health/live` and `/health/ready` on the same Fastify instance as `/QUOTES` … `/FXTRANSFERS`. [`cch-ppa/src/clients/fastify.ts:100-109`](../../../cch-ppa/src/clients/fastify.ts) serves that instance over TLS with `requestCert: true, rejectUnauthorized: true`. By design, MLA's probe presents no client certificate. Every probe therefore fails the TLS handshake, the `catch` turns it into `false`, and the reprobe records another breaker failure.
@@ -421,7 +428,7 @@ Per `CLAUDE.md` ("External decisions — build anyway, but never bury them"). Ea
 
 | # | Severity | One line | Status |
 | --- | --- | --- | --- |
-| F-23 | Critical | Health probe sends no client cert, and real PPA serves health behind mTLS, so a tripped partition never resumes | Open — verified-live |
+| F-23 | Critical | Health probe sends no client cert, and real PPA serves health behind mTLS, so a tripped partition never resumes | Parked [2026-09-24] — pending upstream PPA change to health-endpoint mTLS; see `plan.md` §16 |
 | F-24 | High | Kafka connect/subscribe/run failure at startup is never retried; liveness always UP | Open — verified-live |
 | F-25 | High | PII secret read once, so the PII reprobe can never heal, and a pod without its secret still takes partitions | Open — decision on fix shape (see Decisions) |
 | F-26 | High | Empty secret accepted (unkeyed hash); trailing newline silently changes every token | Open — verified-live |
