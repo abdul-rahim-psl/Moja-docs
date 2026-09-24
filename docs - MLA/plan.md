@@ -3129,3 +3129,62 @@ what `ssh-keygen`/`ssh-copy-id` each do, the parallel to the CSR exchange in the
 **Left open**   Nothing specific to F-12. Whether `GROUP_JOIN`-triggered stale-park clearing is worth
                 building as its own follow-up is an open question for the user, not decided here.
                 `qa-review-findings.md`'s F-13 is next.
+
+### F-13 — `PPA_BASE_URL`'s path component is silently dropped   [2026-09-24]
+
+**Built**       On `paysys-remaining-bugs-f11-onwards`. Correctness baseline re-confirmed before
+                starting: 26/26 suites, 440/440 tests, 100% statements, 97.89% branches, clean
+                build, `git status` clean (F-12 already committed as `8d13be8` by the user). A new
+                module-level `pathPrefix(url: URL): string` in `ppa.client.ts` rejects a URL whose
+                `search`/`hash` is non-empty (fatal at construction, matching the existing
+                boot-time-refusal pattern for other invalid config) and returns `''` for a bare
+                root path (`/`) or the path otherwise, trailing slashes stripped. `HttpsPpaClient`'s
+                constructor calls it for both `baseUrl` and `healthBaseUrl` (independently - a
+                proxy in front of PPA's business endpoints need not share the same prefix as one
+                in front of its health endpoint) and stores `basePath`/`healthBasePath`. `deliver()`
+                now builds its request path as `this.basePath + resolvePpaEndpoint(eventType)`
+                instead of the routed path alone; `probeReady()` builds
+                `` `${this.healthBasePath}/health/ready` `` the same way. Port handling
+                (`url.port`) was left as-is - not part of this finding's own claim, and already
+                behaves correctly for every case the existing test suite and this session's live
+                checks cover.
+**Tests**       8 new in `ppa.client.test.ts`, all inside a new `describe('a path prefix on
+                PPA_BASE_URL', ...)` block: a prefix is prepended to the routed endpoint path; a
+                trailing slash on the prefix is stripped rather than producing a doubled slash; no
+                prefix at all (the existing, default shape) still produces the bare routed path,
+                unchanged; the health-probe path gets its own independently-configured prefix; a
+                `baseUrl` or `healthBaseUrl` carrying `?a=b` or `#fragment` throws at construction,
+                before any request is attempted (table-driven, both suffixes, both URLs - 4 cases).
+                All 31 pre-existing tests in the file passed unmodified against the new code -
+                confirms the no-prefix, no-query-string default shape used everywhere else in the
+                suite was never touched by this change. Full suite: 26/26 suites, 448/448 tests (up
+                from 440), 100% statements/functions/lines, 97.92% branches (up from 97.89%, above
+                the 96% gate), 0 lint errors (216 warnings, unchanged), Prettier clean,
+                `ppa.client.ts` itself 100% statements/lines, 95.45% branches (the two uncovered
+                branches are pre-existing `finally`-block paths unrelated to this change).
+**Verified**    `live — local stack (Redpanda, local PPA + Postgres + ValKey; the stack had exited
+                between sessions and was restarted clean first)`. **Regression check with the
+                default, unprefixed `PPA_BASE_URL` (the real production shape today)**: booted MLA,
+                fed the standard 20-record corridor, 8/8 canonical envelopes forwarded with 8/8 PPA
+                success and 0 rejections - identical to every prior session's baseline. Confirmed via
+                PPA's own log that requests reached `processEnvelope` (proving the request landed on
+                the correct path server-side, not merely that MLA believed it succeeded). Clean
+                `SIGTERM` shutdown, exit code 0. **Positive proof of the fix**: wrote a small
+                Node.js HTTP proxy (`/tmp/.../scratchpad/prefix-proxy.js`, not part of the
+                repository) listening on `:3500`, stripping a `/mla/v1` prefix and forwarding to
+                the real PPA on `:3000` - confirmed directly that an unprefixed request against the
+                proxy 404s and a prefixed one reaches PPA's real `/health/ready`. Booted MLA with
+                `PPA_BASE_URL=http://localhost:3500/mla/v1` and the matching `PPA_HEALTH_BASE_URL`
+                - booted clean, fed the same 20-record corridor through the proxy, **8/8 forwarded,
+                8/8 PPA success, 0 rejections** - real HTTP traffic through a real path-prefixed
+                listener, not a mock. Directly confirmed the counterfactual: the same proxy's
+                unprefixed `/QUOTES` route independently returns 404, which is exactly what every
+                one of those 8 deliveries would have hit before this fix. Clean shutdown afterward,
+                exit code 0. **The fatal-refusal path**: ran the compiled entrypoint directly (not
+                through the test suite) with `PPA_BASE_URL` carrying `?debug=true` - logged
+                `"Invalid configuration - refusing to start"` naming the exact offending URL, real
+                process exit code confirmed `1`. Proxy and MLA processes stopped afterward; stack
+                confirmed healthy and no stray MLA processes remained.
+**Diverged**    Nothing from the remediation doc's own proposed fix, beyond the port-explicitness
+                item noted above (left out, not in scope for this finding's own claim).
+**Left open**   Nothing specific to F-13. `qa-review-findings.md`'s F-14 is next.
