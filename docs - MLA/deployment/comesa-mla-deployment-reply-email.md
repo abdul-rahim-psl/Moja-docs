@@ -47,5 +47,5 @@ Best,
 
 **Deliberately left out.** DFSP key delivery and the MCM (Mojaloop Connection Manager) question — both
 are already being tracked with Infotex/Mojoloop Foundation per the 2026-09-09 meeting
-(`docs/meetings and emails/9-sept.md`), not new asks that belong on CCH techops' plate. Raising them here would
+(`docs/docs - MLA/meetings and emails/9-sept.md`), not new asks that belong on CCH techops' plate. Raising them here would
 muddy who owns what.

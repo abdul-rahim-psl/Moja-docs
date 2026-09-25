@@ -36,7 +36,7 @@ way the dated `continue/` files or `plan.md` §16 entries are meant to be.
    engineer's repo — worth flagging before starting, not a unilateral change to make quietly.
 3. **`TxSts: "ABOR"` translation gap.** Add the missing row to the `TxSts` translation table and the missing
    branch in `isTransferRejection` for the payee-DFSP-rejection shape Sam supplied
-   (`docs/meetings and emails/sam-email-2026-09-16-rejection-samples.md`, `plan.md` §14 item 3). Currently falls through
+   (`docs/docs - MLA/meetings and emails/sam-email-2026-09-16-rejection-samples.md`, `plan.md` §14 item 3). Currently falls through
    silently to Tazama's `PDNG` default — a silent-failure class `strategy.md` §7 specifically warns about.
 
 ## B. Requires a CCH/story-author decision first, but a reversible default can be built now
@@ -47,7 +47,7 @@ way the dated `continue/` files or `plan.md` §16 entries are meant to be.
    question is put to CCH/the story author, rather than waiting.
 
 ~~5. PII secret rotation trigger mechanism~~ **Resolved [2026-09-18], spec confirmed [2026-09-22]** —
-`docs/meetings and emails/tokenization-feedback.md`; `plan.md` §16's "gate item #2 reversed" entry. No
+`docs/docs - MLA/meetings and emails/tokenization-feedback.md`; `plan.md` §16's "gate item #2 reversed" entry. No
 rotation, a long-lived key; the trigger question is moot and no code change is needed. Removed from this
 menu per its own convention (a closed option is removed, not struck through) — kept visible here once, this
 edit, as the record of why it left the list.
@@ -67,7 +67,7 @@ edit, as the record of why it left the list.
 These need someone to actually send them — flagged here as live gaps, not drafted or sent by this document.
 
 8. ~~**Tell George about the JWS removal.**~~ **Sent [2026-09-23]** —
-   `docs/meetings and emails/george-email-2026-09-23-jws-removal.md`; `plan.md` §16's own entry. Sent as its
+   `docs/docs - MLA/meetings and emails/george-email-2026-09-23-jws-removal.md`; `plan.md` §16's own entry. Sent as its
    own email, ahead of the F-11+ QA fixes rather than combined with them (the plan at onboarding expected one
    combined email) — the user's deliberate sequencing choice, sent while item 1's bugfix work was still
    in progress. **A second, later email to George is still owed** once the F-11+ combined image ships,

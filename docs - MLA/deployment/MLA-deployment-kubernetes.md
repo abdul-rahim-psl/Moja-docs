@@ -29,7 +29,7 @@ pause-and-recover on a PPA outage, no restart required to resume) was independen
 just read off the code.
 
 **Update, 15 September 2026 — image pushed, real manifests written.** The 2026-09-14 meeting with George
-(`docs/meetings and emails/14-sept-deployment-meeting.md`) answered most of §11 live. Acting on that: the real
+(`docs/docs - MLA/meetings and emails/14-sept-deployment-meeting.md`) answered most of §11 live. Acting on that: the real
 `cch-mla` image (branch `paysys-QA-F11-onwards` @ `a0437cd`) is now built and pushed to
 **`10.0.70.91:5005/open-frms/cch-frms/cch-mla`** (GitLab Container Registry, same self-hosted instance
 already hosting this repo — §6 is no longer open), and the real manifest set lives at
@@ -531,7 +531,7 @@ to CCH and what stayed open, not a full epic/story pair).
 ## 11. Open questions for CCH
 
 Consolidated from every "Open" row above. Six were asked; the 2026-09-14 meeting with George
-(`docs/meetings and emails/14-sept-deployment-meeting.md`) answered four live:
+(`docs/docs - MLA/meetings and emails/14-sept-deployment-meeting.md`) answered four live:
 
 1. **Format.** **Still unanswered.** Plain Kubernetes manifests applied with `kubectl apply -f` (what
    this document assumes, §1), or a Helm chart? The meeting didn't raise it; proceeding on the plain-
