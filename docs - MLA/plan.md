@@ -373,7 +373,7 @@ Four items were flagged before starting this phase's build. None are CCH/COMESA 
 - [ ] Confirm `operation`, `Content-Type` and `FSPIOP-HTTP-Method` survive identically in CCH's production feed (FSD Open Item #7 for *their* environment, regardless of what our captures show).
 - [ ] **Re-verify the canonical-record table against live traffic.** CCH and the Mojaloop Foundation confirmed at the 2026-09-09 meeting (`docs/meetings and emails/9-sept.md`; §14 Q2) that the per-operation `start`/`egress` asymmetry is by design across all environments — this item now confirms that stated design fact against live traffic, rather than testing an unconfirmed capture artefact.
 - [ ] Obtain a dedicated consumer group ID from CCH. **Blocked on CCH** — and still the one MLA misconfiguration capable of affecting live payments (R-18). Not a deployment-day detail.
-- [ ] Verify a genuine DFSP signature with real keys. **Blocked on the keys** — progressed at the 2026-09-09 meeting but not delivered (§13.1, §14 Q1). Note also that `JWS_VALIDATION_DISABLED` exists as a scoped testing bypass [2026-09-15] and must be confirmed **off** before any live traffic is treated as evidence for this bullet — its value on the deployed cluster at `10.0.150.69` is not recorded anywhere in this knowledge base and should be checked, not assumed.
+- [ ] Verify a genuine DFSP signature with real keys. **Dissolved [2026-09-23]** — DFSP JWS signature validation was removed from MLA outright (item 2 of `deployment/MLA-deployment-kubernetes.md`'s 15 September update; `plan.md` §16's JWS-removal entries), so there is no signature check left to verify against real keys, and `JWS_VALIDATION_DISABLED`/`JWS_*` no longer exist as config surface to check on `10.0.150.69` or anywhere else — confirmed [2026-09-25] via `/health/ready` on the redeployed instance showing `kafka`/`piiSecret` only, no `jwsKeyStore` field.
 - [ ] Real mTLS against the real PPA; the deployment's certificate provisioning. **Regressed rather than advanced, and deliberately so.** The real PPA instance is plain HTTP on `:3000` with no mTLS port found on any of six checked candidates, so MLA gained a dev-only `PPA_MTLS_DISABLED` bypass by user decision [2026-09-17]. While that flag is on, MLA↔PPA traffic is unauthenticated and unencrypted — **a real, standing gap, not a mechanism that turns itself off.** This bullet now also covers turning it back off.
 - [~] End-to-end against the real PPA, including the durable-ack semantics the stub cannot evidence. **Half done [2026-09-17].** MLA's own side is proven: a full happy-path corridor fed through the real instance, all 8 canonical envelopes accepted with HTTP 200, every fed record accounted for (`e2e-testing/checklist.md` §§1–2, §16's own entry). **The durable-ack half is not** — nothing about PPA's own processing after its HTTP 200 (write-ahead persist, translation, correlation, TMS dispatch) has been confirmed. `e2e-testing/checklist.md` §3 breaks that remainder into checkable items; most are now answerable by reading `cch-ppa`'s source or standing up its local compose stack, neither of which has been done.
 - [ ] Load test on production-representative infrastructure. **Still blocked on the environment** — Phase 7's figures are local, on one laptop, and R-10 means the 25/125 TPS baseline is itself unconfirmed.
@@ -460,7 +460,7 @@ Ordered by how much they change what we build. The first four are the ones to pu
 7. **Is `dateOfBirth` genuinely unavailable on this topic**, or absent only from these test parties? Zero occurrences across every capture; downstream `pacs.008` mapping depends on it. **PPA-side (`pacs.008` translation) — not a numbered cch-mla phase.**
 8. **Is `binId` / `processedAsBatch` (present on 59 of 500 records) relevant to us?** Neither the FSD, the stories, nor the POC models batch processing on this topic. Probably out of scope — worth one question rather than an assumption. **If relevant at all, Phase 2** (ingestion/classification scope).
 9. **Alerting destination/routing** (PagerDuty / Slack / email, and the mechanism connecting a condition to it — e.g. Grafana Alertmanager) — R-37, High, from `cch-crosscutting-user-stories.md`'s own Actions table (its own action #5, owner "CCH + FSD author"). The observability *stack* is already confirmed (Prometheus/Grafana/Loki/Tempo/Mimir, IDD §10) and is not itself a question. A SIEM/log-aggregation platform (IDD Open Item #8) is a separate, related question, relevant to audit-log output rather than metrics. **No longer gates Phase 6's formal closure** — Phase 6 closed [2026-09-08] with alert paths built against a configurable sink (§9, §13.1, §16's US-MON-01 entry); this question gates only which real destination is eventually wired into that sink.
-10. **Is the hub the only ingress/egress into the system, such that MLA's own JWS validation is redundant?** **Outcome [2026-09-23]: validation removed from MLA outright** — built and live-verified on `paysys-remove-JWS` (§16), `JWS_VALIDATION_DISABLED` removed with it; closure pending story-author and rules-owner/CCH sign-off; Michael's question back still unanswered. Original entry: Distinct from item 1 above (obtaining the keys) — this asks whether validation is needed *at all*, so `JWS_VALIDATION_DISABLED` could become a standing default rather than a scoped testing bypass, while item 1 stays unresolved. **Partially answered [2026-09-21] — Michael (Mojaloop Foundation), via Mutale.** Verbatim: *"Nothing will get on to the Kafka topic unless it has already been validated by the switch, and the Kafka topic is in the same system boundary as the validation process. I'm not sure what would be gained by PaySys performing another validation. What kind of use case are they planning to guard against?"* **Confirms the trust-boundary premise** — the hub-only-ingress half of the question is now answered directly, not assumed, and **in production, MLA's own consumer process sits inside that same boundary**, so a different-trust-zone argument for keeping validation on does not apply here. **Does not itself authorize disabling validation** — `george-reply-2026-09-15.md` item 2's original ask stays **not accepted as a permanent change** (`MLA-deployment-kubernetes.md` §6), and Michael has asked a fair follow-up of his own: what failure mode MLA's re-validation guards against, given the switch already validates. The one candidate answer that survives is narrower than originally drafted here: JWS verification is tamper-evidence for the specific switch-to-Kafka hop, which trust-boundary confirmation alone does not rule out corruption or truncation on. **Whether that narrower point is worth sending back to Michael is the user's call, not yet actioned** — weaker ground than a same-boundary/different-trust-zone argument would have been. §16's [2026-09-21] "Michael's reply" entry has the full narrative. **Gates nothing today** — `JWS_VALIDATION_DISABLED` remains exactly what it was built as (§13.1's DFSP-keys row, `plan.md` §16's 2026-09-15 entry): a scoped, reversible, loudly-observable testing-only bypass, default off.
+10. **Is the hub the only ingress/egress into the system, such that MLA's own JWS validation is redundant?** **Outcome [2026-09-23]: validation removed from MLA outright** — built and live-verified on `paysys-remove-JWS` (§16), `JWS_VALIDATION_DISABLED` removed with it; closure pending story-author and rules-owner/CCH sign-off; Michael's question back still unanswered. Original entry: Distinct from item 1 above (obtaining the keys) — this asks whether validation is needed *at all*, so `JWS_VALIDATION_DISABLED` could become a standing default rather than a scoped testing bypass, while item 1 stays unresolved. **Partially answered [2026-09-21] — Michael (Mojaloop Foundation), via Mutale.** Verbatim: *"Nothing will get on to the Kafka topic unless it has already been validated by the switch, and the Kafka topic is in the same system boundary as the validation process. I'm not sure what would be gained by PaySys performing another validation. What kind of use case are they planning to guard against?"* **Confirms the trust-boundary premise** — the hub-only-ingress half of the question is now answered directly, not assumed, and **in production, MLA's own consumer process sits inside that same boundary**, so a different-trust-zone argument for keeping validation on does not apply here. **Does not itself authorize disabling validation** — `george-reply-2026-09-15.md` item 2's original ask stays **not accepted as a permanent change** (`MLA-deployment-kubernetes.md` §6), and Michael has asked a fair follow-up of his own: what failure mode MLA's re-validation guards against, given the switch already validates. The one candidate answer that survives is narrower than originally drafted here: JWS verification is tamper-evidence for the specific switch-to-Kafka hop, which trust-boundary confirmation alone does not rule out corruption or truncation on. **Whether that narrower point is worth sending back to Michael is the user's call, not yet actioned** — weaker ground than a same-boundary/different-trust-zone argument would have been. §16's [2026-09-21] "Michael's reply" entry has the full narrative. This exchange is now superseded by the [2026-09-23] outcome at the top of this item: `JWS_VALIDATION_DISABLED` no longer exists in the code at all, so there is nothing left to gate.
 
 **Not on this list:** which record is the final-state trigger. That is D5, settled internally as `commitTransfer` with the ISO `TxSts` vocabulary (`COMM`/`RESV`) — §3.1 — so it is not a question for COMESA.
 
@@ -3638,3 +3638,52 @@ this deployment's DFSPs actually build the field.
 **Left open**   Nothing further planned. If a DFSP integration outside today's confirmed set is ever
                 onboarded, this finding's original fix (sort object keys recursively before hashing)
                 is still the documented remedy in `qa-sweep-2-findings.md` and can be revisited then.
+
+### Phase 8 (partial) — `10.0.150.69` test deployment updated with the F-11–F-28 bugfix image   [2026-09-25]
+
+**Context.** The QA bugfix workstream (F-01 onward, `paysys-remaining-bugs-f11-onwards`) reached a point
+where the fixes are merged directly onto `main` (F-11 through F-28 committed there; F-17 deferred, F-23
+parked, F-18+ paused, F-33 closed by decision - all per their own §16 entries above). This entry covers
+updating this side's own test rig at `10.0.150.69` (namespace `mla`, on the Mojaloop demo cluster - not
+CCH's own cluster; see `deployment/local-deployment.md`) to run that image, following the redeploy
+procedure `local-deployment.md` §11 already documents from the JWS-removal update.
+
+**What changed, and why it wasn't a pure image swap.** `.env.template` gained two new variables during
+F-16 (`ALERT_WEBHOOK_MAX_IN_FLIGHT=8`, `ALERT_WEBHOOK_COALESCE_MS=10000`, the webhook fan-out cap), and
+`cch-mla/deploy/kubernetes/01-configmap.yaml` was updated in the same repo history to carry them. The
+live ConfigMap on the cluster (`cch-mla-config`, `mla` namespace) is not a straight copy of that file -
+it carries this deployment's own dry-run/live-PPA values (`KAFKA_GROUP_ID=cch-mla-dryrun`,
+`PPA_BASE_URL` pointed at the real PPA, `PPA_MTLS_DISABLED=true`) layered on top over several prior
+sessions. Applying the repo's ConfigMap file directly would have reverted those values. Patched in only
+the two new keys instead (`kubectl patch configmap ... --type merge`), leaving every existing key
+untouched - verified by reading back all four security/routing-relevant keys after the patch
+(`PPA_BASE_URL`, `KAFKA_GROUP_ID`, `PPA_MTLS_DISABLED` unchanged; the two new keys present with the
+template's own defaults).
+
+**Build and ship.** Built from `main` HEAD (`d576631`, "F-28 code and tests are done and already
+live-verified") - not the QA branch itself, per the user's correction; `main` already carries the same
+commits directly. Full gate green before shipping: 27/27 suites, 492/492 tests, 100% statement coverage.
+Image shipped the same way as the prior JWS-removal update - `docker save | ssh ... docker load` into
+the remote host's own Docker daemon (confirmed via `crictl images` on the node that the image was not
+already present before the load, ruling out a stale-tag false positive), then `kind load docker-image
+... --name mojaloop-fx` into the kind node's own containerd, then `kubectl delete pod -n mla -l
+app=cch-mla` to force the Deployment to start a fresh container against the tag's new content
+(`imagePullPolicy: IfNotPresent` means Kubernetes has no other reason to notice the tag changed).
+
+**Verified live, not just "pod is Running".** New pod: `1/1 Running`, 0 restarts. `/health/ready`:
+`{"status":"UP","kafka":"UP","piiSecret":"UP"}` - no `jwsKeyStore` field, confirming the earlier JWS
+removal is still correctly reflected in this image. Boot logs show clean Kafka consumer connect and
+group join, no errors/warnings anywhere in the post-restart log window. Fed a genuinely fresh real
+corridor (`__tests__/fixtures/DRPP_Kafka_E2E_Pack/02_ZMW_to_MWK`, 20 records, not previously used for
+this deployment's own verification) onto the real `topic-event-audit` via `npm run feeder`, tunneled
+through a fresh `kubectl port-forward` (the pre-existing one from a prior session had gone stale -
+`ECONNRESET` on every connect attempt - killed and restarted before the feed succeeded). All 8 canonical
+envelopes (FXQUOTE, QUOTE, FXTRANSFER, TRANSFER x2 each) forwarded and accepted by the real PPA.
+`/metrics` confirms: `mla_forwarded_total` = 2 per event type (8 total),
+`mla_ppa_delivery_outcomes_total{outcome="success"}` = 8 with zero of any other outcome,
+`mla_consumer_lag{partition="0"}` = 0.
+
+**Left open**   This is this side's own test rig, not CCH's own cluster deployment - §11's "CCH's own
+                cluster deployment" bullet is unaffected by this entry and stays open regardless. No
+                further action needed on this update; the deployed image and ConfigMap are now current
+                with `main`.
