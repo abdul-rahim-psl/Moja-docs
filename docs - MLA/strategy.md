@@ -164,6 +164,14 @@ Raw source material, not synthesized — read the file named when its wording ma
 | **`meetings and emails/tokenization-feedback.md`** | **The full thread reversing the PII secret-rotation direction**, raw source — George Murage's reasoning (rotation would break Tazama's own fraud-rule matching across transaction history) and both sides' confirmation of a long-lived, non-rotating key. `plan.md` §16's "US-PII-02 — gate item #2 reversed" entry and `EPICS/EPIC-PII-tokenization/executive-summary.md` carry the synthesized outcome and its engineering consequence. |
 | **`meetings and emails/george-email-2026-09-23-jws-removal.md`** | **Sent [2026-09-23]**, raw source — our own outbound reply to George on the JWS removal: what changed, that the new GHCR image (`1e7610e`, already pinned in `03-mla-deployment.yaml`) needs no action beyond CCH's already-pending `kubectl apply`, and that `cch-mla-jws-keys` is no longer required. Sent standalone, ahead of the F-11+ QA-bugfix combined image — `plan.md` §16's own entry and `e2e-testing/next-steps.md` item 8 record the sequencing decision and that a second, later email covering the bugfixes is still owed. |
 
+### 2.10 Rule-processor PR review — `docs - MLA/izyane-PR-review/`
+
+**A separate workstream from everything else this file maps** — it governs reviewing pull requests in the `psl-izyane-cch-frms` rule-processor fleet (one repo per Tazama rule: `rule-001`, `rule-002`, …), not `cch-mla` or `cch-ppa`. It sits under this folder for discoverability, per `CLAUDE.md`'s own pointer, but nothing in §1–§2.9 or §3's routes below applies to it, and nothing in it applies to MLA/PPA work.
+
+| File | Significance |
+| --- | --- |
+| **`izyane-PR-review/Claude_PR_Review_Template.md`** | **The working instructions for reviewing any rule-processor PR.** Adapted from a general app-shaped review methodology for a fleet with no endpoints/frontend/ORM. Covers preflight (branch/base checks, scope guardrail, existing-review check), the rule-processor-specific hunts (inert config parameters — a settled, recurring fleet-wide finding; the message-type guard; the platform-wide constraint that only `pain.001`/`pain.013`/`pacs.008`/`pacs.002` are ingested fleet-wide, superseding stale FSD/Dev-Config-Guide text on that one point; exit-condition convention; query correctness; band/unit checks; README accuracy; secrets/PII in logs), the required review file format (traceability table, per-file diff review, categorized Issues, binary Approved/Changes-Requested verdict), multi-round follow-up handling, and the settled facts not to re-litigate per PR. Read it in full before starting any such review — not just the section matching the PR at hand, since the settled-facts list changes how several findings are worded. ~290 lines. |
+
 ---
 
 ## 3. Reading routes by task
@@ -179,6 +187,7 @@ Match the task to a route. Reading beyond the route is usually wasted context.
 | **Deciding what to ask COMESA for** | `plan.md` §14 → §13 (blocked work) |
 | **Actually asking COMESA/CCH something — drafting the email, or preparing for the meeting** | `questions for comesa.md` (the wording and context per question) → `plan.md` §14 for the current status of each, which is the authority where the two differ |
 | **Reading a meeting's or email thread's raw wording, rather than its synthesized outcome** | §2.9's table for the file → `meetings and emails/` — raw source only; `plan.md` §16 or the relevant knowledge-base section is the authority on what it settled |
+| **Reviewing a pull request in the `psl-izyane-cch-frms` rule-processor fleet** | `izyane-PR-review/Claude_PR_Review_Template.md` in full — a separate workstream from MLA/PPA; nothing else in this file's routes applies |
 | **Planning implementation, or estimating any story** | `cross-reference.md` §1 (the seven forks) → §2 (contradicted facts) → §11 (what was never built) |
 | **Reusing or porting anything from the POC** | `cross-reference.md` §12 (reuse verdict) → the matching area section → the POC module itself |
 | **Questioning why the POC did something differently** | `cross-reference.md` §2 → the area section → `../docs-poc-mla-ppa/MLA-PPA-Technical-Design.md` (outside this repository) for the full derivation |
