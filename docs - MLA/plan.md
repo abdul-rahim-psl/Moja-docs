@@ -374,7 +374,7 @@ Four items were flagged before starting this phase's build. None are CCH/COMESA 
 - [ ] **Re-verify the canonical-record table against live traffic.** CCH and the Mojaloop Foundation confirmed at the 2026-09-09 meeting (`docs/docs - MLA/meetings and emails/9-sept.md`; §14 Q2) that the per-operation `start`/`egress` asymmetry is by design across all environments — this item now confirms that stated design fact against live traffic, rather than testing an unconfirmed capture artefact.
 - [ ] Obtain a dedicated consumer group ID from CCH. **Blocked on CCH** — and still the one MLA misconfiguration capable of affecting live payments (R-18). Not a deployment-day detail.
 - [ ] Verify a genuine DFSP signature with real keys. **Dissolved [2026-09-23]** — DFSP JWS signature validation was removed from MLA outright (item 2 of `deployment/MLA-deployment-kubernetes.md`'s 15 September update; `plan.md` §16's JWS-removal entries), so there is no signature check left to verify against real keys, and `JWS_VALIDATION_DISABLED`/`JWS_*` no longer exist as config surface to check on `10.0.150.69` or anywhere else — confirmed [2026-09-25] via `/health/ready` on the redeployed instance showing `kafka`/`piiSecret` only, no `jwsKeyStore` field.
-- [ ] Real mTLS against the real PPA; the deployment's certificate provisioning. **Regressed rather than advanced, and deliberately so.** The real PPA instance is plain HTTP on `:3000` with no mTLS port found on any of six checked candidates, so MLA gained a dev-only `PPA_MTLS_DISABLED` bypass by user decision [2026-09-17]. While that flag is on, MLA↔PPA traffic is unauthenticated and unencrypted — **a real, standing gap, not a mechanism that turns itself off.** This bullet now also covers turning it back off.
+- [ ] Real mTLS against the real PPA; the deployment's certificate provisioning. **Regressed rather than advanced, and deliberately so.** The real PPA instance is plain HTTP on `:3000` with no mTLS port found on any of six checked candidates, so MLA gained a dev-only `PPA_MTLS_DISABLED` bypass by user decision [2026-09-17]. While that flag is on, MLA↔PPA traffic is unauthenticated and unencrypted — **a real, standing gap, not a mechanism that turns itself off.** This bullet now also covers turning it back off. **mTLS architecture reversed [2026-09-25 to 09-28]**, per Oscar Cobar (COMESA/DRPP), the Infotex contact (`meetings and emails/sept-28.md - Conversation with Oscar.md`): COMESA/DRPP now hosts the interconnect CA (not Paysys, as the 2026-09-15 proposal had it), and mTLS terminates at Paysys's own Tazama ingress gateway (`mla-interconnect.paysyslabs.com`), not a new gateway in front of PPA — `cch-mla` handles the client-side mTLS connection itself, through configuration. CN/O/C values sent to Oscar; the CSR and Oscar's CA bundle are the next concrete steps. `deployment/MLA-deployment-kubernetes.md` §7/§8/§11 has the full detail.
 - [~] End-to-end against the real PPA, including the durable-ack semantics the stub cannot evidence. **Half done [2026-09-17].** MLA's own side is proven: a full happy-path corridor fed through the real instance, all 8 canonical envelopes accepted with HTTP 200, every fed record accounted for (`e2e-testing/checklist.md` §§1–2, §16's own entry). **The durable-ack half is not** — nothing about PPA's own processing after its HTTP 200 (write-ahead persist, translation, correlation, TMS dispatch) has been confirmed. `e2e-testing/checklist.md` §3 breaks that remainder into checkable items; most are now answerable by reading `cch-ppa`'s source or standing up its local compose stack, neither of which has been done.
 - [ ] Load test on production-representative infrastructure. **Still blocked on the environment** — Phase 7's figures are local, on one laptop, and R-10 means the 25/125 TPS baseline is itself unconfirmed.
 - [x] **Kubernetes manifests.** Done [2026-09-15] — real manifests built for CCH techops and shipped, with the registry pivoted to **GHCR** (`psl-izyane-cch-frms/cch-mla`, digest-pinned), and MLA deployed and running at `10.0.150.69` (namespace `mla`).
@@ -426,7 +426,7 @@ The POC was live-verified. Where we do something different, the burden of proof 
 | **R-04 (Critical) has no acceptance criteria** — the "never synthesize" prohibitions. MLA-side equivalent: never fabricate an envelope for an event that did not arrive. | Phase 2/3 acceptance criteria | Story author — liftable from the POC's behaviour |
 | ~~No network path from the deployed MLA (`10.0.150.69`, namespace `mla` — a Paysys-side test deployment on the Mojaloop demo cluster, not CCH's own) to the real PPA (`10.0.115.186:3000`) — discovered [2026-09-17].~~ **Resolved [2026-09-21] — connectivity confirmed restored.** MLA was already correctly deployed and configured throughout (`PPA_MTLS_DISABLED=true`, `PPA_BASE_URL`/`PPA_HEALTH_BASE_URL` both pointed at the real PPA); nothing on its side ever needed fixing. Re-checked from the same three vantage points that found the break: this machine → PPA (`curl` → HTTP 200), `10.0.150.69` host → PPA (`curl` → HTTP 200, no longer times out), and — the one that actually matters — the `cch-mla` pod's own network namespace → PPA, via the same ephemeral-debug-container technique used to find the break (`redis:5.0.4-alpine`, `wget`) → `{"ready":true,"checks":{"writeAheadStore":true}}`, no timeout. All three green. **`/health/ready` on the pod itself also confirms `kafka: UP` with `mla_consumer_lag{partition="0"}=0`** — fully caught up, not stuck behind a backlog. **Root cause, per the user [2026-09-21]:** `10.0.150.69` and `10.0.115.186` sit on different subnets within the data centre; an infra person resolved the routing gap between them directly. **Confirmed genuinely working, not just reachable [2026-09-21]:** a real corridor (`01_MWK_to_ZMW_PRIMARY`, re-signed) fed onto the real `topic-event-audit` produced all 8 canonical envelopes forwarded and accepted by the real PPA with HTTP 200 — §16's own entry for it. Kept here, struck through, per this table's own convention for resolved rows. | ~~Live-traffic delivery from the deployed MLA to the real PPA~~ — no longer gates delivery, confirmed working end to end; **`e2e-testing/checklist.md` §3's `[remote-instance]` items still need the PPA engineer/further discovery regardless of connectivity, per that section's own closing note** | — |
 | **CCH's own cluster deployment has not been attempted** — the manifest package (manifests, namespace file, ConfigMap files) was handed to CCH via George Murage [2026-09-15] (CCH's technical lead and our point of contact — techops is the team that actually runs `kubectl`, not George himself); as of the [2026-09-17] check-in George had reviewed it, found the notes clear, and techops had not yet applied it (`docs/docs - MLA/meetings and emails/17-sept-checkin-for-pending-items.md`). Flagged as a risk if not closed by end of that week; not yet confirmed either way since. | Every §11 checklist item that requires CCH's cluster to actually exist and run MLA — real DFSP signatures, the production feed's own header behaviour, the dedicated consumer group, everything downstream of "MLA is actually ingesting CCH's real Kafka topic" | George Murage / CCH techops |
-| **Infotex call not yet scheduled** — needed to close two items: whether MLA's outbound IP is public (so Infotex can allow-list Paysyslabs), and whether the mTLS certificate is embedded in MLA directly or routed via a dedicated egress gateway. Bears on `MLA-deployment-kubernetes.md` §11 Q4/Q5 (the PPA endpoint address, mTLS gateway). Oscar (Infotex) has accepted the GitHub invite and is copied on relevant threads. | The PPA endpoint address and mTLS gateway provisioning — both already tracked as open in `MLA-deployment-kubernetes.md` §11 | George (to schedule) / Infotex |
+| ~~**Infotex call not yet scheduled**~~ **Resolved [2026-09-25 to 09-28]** — not a scheduled call but a secure-chat exchange with Oscar Cobar (COMESA/DRPP), the Infotex contact (`meetings and emails/sept-28.md - Conversation with Oscar.md`). Both items closed, though the direction reverses the 2026-09-15 proposal: `cch-mla` itself handles the mTLS connection (confirmed — Oscar's side has no gateway of its own on the Switch side), and **COMESA/DRPP hosts the interconnect CA, not Paysys**, terminating at Paysys's own Tazama ingress gateway rather than a new gateway in front of PPA. `MLA-deployment-kubernetes.md` §7/§8/§11 has the resulting architecture. **Still open**: the CSR itself (not yet generated) and Oscar's CA bundle (not yet received) — tracked in §11's mTLS checklist bullet above, not here. | ~~The PPA endpoint address and mTLS gateway provisioning~~ — architecture question resolved; CSR/CA-bundle exchange is what remains, tracked in §11 | Oscar Cobar (CA bundle) / us (CSR) |
 
 ### 13.2 Gates production, not the work ahead
 
@@ -3687,3 +3687,60 @@ envelopes (FXQUOTE, QUOTE, FXTRANSFER, TRANSFER x2 each) forwarded and accepted 
                 cluster deployment" bullet is unaffected by this entry and stays open regardless. No
                 further action needed on this update; the deployed image and ConfigMap are now current
                 with `main`.
+
+### Phase 8 (partial) — mTLS architecture reversed via Oscar Cobar (COMESA/DRPP), the Infotex contact   [2026-09-28]
+
+**Context.** §13.1's "Infotex call not yet scheduled" row and §11's mTLS checklist bullet had been open
+since the [2026-09-17] check-in — whether MLA's outbound IP is public, and how the mTLS certificate is
+provisioned and routed. That call happened as a secure chat rather than a scheduled call, with Oscar R.
+Cobar on the COMESA/DRPP side, George Murage (Altiora) and both Paysys engineers copied, running
+2026-09-25 through 2026-09-28. Full raw notes: `meetings and emails/sept-28.md - Conversation with
+Oscar.md`. Related PR: `psl-izyane-cch-frms/cch-mla#1`.
+
+**What it settles, and why it is a reversal, not a continuation.** The 2026-09-15 architecture accepted
+from George's `certificate-setup-proposal.md` — a Paysys-operated Interconnect CA, terminating at a new
+mTLS ingress gateway built in front of PPA, PPA's own mesh trust store never touched — is superseded, not
+extended. Five decisions from the Oscar exchange:
+
+1. Mutual TLS, not one-way.
+2. A single CA, not the dual/triple-CA model (DRPP mesh CA / Interconnect CA / TAZAMA mesh CA) the 15-Sept
+   proposal specified.
+3. **COMESA/DRPP hosts and is accountable for that CA — the reverse of 15-Sept, where Paysys operated it.**
+4. mTLS terminates at **Paysys's own existing Tazama ingress gateway**
+   (`mla-interconnect.paysyslabs.com`), not a new gateway built in front of PPA. This removes a piece of
+   net-new infrastructure the 15-Sept plan required and never built.
+5. `cch-mla` itself handles the mTLS connection, through configuration — confirmed directly with Oscar,
+   since his side has no ingress/egress gateway of its own on the Switch side to originate it instead.
+
+**Certificate roles are also reversed**, following from decision 3: Paysys's ingress presents the server
+certificate (`CN=mla-interconnect.paysyslabs.com`, `O=DRPP`, `C=ZM`, SAN required since modern clients
+check it rather than CN); `cch-mla` presents the client certificate (CN not mandated by Oscar's side, but
+requested in advance for allow-listing). Both are now signed by the same COMESA/DRPP CA — previously each
+certificate would have come from a Paysys-operated one.
+
+**What does not change.** Traffic direction: `cch-mla` always initiates the request to PPA; PPA replies
+synchronously on the same connection and never calls MLA. TLS version/cipher suites (TLS 1.2/1.3, any
+OpenSSL-supported suite) confirmed 2026-09-20 and untouched by this exchange.
+
+**Status as of 2026-09-28, nothing yet live-verified.** CN/O/C values for the server certificate sent to
+Oscar; the CSR itself not yet generated. Oscar is preparing the CA bundle (root and intermediates, public
+certificates only) to send over the same channel. This is a decision-and-planning entry, not a build one
+— no code changed and no certificate was issued or exchanged. The interim CA generated [2026-09-15] and
+corrected [2026-09-21] (`O=Paysys, CN=cch-mla-ppa-interconnect-ca`) is superseded by this design and will
+not be the CA ultimately trusted; it stays in place on `10.0.150.69` only because `PPA_MTLS_DISABLED=true`
+means nothing is consuming it for a real connection yet (§11's mTLS checklist bullet, unchanged by this
+entry beyond recording the new plan).
+
+**Documents updated in this pass**: `strategy.md` §1, §2.8 (line 147), §2.9 (new file registered);
+`deployment/certificate-setup-proposal.md` (superseded notice); `deployment/MLA-deployment-kubernetes.md`
+(new dated update block, §7, §8 item 1, §11 Q5, §12 item 4); `plan.md` §11, §13.1, this entry.
+
+**Left open**   Receive Oscar's CA bundle. Generate and send the server CSR (key type/size to be
+                confirmed with Oscar first; private key stays on the gateway host). Agree who generates
+                `cch-mla`'s own client key/CSR and its CN, and get it signed by the COMESA/DRPP CA.
+                Configure `cch-mla` (PR #1) with its client cert/key, the CA bundle, and the
+                `mla-interconnect.paysyslabs.com` target. Configure the ingress listener to verify client
+                certificates against the COMESA/DRPP CA, enforce on `/others` only, and optionally
+                allow-list `cch-mla`'s CN. Also open: which host runs the "UAT Nginx" — confirmed not to
+                be the PPA VM, `10.0.115.186`. None of this is live-verified yet; §11's "Real mTLS against
+                the real PPA" checklist bullet stays open until it is.

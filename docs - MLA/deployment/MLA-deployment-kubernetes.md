@@ -111,6 +111,33 @@ DISABLED=true` is still active on this deployment (§7), so no traffic was ever 
 identity and no pod restart was needed. `ca.crt`/`client.crt` from the corrected CA (never `client.key`)
 were sent to George the same day. Full detail: §8 item 1, §11 Q5.
 
+**Update, 25–28 September 2026 — CA ownership and termination point reversed, per Oscar Cobar
+(COMESA/DRPP), the Infotex contact.** A secure-chat exchange — full raw notes in
+[`../meetings and emails/sept-28.md - Conversation with Oscar.md`](<../meetings and emails/sept-28.md - Conversation with Oscar.md>)
+— settles the mTLS architecture, and it is not the 15-September design above. Five decisions:
+
+1. Mutual TLS (not one-way).
+2. A single CA, not the dual-CA (DRPP mesh CA / Interconnect CA / TAZAMA mesh CA) model
+   [`certificate-setup-proposal.md`](certificate-setup-proposal.md) proposed.
+3. **COMESA/DRPP hosts and is accountable for that CA — the reverse of the 15-September proposal, where
+   Paysys operated the Interconnect CA.**
+4. mTLS terminates at Paysys's own Tazama ingress gateway, `mla-interconnect.paysyslabs.com` — not at a
+   new gateway in front of PPA as the 15-September proposal had it. This is a genuine simplification: the
+   gateway already exists, rather than being new infrastructure to stand up.
+5. `cch-mla` itself handles the mTLS connection on the client side, through configuration — confirmed
+   directly, since Oscar's side has no ingress/egress gateway of its own on the Switch side to originate
+   it instead.
+
+**Certificate roles are also reversed.** Paysys's ingress presents the server certificate
+(`CN=mla-interconnect.paysyslabs.com`, `O=DRPP`, `C=ZM`, signed by the COMESA/DRPP CA); `cch-mla` presents
+the client certificate (CN not mandated, but Oscar's side wants it in advance to allow-list), also signed
+by the COMESA/DRPP CA. Both certificates now come from the same COMESA/DRPP-operated CA, not from a
+Paysys-operated one.
+
+**Status as of 2026-09-28.** CN/O/C values for the server certificate have been sent to Oscar; the CSR
+itself has not yet been generated. Oscar is preparing the CA bundle (root and intermediates) to send over
+the same secure channel. Full detail and the exact `openssl` CSR command: §7, §8 item 1, §11 Q4/Q5.
+
 - [1. The ask, as received](#1-the-ask-as-received)
 - [2. Architecture — where MLA actually sits](#2-architecture--where-mla-actually-sits)
 - [3. What ships unconditionally vs. what only CCH can supply](#3-what-ships-unconditionally-vs-what-only-cch-can-supply)
@@ -332,16 +359,21 @@ blocker for this handoff.
   is the half of the topology that does *not* cross an organizational boundary.
 - **MLA → PPA: the one boundary crossing.** **Updated 2026-09-15** — §2's diagram showed a point-to-point
   VPN; that is now superseded. The agreed target is a public, IP allow-listed endpoint on the Paysys side
-  (not a VPN tunnel), terminating at a dedicated mTLS ingress gateway in front of PPA — see
-  [`connectivity-options.md`](connectivity-options.md) and [`certificate-setup-proposal.md`](certificate-setup-proposal.md).
-  This is still a `NetworkPolicy` egress rule on MLA's side (allow the gateway's address, port from
-  `PPA_TIMEOUT_MS`'s own endpoint on `PPA_BASE_URL`), but the far side is a reachable public address
-  behind an allow-list and SAN-pinned mTLS, not a private tunnel endpoint. Real addresses are still
-  pending (§11 Q4). **Update 2026-09-20**: whitelisting is the confirmed mechanism (George, per Slack) —
-  DRPP's own source IP for the allow-list has already been shared with Paysys. The address given back for
-  the PPA side was flagged by George as looking like an internal IP, not one reachable over the public
-  internet — Paysys's network team still needs to confirm the PPA hostname (or a publicly-reachable IP if
-  the hostname doesn't resolve against a public DNS resolver). See §11 Q4.
+  (not a VPN tunnel) — see [`connectivity-options.md`](connectivity-options.md). This is still a
+  `NetworkPolicy` egress rule on MLA's side (allow the gateway's address, port from `PPA_TIMEOUT_MS`'s own
+  endpoint on `PPA_BASE_URL`), but the far side is a reachable public address behind an allow-list and
+  SAN-pinned mTLS, not a private tunnel endpoint. **Update 2026-09-20**: whitelisting is the confirmed
+  mechanism (George, per Slack) — DRPP's own source IP for the allow-list has already been shared with
+  Paysys.
+  **Update 2026-09-25/28 — termination point reversed, per Oscar Cobar (COMESA/DRPP), the Infotex
+  contact** ([`../meetings and emails/sept-28.md - Conversation with Oscar.md`](<../meetings and emails/sept-28.md - Conversation with Oscar.md>)).
+  mTLS terminates on **Paysys's own Tazama ingress gateway**, at `mla-interconnect.paysyslabs.com` — not
+  at a new gateway in front of PPA as [`certificate-setup-proposal.md`](certificate-setup-proposal.md)
+  had proposed. Traffic is one-way: `cch-mla` always initiates the request to Tazama's PPA; PPA replies
+  synchronously on the same connection and never calls MLA. Oscar's side has no ingress/egress gateway of
+  its own on the Switch side, so `cch-mla` itself must handle the mTLS connection, through configuration —
+  confirmed [2026-09-28]. CN/O/C values for the server certificate have been sent to Oscar; the CSR has
+  not yet been generated. Full detail: §8 item 1, §11 Q4/Q5.
 - **TLS version and cipher suites — resolved 2026-09-20.** George confirmed TLS 1.2/1.3 is acceptable on
   the DRPP side, and any OpenSSL-supported cipher suite is fine — no fixed list to negotiate. See §11 Q5.
 - **No inbound Ingress for MLA.** All payment traffic arrives over Kafka; the only HTTP surface is
@@ -388,6 +420,43 @@ Three genuinely different secrets, each with its own open provisioning question:
    (never `client.key`, never `ca.key`) were shared with George the same day. Paysys's own `client.key`/
    `ca.key` are held locally, not committed to any repository, consistent with this section's existing
    rule.
+   **Update 2026-09-25/28 — CA ownership and architecture reversed, per Oscar Cobar (COMESA/DRPP), the
+   Infotex contact.** A secure-chat exchange
+   ([`../meetings and emails/sept-28.md - Conversation with Oscar.md`](<../meetings and emails/sept-28.md - Conversation with Oscar.md>))
+   settles this differently from the 2026-09-15 target above: **COMESA/DRPP hosts and is accountable for
+   the single interconnect CA, not Paysys**, and mTLS terminates at Paysys's own Tazama ingress gateway
+   (`mla-interconnect.paysyslabs.com`), not at a new gateway in front of PPA — so no new gateway needs to
+   be built. `cch-mla` presents the client certificate to that ingress, through configuration, since
+   Oscar's side has no gateway of its own to originate the connection instead. The two certificates and
+   their roles:
+   - **Server certificate** (presented by Paysys's ingress; `cch-mla` validates it): `CN =
+     mla-interconnect.paysyslabs.com`, `SAN = DNS:mla-interconnect.paysyslabs.com`, `O = DRPP`, `C = ZM`,
+     signed by the COMESA/DRPP CA.
+   - **Client certificate** (presented by `cch-mla`; Paysys's ingress validates it): CN not mandated by
+     Oscar's side, but asked to be told in advance so it can be allow-listed; also signed by the
+     COMESA/DRPP CA.
+
+   Both certificates now come from the same COMESA/DRPP-operated CA — the single-CA decision agreed with
+   Oscar — rather than from the Paysys-operated Interconnect CA the 2026-09-15/21 material above describes.
+   The interim CA generated 2026-09-15 and corrected 2026-09-21 (`O=Paysys, CN=cch-mla-ppa-interconnect-ca`)
+   is superseded by this design and is not the CA that will ultimately be trusted; it remains in place on
+   `10.0.150.69` only because `PPA_MTLS_DISABLED=true` still means nothing is consuming it for a real
+   connection.
+
+   **Status as of 2026-09-28.** CN/O/C values for the server certificate have been sent to Oscar; the CSR
+   itself has not yet been generated. Oscar is preparing the CA bundle (root and intermediates, public
+   certificates only) to send over the same secure channel. Next steps, in order: receive the CA bundle;
+   generate the server CSR (`openssl req -new -newkey rsa:2048 -nodes -keyout mla-interconnect.key -out
+   mla-interconnect.csr -subj "/C=ZM/O=DRPP/CN=mla-interconnect.paysyslabs.com" -addext
+   "subjectAltName=DNS:mla-interconnect.paysyslabs.com"`, key type/size to be confirmed with Oscar first,
+   private key kept on the gateway host, only the `.csr` sent); agree who generates `cch-mla`'s own
+   client key/CSR (the key should be generated where `cch-mla` actually runs, on the Switch side) and its
+   CN, and send it to the COMESA/DRPP CA for signing; configure `cch-mla` with its client cert/key, the CA
+   bundle to trust the server certificate, and the target `https://mla-interconnect.paysyslabs.com/others/...`
+   (see PR [psl-izyane-cch-frms/cch-mla#1](https://github.com/psl-izyane-cch-frms/cch-mla/pull/1)); and
+   configure the ingress layer to verify client certificates against the COMESA/DRPP CA, enforce on
+   `/others` only, optionally allow-list `cch-mla`'s CN, and restrict origin access. Also still open: which
+   host runs the "UAT Nginx" — confirmed not to be the PPA VM, `10.0.115.186`.
 2. ~~**DFSP JWS public keys (`JWS_PUBLIC_KEY_DIR`).**~~ **Dissolved [2026-09-23]** — MLA no longer validates DFSP signatures, so there is no key directory to provision. Original item: the mechanism is a watched directory of
    `<dfspId>.pem` files, chosen so adding a key never requires a restart (`engineering-rules.md` §8). At
    the 2026-09-09 meeting, Sam (Mojoloop Foundation) recommended MLA interface with **MCM (Mojaloop
@@ -549,20 +618,22 @@ Consolidated from every "Open" row above. Six were asked; the 2026-09-14 meeting
    shared with Paysys. Still outstanding: the PPA hostname (or public IP if the hostname won't resolve
    against a public DNS resolver) — the address given back was flagged 2026-09-20 as looking like an
    internal IP, pending Paysys's network team.
-5. **mTLS provisioning — architecture resolved 2026-09-15, key-exchange mechanism proposed 2026-09-20,
-   gateway not yet built.** Two separate trust boundaries (DRPP and Paysyslabs) means neither side's
-   cert-manager trusts the other's certificates today. George's proposal — a dedicated Interconnect CA
+5. **mTLS provisioning — architecture reversed 2026-09-25/28, CSR/CA-bundle exchange under way.** Two
+   separate trust boundaries (DRPP and Paysyslabs) means neither side's cert-manager trusts the other's
+   certificates by default. George's 2026-09-15 proposal — a dedicated Paysys-operated Interconnect CA
    terminating at a new ingress gateway in front of PPA, per
-   [`certificate-setup-proposal.md`](certificate-setup-proposal.md) — is accepted as the target. That
-   gateway is new Paysys-side infrastructure, not yet built. Built against an interim, reversible default
-   in the meantime (`cch-mla/deploy/kubernetes/README.md`). **2026-09-20**: George proposed a CSR-based
-   exchange so no private key crosses the boundary (§8 item 1) — pending Paysys review. **TLS
-   version/cipher suites confirmed 2026-09-20**: TLS 1.2/1.3 and any OpenSSL-supported cipher suite are
-   acceptable to George's side — nothing further to negotiate on this point. **2026-09-21**: the interim
-   CA/client cert this item's "interim default" referred to was found to be the wrong material (dev-harness
-   CA, not a dedicated one) and was regenerated and corrected — full detail in §8 item 1's 2026-09-21
-   update. `ca.crt`/`client.crt` from the corrected CA were sent to George the same day; his CSR-based
-   exchange (above) is the next step once he reviews them.
+   [`certificate-setup-proposal.md`](certificate-setup-proposal.md) — was accepted as the target through
+   2026-09-21, and an interim CA/client identity was built and corrected against it
+   (`cch-mla/deploy/kubernetes/README.md`; §8 item 1's 2026-09-15/21 updates). **Superseded [2026-09-25 to
+   09-28]** by a secure-chat exchange with Oscar Cobar (COMESA/DRPP), the Infotex contact
+   ([`../meetings and emails/sept-28.md - Conversation with Oscar.md`](<../meetings and emails/sept-28.md - Conversation with Oscar.md>)):
+   **COMESA/DRPP now hosts the single interconnect CA, not Paysys**, and mTLS terminates at **Paysys's own
+   existing Tazama ingress gateway** (`mla-interconnect.paysyslabs.com`), not a new gateway in front of
+   PPA — so no new gateway needs to be built. `cch-mla` presents the client certificate; Paysys's ingress
+   presents the server certificate; both signed by the COMESA/DRPP CA. Full detail, including the current
+   CSR/CA-bundle exchange status, §8 item 1's 2026-09-25/28 update. **TLS version/cipher suites confirmed
+   2026-09-20**: TLS 1.2/1.3 and any OpenSSL-supported cipher suite are acceptable to George's side —
+   nothing further to negotiate on this point, and nothing in the 09-25/28 reversal changes it.
 6. **Metrics/health scraping — deliberately deferred.** DRPP has its own Prometheus/Grafana/Loki stack,
    but MLA-only metrics are limited in isolation; George suggested Paysyslabs scrape MLA's metrics
    directly instead. Agreed: deploy first, confirm the pod's reachable, revisit monitoring after.
@@ -587,9 +658,14 @@ items already being tracked, not new asks created by this deployment work.
    bump `03-mla-deployment.yaml`'s pinned image digest to a post-removal build.~~ **Done [2026-09-23]** —
    `03-mla-deployment.yaml` now pins `sha256:0907…` (tag `1e7610e`), pushed to GHCR and boot-tested
    standalone (`e2e-testing/remove-JWS.md` §11, `plan.md` §16's [2026-09-23] entries).
-4. Stand up the agreed ingress-gateway architecture on the Paysys side
+4. ~~Stand up the agreed ingress-gateway architecture on the Paysys side
    ([`certificate-setup-proposal.md`](certificate-setup-proposal.md)) and reissue MLA's client certificate
-   under the gateway's own Interconnect CA, retiring the interim CA once that's live.
+   under the gateway's own Interconnect CA, retiring the interim CA once that's live.~~ **Superseded
+   [2026-09-25/28]** — no new gateway is being built; mTLS terminates at the existing Tazama ingress
+   gateway instead, under a COMESA/DRPP-hosted CA (§8 item 1, §11 Q5). Current next steps: receive Oscar's
+   CA bundle; generate and send the server CSR; agree `cch-mla`'s own client CN and get it signed; wire
+   `cch-mla`'s config (PR #1); configure the ingress listener. Full detail in §8 item 1's 2026-09-25/28
+   update.
 5. Reply to George confirming the four decisions recorded in the 15 September update above, and send the
    registry URL + deploy token, `KAFKA_BROKERS`'s variable name, and the digest-pinning acknowledgement.
    **Partially superseded 2026-09-17** — access is being granted directly on GHCR per-username instead

@@ -5,6 +5,16 @@
 TAZAMA Interconnect Certificate Setup Proposal". Reproduced here as the source of record; the decision it
 fed into is in [`MLA-deployment-kubernetes.md`](MLA-deployment-kubernetes.md)'s 15 September update.
 
+**Superseded [2026-09-25 to 09-28].** The CA-ownership and termination-point design below — a
+Paysys-operated Interconnect CA, terminating at a new mTLS ingress gateway in front of PPA — was reversed
+in a secure-chat exchange with Oscar Cobar (COMESA/DRPP), the Infotex contact:
+[`../meetings and emails/sept-28.md - Conversation with Oscar.md`](<../meetings and emails/sept-28.md - Conversation with Oscar.md>).
+COMESA/DRPP now hosts the single interconnect CA, and mTLS terminates at Paysys's own Tazama ingress
+gateway (`mla-interconnect.paysyslabs.com`), with `cch-mla` presenting the client certificate — the CA
+ownership and the two certificates' roles are the reverse of what this document proposes below. Kept here
+as the historical proposal; [`MLA-deployment-kubernetes.md`](MLA-deployment-kubernetes.md) §7/§8/§11
+carries the current design.
+
 ---
 
 This note describes the certificate arrangement for the mutually authenticated link between the Mojaloop

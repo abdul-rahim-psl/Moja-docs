@@ -14,13 +14,13 @@ One PR reviewed per session turn, only when explicitly told to proceed — same 
 
 Given [2026-09-25]:
 
-| # | Repo | PR | Branch | Status |
-| - | ---- | -- | ------ | ------ |
-| 1 | `cch-rule-016` | [#7](https://github.com/psl-izyane-cch-frms/cch-rule-016/pull/7) | `feat/tc` | Not started |
-| 2 | `cch-rule-018` | [#7](https://github.com/psl-izyane-cch-frms/cch-rule-018/pull/7) | `feat/elot` | Not started |
-| 3 | `cch-rule-020` | [#7](https://github.com/psl-izyane-cch-frms/cch-rule-020/pull/7) | `feat/lta` | Not started |
-| 4 | `cch-rule-024` | [#7](https://github.com/psl-izyane-cch-frms/cch-rule-024/pull/7) | `feat/nctm` | Not started |
-| 5 | `cch-rule-026` | [#7](https://github.com/psl-izyane-cch-frms/cch-rule-026/pull/7) | `feat/ctm` | Not started |
+| # | Repo | PR | Branch | Status | Verdict | Review |
+| - | ---- | -- | ------ | ------ | ------- | ------ |
+| 1 | `cch-rule-016` | [#7](https://github.com/psl-izyane-cch-frms/cch-rule-016/pull/7) | `feat/tc` | Reviewed [2026-09-28] | Changes Requested | `claude/pr-reviews/cch-rule-016-7.md` |
+| 2 | `cch-rule-018` | [#7](https://github.com/psl-izyane-cch-frms/cch-rule-018/pull/7) | `feat/elot` | Reviewed [2026-09-28] | Changes Requested | `claude/pr-reviews/cch-rule-018-7.md` |
+| 3 | -->`cch-rule-020` | [#7](https://github.com/psl-izyane-cch-frms/cch-rule-020/pull/7) | `feat/lta` | Reviewed [2026-09-28] | Changes Requested | `claude/pr-reviews/cch-rule-020-7.md` |
+| 4 | `cch-rule-024` | [#7](https://github.com/psl-izyane-cch-frms/cch-rule-024/pull/7) | `feat/nctm` | Reviewed [2026-09-28] | Changes Requested | `claude/pr-reviews/cch-rule-024-7.md` |
+| 5 | `cch-rule-026` | [#7](https://github.com/psl-izyane-cch-frms/cch-rule-026/pull/7) | `feat/ctm` | Not started | — | — |
 | 6 | `cch-rule-030` | [#6](https://github.com/psl-izyane-cch-frms/cch-rule-030/pull/6) | `feat/tuca` | Not started |
 | 7 | `cch-rule-044` | [#6](https://github.com/psl-izyane-cch-frms/cch-rule-044/pull/6) | `feat/stfd` | Not started |
 | 8 | `cch-rule-048` | [#6](https://github.com/psl-izyane-cch-frms/cch-rule-048/pull/6) | `feat/ltah` | Not started |
