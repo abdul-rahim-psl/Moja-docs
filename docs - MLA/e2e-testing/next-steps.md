@@ -27,13 +27,10 @@ way the dated `continue/` files or `plan.md` §16 entries are meant to be.
    **Ships as one combined image** once F-11 through F-22 are all done, to both `10.0.150.69` and GHCR
    (re-pinning `03-mla-deployment.yaml`'s digest), with its own follow-up email to George — see item 8 below
    for why this is now separate from the JWS-removal email already sent.
-2. **`cch-ppa` schema-completeness fix.** Add the missing ISO fields (`RmtInf`, `SttlmInf`, `ChrgBr`, `Purp`,
-   `PmtMtd`, `ReqdAdvcTp`, `Dbtr`/`Cdtr`/`DbtrAcct`/`CdtrAcct`, and others) to the `pain.001`/`pain.013`/
-   `pacs.008` translations so local schema validation stops rejecting them. **The single highest-leverage fix
-   live-verified as blocking** — confirmed identically on both the local stack (`e2e-testing/locally-up.md`)
-   and the real remote PPA (`plan.md` §16's [2026-09-21] SSH-access entry), and it gates everything
-   downstream of TMS dispatch (`e2e-testing/checklist.md` §3.6, §3.8, §3.9). Touches `cch-ppa`, the other
-   engineer's repo — worth flagging before starting, not a unilateral change to make quietly.
+~~2. `cch-ppa` schema-completeness fix.~~ **Resolved [2026-09-29]** — fixed by Umair Khan in `cch-ppa`
+   commit `a625ed69`, live-verified independently against a real local MLA→PPA→TMS chain (`plan.md` §16's
+   [2026-09-29] entry; `strategy.md` §1). Removed from this menu per its own convention (a closed option is
+   removed, not struck through) — kept visible here once, this edit, as the record of why it left the list.
 3. **`TxSts: "ABOR"` translation gap.** Add the missing row to the `TxSts` translation table and the missing
    branch in `isTransferRejection` for the payee-DFSP-rejection shape Sam supplied
    (`docs/docs - MLA/meetings and emails/sam-email-2026-09-16-rejection-samples.md`, `plan.md` §14 item 3). Currently falls through

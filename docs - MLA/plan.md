@@ -3744,3 +3744,78 @@ entry beyond recording the new plan).
                 allow-list `cch-mla`'s CN. Also open: which host runs the "UAT Nginx" — confirmed not to
                 be the PPA VM, `10.0.115.186`. None of this is live-verified yet; §11's "Real mTLS against
                 the real PPA" checklist bullet stays open until it is.
+
+### `cch-ppa` schema-completeness gap — closed, live-verified end to end        [2026-09-29]
+
+**Context.** `e2e-testing/checklist.md` §3, `e2e-testing/locally-up.md`, and `e2e-testing/mla-to-ppa-event-envelopes.md`
+had all independently confirmed the same gap: `pain.001`/`pain.013`/`pacs.008` failed PPA's own local ISO
+schema validation on real DRPP traffic (missing `RmtInf`, `SttlmInf`, `ChrgBr`, `Purp`, `Dbtr`/`Cdtr` fields),
+so no real corridor ever reached TMS. `e2e-testing/next-steps.md` item 2 named it "the single highest-leverage
+fix live-verified as blocking." Muhammad Umair Khan (PPA's own engineer) fixed it in `cch-ppa` commit
+`a625ed69f1462ac80c6fc4acfce5c34ea401d964` ("fixes: tested against real payloads") on `main`, with his own
+regression tests and a 40/40 replay of `samples/mla-to-ppa-event-envelopes.md`'s captures. Per `CLAUDE.md`'s
+live-verification rule, that result was independently reproduced here — against a real local MLA, before
+being recorded as closed.
+
+**What the fix does**, read directly from the commit: `Purp.Cd` gained the already-documented
+`TRANSFER`/`BUSINESS` → `MP2B` mapping (only `CONSUMER` → `MP2P` had been wired up, and all five real
+captures carry `initiatorType: BUSINESS`); `SttlmInf.SttlmMtd`/`ChrgBr`/`RmtInf.Ustrd` on `pacs.008`, and
+`RmtInf.Ustrd` on `pain.001` by direct analogy, now apply their documented fallbacks (`"CLRG"`/`"SLEV"`/`""`)
+instead of omitting the field outright when the source is absent — all three interfaces changed from
+optional to required accordingly; `Dbtr.Nm`/`InitgPty` (payer name) now falls back through
+`complexName` → `payer.name` → a new `resolveDebtorName` (the payer's own MSISDN), because real captures
+tokenize `complexName` into one opaque PII string MLA's own US-PII-01/02 tokenization produces, which the
+existing decomposition into `{firstName, middleName, lastName}` could never parse; and `pacs.002`'s
+`TxSts`/`AccptncDtTm` now read the ISO-egress callback shape (`TxInfAndSts.TxSts`/`PrcgDt.DtTm`) that the
+real TRANSFER callback turns out to carry, not only the FSPIOP-native `transferState`/`completedTimestamp`
+shape the golden-path fixture used — `COMM`→`ACSC`/`RESV`→`ACSP` added by direct analogy to the existing
+FSPIOP mapping, no `ABORTED`-equivalent guessed since none appears in this capture set.
+
+**Built**       Nothing — this entry records live-verification of `cch-ppa`'s own fix, not a `cch-mla`
+                change. `cch-mla` itself is unchanged (`main` @ `f2fb624`).
+**Tests**       Not run here; Umair's own commit carries the regression suite (259/259 passing per his
+                README addendum). This entry's contribution is independent live reproduction, not unit
+                coverage.
+**Verified**    `live` — a real local three-service chain: `cch-mla` (`main` @ `f2fb624`) against a real
+                local Redpanda broker, `cch-ppa` (`main` @ `a625ed69`, built fresh from source) against
+                real local Postgres/ValKey, and the real local Tazama TMS stack (`tazama-tms-1` +
+                event-director + rule processors, already running). All 5 real `DRPP_Kafka_E2E_Pack`
+                corridors (100 raw records, the same captures `mla-to-ppa-event-envelopes.md` and Umair's
+                own replay used) fed via `npm run feeder`. Result, read directly from PPA's own Postgres
+                write-ahead store, not inferred from logs: `write_ahead` — 40/40 rows `completed`, zero
+                `failed`, zero stuck `pending`. `processed_pairs` — all 20 expected ISO messages present
+                (5 each of `pain.001.001.11`, `pain.013.001.09`, `pacs.008.001.10`, `pacs.002.001.12`).
+                This table's own claim-then-release design
+                (`cch-ppa/src/services/idempotency.service.ts`) means a surviving row is proof of a genuine
+                TMS acceptance, not just an attempt — the claim is released on a 4xx or exhausted 5xx/retry
+                and never re-inserted, so a present row was never rolled back. Zero DLQ writes
+                (`ppa_dlq_write_total` absent from `/metrics`), `ppa_tms_circuit_breaker_state=0` (closed)
+                throughout. MLA's own metrics: `mla_ppa_delivery_outcomes_total{outcome="success"}` and
+                zero `mla_consumer_lag` on every partition post-feed.
+**Diverged**    Two local-environment gaps found and worked around, neither a `cch-ppa`/`cch-mla` code
+                defect: (1) no `auth-service`/Keycloak exists in the local stack — a gap
+                `locally-up.md` §6.2 had already flagged — so PPA's `getBearerToken()` call
+                (`src/services/auth.service.ts`) had nothing to log in against. Worked around with a
+                throwaway, clearly non-production local stub (a ~20-line Node HTTP server returning a
+                JWT-shaped token from `POST /v1/auth/login`) — it satisfies only PPA's own client-side
+                shape checks; the local `tazama-tms-1` instance was independently confirmed to enforce no
+                auth at all (identical `400` response with or without an `Authorization` header), so this
+                stub proves the dispatch *code path*, not a real credential exchange, and must not be read
+                as evidence of anything auth-related. (2) PPA's `.env` pointed `TMS_BASE_URL` and
+                `TMS_AUTH_LOGIN_URL` at `localhost`, which inside PPA's own Docker container resolves to the
+                container itself, not the host running TMS and the stub — a local `docker-compose.yml`
+                networking mismatch, not a `cch-ppa` defect. Fixed by pointing both at the Docker bridge
+                gateway IP instead. Local write-ahead/correlation state was truncated (Postgres
+                `TRUNCATE`, ValKey volume recreated) after this fix, and all 5 corridors re-fed fresh, so
+                the `Verified` numbers above reflect only the corrected run, not the earlier
+                misconfigured attempt.
+**Left open**   The real `auth-service`/Keycloak chain is still genuinely unverified locally — this closes
+                the schema-completeness gap specifically, not US-PPA-13's full real bearer-token path.
+                Standing up a real `auth-service`/Keycloak locally remains separate, undone work if that
+                path itself ever needs live-verification. mTLS was not exercised (`DOCS_INSECURE_HTTP=true`
+                on PPA, `PPA_MTLS_DISABLED=true` on MLA) — orthogonal to this gap and tracked separately
+                under the Oscar/Infotex mTLS work above. `cch-ppa`'s own local write-ahead/`processed_pairs`
+                schema stores raw envelopes and message-type claims, not the translated ISO wire bodies
+                themselves, so this entry's evidence is claim-survival, not a byte-for-byte diff against the
+                previously-rejecting schema — sufficient given `idempotency.service.ts`'s claim/release
+                design, but noted for a future reader expecting to find the translated JSON in Postgres.
