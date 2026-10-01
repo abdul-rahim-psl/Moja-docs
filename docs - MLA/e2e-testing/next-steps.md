@@ -1,85 +1,77 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 
-# Next Steps — Options as of 2026-09-22
+# Next Steps — Options as of 2026-10-01
 
 **Status:** a menu, not a plan. Nothing here is sequenced or committed to; it is the set of possible next
-moves surfaced when onboarding a session against `strategy.md` §1, `plan.md` §13/§14, and
-`e2e-testing/remove-JWS.md`, at the point where Phase 7 is dev-complete-pending-CI, Phase 8 is partially
-under way, and the QA bugfix workstream (F-11 onwards) sits open on `paysys-QA-F11-onwards`. Superseded the
-moment any of these is actually picked up and tracked properly in `plan.md` §16 — this document does not
-replace that log.
+moves as things stand. Phase 7 is development-complete and waiting on a CI runner. Phase 8 is partly under
+way: our own test rig at `10.0.150.69` runs `main`, and CCH's own cluster deployment has not happened. The QA
+bugfix workstream has its fixes on `cch-mla` `main` (`f2fb624`), with the remaining findings open. Any item
+here stops being covered by this menu once it is picked up and logged in `plan.md` §16, which this document
+does not replace.
 
-**This is a living document.** It is expected to change in place as work moves forward — an option removed
-once it closes or stops being live (not left struck through, unlike `plan.md` §13's convention: this list is
-a menu of what's still available, not a history), and a new option added the moment something else opens up.
-Re-read it fresh each session rather than trusting a stale local copy; do not treat it as a fixed record the
-way the dated `continue/` files or `plan.md` §16 entries are meant to be.
+**This is a living document.** It changes in place as work moves forward. A closed option is removed, not
+struck through (unlike `plan.md` §13's convention), because this list is a menu of what is still available,
+not a history. A new option is added as soon as it opens. Item numbers are stable identifiers cited
+elsewhere, so a removed item's number is not reused. Re-read this file fresh each session rather than
+trusting a stale local copy.
 
 ---
 
 ## A. Pure engineering — no external blocker, can start immediately
 
-1. **F-11 through F-22 QA findings.** Medium/Low severity. In progress on `paysys-remaining-bugs-f11-onwards`
-   (cut fresh from `main` [2026-09-23], post-JWS-removal — `paysys-QA-F11-onwards` was left stale, 5 commits
-   behind `main`, and is superseded by this branch). `bugs/qa-review-findings.md` has each finding, one fix
-   per prompt by the user's cadence; `bugs/qa-review-remediation.md` has the proposed fix, in suggested order.
-   Fully self-contained — no CCH/COMESA dependency. **F-11 done** [2026-09-23] — see `plan.md` §16.
-   **Ships as one combined image** once F-11 through F-22 are all done, to both `10.0.150.69` and GHCR
-   (re-pinning `03-mla-deployment.yaml`'s digest), with its own follow-up email to George — see item 8 below
-   for why this is now separate from the JWS-removal email already sent.
-~~2. `cch-ppa` schema-completeness fix.~~ **Resolved [2026-09-29]** — fixed by Umair Khan in `cch-ppa`
-   commit `a625ed69`, live-verified independently against a real local MLA→PPA→TMS chain (`plan.md` §16's
-   [2026-09-29] entry; `strategy.md` §1). Removed from this menu per its own convention (a closed option is
-   removed, not struck through) — kept visible here once, this edit, as the record of why it left the list.
+1. **Remaining QA findings.** Fixed and live-verified on `main`: F-01–F-16, F-25, F-26, F-28a. F-17 is
+   deliberately deferred and F-33 is closed by decision (`plan.md` §16). Open and self-contained: F-18–F-22
+   (`bugs/qa-review-findings.md`, fix direction in `bugs/qa-review-remediation.md`), and F-24 and F-29–F-42
+   plus Q-01–Q-07 (`bugs/qa-sweep-2-findings.md`, which carries both the finding and its fix direction).
+   **F-24** (High: a Kafka startup failure is never retried, and liveness stays `UP`) was proposed as the next
+   one to pick up. One finding at a time, using `CLAUDE.md`'s preview/close-out cadence. The F-11–F-28
+   image already runs on `10.0.150.69` [2026-09-25]; it still needs to be pushed to GHCR and pinned in
+   `03-mla-deployment.yaml` (see item 8).
 3. **`TxSts: "ABOR"` translation gap.** Add the missing row to the `TxSts` translation table and the missing
    branch in `isTransferRejection` for the payee-DFSP-rejection shape Sam supplied
-   (`docs/docs - MLA/meetings and emails/sam-email-2026-09-16-rejection-samples.md`, `plan.md` §14 item 3). Currently falls through
-   silently to Tazama's `PDNG` default — a silent-failure class `strategy.md` §7 specifically warns about.
+   (`meetings and emails/sam-email-2026-09-16-rejection-samples.md`, `plan.md` §14 item 3). It currently falls
+   through silently to Tazama's `PDNG` default, a silent-failure class `strategy.md` §7 specifically warns
+   about. `cch-ppa` `a625ed69` added `COMM`→`ACSC`/`RESV`→`ACSP` for the ISO-egress callback shape and
+   deliberately left out any `ABOR` equivalent, so the gap is still open on PPA's side.
+15. **Re-evaluate F-23 against the `cch-ppa` change it was parked for.** `cch-ppa` `9c5709e` [2026-09-28]
+   removed mTLS from PPA entirely. PPA now serves plain HTTP on every route, including health, and its own
+   code comment places mTLS termination at an Nginx in front of PPA. PPA itself no longer requires a client
+   certificate on `/health/ready`. Whether F-23 still applies now depends on whether the mTLS-terminating
+   ingress (`mla-interconnect.paysyslabs.com`) requires a client certificate on the health path. Also
+   re-check F-35 against the new shape. `plan.md` §16's F-23 entry lists exactly what to check.
+16. **F-28b: tokenize identity inside the quote callback's `ilpPacket`.** Decode the ILP v4 packet, tokenize
+   the identity fields, re-encode it. PPA never reads this packet on the quote-callback leg, so there is no
+   correctness dependency to protect (`plan.md` §16's F-28 entry). Not started; needs its own preview.
 
 ## B. Requires a CCH/story-author decision first, but a reversible default can be built now
 
-4. **Payee `complexName` tokenization.** Open spec question — no "Payee legal name" row exists in the
-   Fields-to-Tokenize table (`plan.md` §16's [2026-09-21] SSH-access entry; `core-knowledge.md` §13.3). Per
-   `CLAUDE.md`'s external-decisions rule, a reversible default (tokenize it) could be built now while the
-   question is put to CCH/the story author, rather than waiting.
-
-~~5. PII secret rotation trigger mechanism~~ **Resolved [2026-09-18], spec confirmed [2026-09-22]** —
-`docs/docs - MLA/meetings and emails/tokenization-feedback.md`; `plan.md` §16's "gate item #2 reversed" entry. No
-rotation, a long-lived key; the trigger question is moot and no code change is needed. Removed from this
-menu per its own convention (a closed option is removed, not struck through) — kept visible here once, this
-edit, as the record of why it left the list.
+17. **Kafka TLS/SASL (F-27).** MLA's Kafka connection has no TLS/SASL support, and nobody has asked CCH
+   whether their broker requires it. This is CCH's to answer. The support itself can be built now behind
+   configuration, off by default.
 
 ## C. Documentation / decision-support work, no code
 
-6. ~~**Advance `e2e-testing/remove-JWS.md`.**~~ **Built and live-verified [2026-09-23]** on `cch-mla` branch `paysys-remove-JWS`, closure pending that document's §9 sign-offs. Still open from this item: e.g. draft the narrower follow-up question to Michael (§1.1's
-   surviving tamper-evidence argument — corruption/truncation on the switch-to-Kafka hop, distinct from the
-   foreign-producer question he already answered) before CCH decides whether to authorize removal. Explicitly
-   not yet actioned; §9 of that document lists exactly which decisions are not engineering's to make alone.
-7. **Formally close Phase 4.** Both gate items are now resolved (#1 fail-mode, #2 secret rotation — no
-   rotation, a long-lived key) — this is now a single closure write-up, not two items to keep visibly
-   separate.
+18. **Correct `plan.md` §16's F-17 entry (F-34).** It says the parked-recovery path retries only the commit;
+   it actually re-delivers. This is a documentation finding with no code change.
 
 ## D. Coordination / drafting for someone else to act on
 
-These need someone to actually send them — flagged here as live gaps, not drafted or sent by this document.
+These need someone to actually send them. They are flagged here as live gaps; this document does not draft
+or send them.
 
-8. ~~**Tell George about the JWS removal.**~~ **Sent [2026-09-23]** —
-   `docs/docs - MLA/meetings and emails/george-email-2026-09-23-jws-removal.md`; `plan.md` §16's own entry. Sent as its
-   own email, ahead of the F-11+ QA fixes rather than combined with them (the plan at onboarding expected one
-   combined email) — the user's deliberate sequencing choice, sent while item 1's bugfix work was still
-   in progress. **A second, later email to George is still owed** once the F-11+ combined image ships,
-   covering the bugfixes.
-10. **Push CCH/techops on the manifest `kubectl apply`.** Handed to George Murage [2026-09-15]; unconfirmed
-    whether techops has applied it since the [2026-09-17] check-in (`plan.md` §13.1). The JWS-removal email
-    above (item 8) asked directly whether anything is blocking this.
-11. **Chase the Infotex call.** Still not scheduled — needed to settle MLA's outbound IP and mTLS certificate
-    routing (`plan.md` §13.1, `deployment/MLA-deployment-kubernetes.md` §11 Q4/Q5).
-12. ~~**Chase DFSP keys / JWKS / the MCM onboarding video.**~~ **Dissolved [2026-09-23]** by the JWS removal (sign-off confirmed). Original item: Pending from Sam since the [2026-09-09] meeting
-    (`plan.md` §13.1, §14 item 1) — the single highest-value unblock for Phase 3's genuine-signature
-    verification, and the item `remove-JWS.md` §1.2 notes would dissolve entirely if JWS is removed instead.
-13. **Ask George for his annotated event table.** Covering the ~52% of the 500-record export not yet
+8. **Email George about the QA bugfixes.** The JWS-removal email went out on its own [2026-09-23]
+   (`meetings and emails/george-email-2026-09-23-jws-removal.md`). A second email covering the bugfixes is
+   owed once that image is on GHCR and pinned (item 1).
+10. **Push CCH/techops on the manifest `kubectl apply`.** Handed to George Murage [2026-09-15]. No
+    confirmation has come in since the [2026-09-17] check-in that techops has applied it (`plan.md` §13.1).
+19. **Complete the mTLS certificate exchange with Oscar Cobar (COMESA/DRPP).** The architecture is settled
+    [2026-09-25 to 09-28]: COMESA/DRPP hosts the CA, and mTLS terminates at Paysys's ingress gateway
+    `mla-interconnect.paysyslabs.com`. Still open: receive Oscar's CA bundle; generate and send the server
+    CSR; agree who generates `cch-mla`'s client key/CSR and its CN; identify which host runs the "UAT Nginx"
+    (`plan.md` §16's [2026-09-28] entry, `deployment/MLA-deployment-kubernetes.md` §11).
+13. **Ask George for his annotated event table.** It covers the ~52% of the 500-record export not yet
     reflected in the per-operation model (`plan.md` §14 item 2's follow-up, not yet received).
-14. **Ask Sam for a genuine FX-side rejection/timeout sample.** Still missing — every FX-labelled folder in
+14. **Ask Sam for a genuine FX-side rejection/timeout sample.** Still missing. Every FX-labelled folder in
     the [2026-09-16] report either hides the raw shape behind an SDK abstraction or returns `202` with no
     visible failure callback (`plan.md` §14 item 3).
 
@@ -87,7 +79,8 @@ These need someone to actually send them — flagged here as live gaps, not draf
 
 ## How this menu was derived
 
-Read in this order: `strategy.md` §1 (orientation) → `plan.md` §13 (blocked work) and §14 (open questions for
-COMESA) → `e2e-testing/remove-JWS.md` (the newest open proposal) → `bugs/qa-review-findings.md` (the QA
-workstream's own remaining scope). Nothing here required primary research beyond what those documents already
-state; this file only collects and orders the possibilities they separately describe.
+Read in this order: `strategy.md` §1 (orientation) → `plan.md` §13 (blocked work), §14 (open questions for
+COMESA) and §16's most recent entries → `bugs/qa-review-findings.md` and `bugs/qa-sweep-2-findings.md`
+(the QA workstream's remaining scope and its "Decisions that are not engineering's" table). Nothing here
+required primary research beyond what those documents state, except item 15, which comes from reading
+`cch-ppa`'s own git history.
