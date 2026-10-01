@@ -4,8 +4,8 @@
 
 **Status:** a menu, not a plan. Nothing here is sequenced or committed to; it is the set of possible next
 moves as things stand. Phase 7 is development-complete and waiting on a CI runner. Phase 8 is partly under
-way: CCH reports `cch-mla` deployed on its own cluster and sending to the ingress gateway (Oscar Cobar,
-[2026-10-01]; not yet verified on the Paysys side), and our own test rig at `10.0.150.69` runs `main`. The QA bugfix workstream has its fixes on `cch-mla` `main` (`f2fb624`), with the remaining findings open. Any item
+way: CCH's own `cch-mla` is deployed and delivering to PPA through the ingress gateway (verified
+[2026-10-01]), and our own test rig at `10.0.150.69` runs `main`. The QA bugfix workstream has its fixes on `cch-mla` `main` (`f2fb624`), with the remaining findings open. Any item
 here stops being covered by this menu once it is picked up and logged in `plan.md` §16, which this document
 does not replace.
 
@@ -19,15 +19,12 @@ trusting a stale local copy.
 
 ## A. Pure engineering — no external blocker, can start immediately
 
-20. **Verify CCH's report, then confirm to Oscar whether PPA sees CCH's traffic.** He asked for this explicitly
-    (`meetings and emails/oscar-message-2026-10-01-cch-mla-traffic.md`). Run the `write_ahead` query from
-    `plan.md` §16's [2026-10-01] PPA-host entry on `10.0.115.186`: `created_at` shows when each envelope
-    arrived, and a row whose `id` is absent from this side's capture fixtures is fresh live traffic.
-    `fspiop-source` cannot discriminate, because the captures came from CCH's staging environment and
-    use the same test DFSP IDs. The same
-    query settles where PPA's startup burst of 57 DLQ writes came from. PPA was down from 2026-09-30 09:19
-    EDT until 2026-10-01, so CCH traffic sent in that window could only have landed if MLA re-delivered it
-    afterwards.
+20. **Reply to Oscar.** CCH's delivery to PPA is verified (`plan.md` §16's [2026-10-01] verification entry):
+    all six correlation IDs from his evidence are in PPA's write-ahead store. The reply should also say that
+    none of it has reached Tazama yet (`processed_pairs` is empty since 2026-09-28; item 21 fixes it), and ask for CCH's MLA logs and
+    metrics covering the PPA outage, 2026-09-30 13:19 UTC to about 2026-10-01 05:35 UTC. About 12 scheduled
+    batches fell inside that window, but only 153 envelopes arrived afterwards, so roughly 500 are
+    unaccounted for.
 21. **Rebuild PPA on `10.0.115.186` from current `cch-ppa` `main`.** The running image (`cch-ppa-ppa`,
     built locally from an unknown commit) very likely predates the schema fix `a625ed69`, so QUOTE and
     TRANSFER traffic fails local validation and never reaches TMS. In the same pass: point `TMS_BASE_URL` and

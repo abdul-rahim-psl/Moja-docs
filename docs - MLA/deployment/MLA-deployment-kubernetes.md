@@ -139,12 +139,15 @@ Paysys-operated one.
 itself has not yet been generated. Oscar is preparing the CA bundle (root and intermediates) to send over
 the same secure channel. Full detail and the exact `openssl` CSR command: §7, §8 item 1, §11 Q4/Q5.
 
-**Update, 1 October 2026 — CCH reports MLA deployed and sending (unverified here); the UAT ingress path confirmed.** Oscar Cobar
+**Update, 1 October 2026 — CCH's MLA verified delivering to PPA; the UAT ingress path confirmed.** Oscar Cobar
 (CCH techops lead) reports that `cch-mla` is deployed on CCH's own cluster and has sent traffic to
 `mla-interconnect.paysyslabs.com`. He asks Paysys to confirm that PPA sees it
 ([`../meetings and emails/oscar-message-2026-10-01-cch-mla-traffic.md`](<../meetings and emails/oscar-message-2026-10-01-cch-mla-traffic.md>)).
-That report is not yet verified on the Paysys side: no PPA write-ahead row has been traced to a CCH DFSP, and no ingress-gateway log has been checked. Oscar's evidence is not in this knowledge base. Which image digest CCH runs, and whether mTLS was in use, are
-not yet confirmed. The same day the user confirmed the UAT path, sketched in
+**Verified the same day**: the six correlation IDs in the `Forwarded` log lines he sent from pod
+`cch-mla-fd5c4b744-7x275` (`region-stg-master-1`) are all in PPA's write-ahead store, with matching
+transaction IDs, first arrival 2026-09-28 19:46:52 UTC. CCH's MLA trusts the gateway through a self-signed
+certificate bundled into its CA file, a stopgap until the COMESA/DRPP CA exchange (§8 item 1) completes.
+Still unknown: which image digest CCH runs, and whether the gateway verifies MLA's client certificate. The same day the user confirmed the UAT path, sketched in
 [`architecture/CCh-->PSL architecture.jpeg`](<architecture/CCh-->PSL architecture.jpeg>), and §2 below is
 updated to match:
 
@@ -233,7 +236,7 @@ reflects it:
                                              └──────────────────────────────────────────────────────────┘
 ```
 
-- **MLA is deployed inside CCH's own cluster** (reported deployed and sending by Oscar Cobar [2026-10-01], not yet verified on the Paysys side), alongside (or at least network-adjacent to) the Kafka
+- **MLA is deployed inside CCH's own cluster** (deployed, and its delivery to PPA verified [2026-10-01]), alongside (or at least network-adjacent to) the Kafka
   broker carrying `topic-event-audit`. This is *why* Oscar's team is the one running `kubectl`, not us —
   MLA holds no Tazama-scoped credential and cannot leave CCH's boundary (`core-knowledge.md` §1).
 - **PPA and Tazama run on the Paysys side**, on the PPA host `10.0.115.186`: PPA's own compose project
@@ -635,7 +638,7 @@ to CCH and what stayed open, not a full epic/story pair).
 Consolidated from every "Open" row above. Six were asked; the 2026-09-14 meeting with George
 (`docs/docs - MLA/meetings and emails/14-sept-deployment-meeting.md`) answered four live:
 
-1. **Format.** **Moot in practice, if CCH's report holds.** CCH reports `cch-mla` deployed [2026-10-01], not yet verified on the Paysys side. Whether it used these plain
+1. **Format.** **Moot in practice.** CCH has deployed `cch-mla`, and its delivery to PPA is verified [2026-10-01]. Whether it used these plain
    manifests unchanged or adapted them is not recorded.
 2. **Registry — resolved.** Flexible on location; just needs a URL and a valid auth token. Settled on
    GHCR (`ghcr.io/psl-izyane-cch-frms/cch-mla`), image pushed — see §6's 2026-09-15 update above.
@@ -645,7 +648,7 @@ Consolidated from every "Open" row above. Six were asked; the 2026-09-14 meeting
    confirmation is still outstanding.
 4. **The PPA endpoint — resolved.** The address is the ingress gateway, `mla-interconnect.paysyslabs.com`,
    on a public IP, reached by IP allow-listing rather than a VPN (George, 2026-09-20). DRPP's source IP is
-   on the gateway's allow-list. CCH reports its MLA has sent traffic to it [2026-10-01], not yet verified on the Paysys side.
+   on the gateway's allow-list. CCH's MLA delivers through it, verified [2026-10-01].
 5. **mTLS provisioning — architecture reversed 2026-09-25/28, CSR/CA-bundle exchange under way.** Two
    separate trust boundaries (DRPP and Paysyslabs) means neither side's cert-manager trusts the other's
    certificates by default. George's 2026-09-15 proposal — a dedicated Paysys-operated Interconnect CA
@@ -698,9 +701,9 @@ items already being tracked, not new asks created by this deployment work.
 5. Reply to George confirming the four decisions recorded in the 15 September update above, and send the
    registry URL + deploy token, `KAFKA_BROKERS`'s variable name, and the digest-pinning acknowledgement.
    **Partially superseded 2026-09-17** — access is being granted directly on GHCR per-username instead
-   (see §6's 2026-09-17 update); invite `KhaledSaiidi` and `orcr` (Read role). CCH reports `cch-mla` deployed [2026-10-01], which would mean it obtained
-   the image. Unverified here, and which digest it runs is unknown.
+   (see §6's 2026-09-17 update); invite `KhaledSaiidi` and `orcr` (Read role). CCH has deployed `cch-mla` [2026-10-01], so it obtained the image; which digest
+   it runs is unknown.
 6. Live-verify against CCH's actual cluster before calling any of this done, per `engineering-rules.md`
-   §11. CCH reports it applied and sent traffic [2026-10-01]. The Paysys-side half of that proof is
-   still open: PPA's write-ahead store showing CCH's envelopes, which is what Oscar asked Paysys to
-   confirm.
+   §11. Done for delivery [2026-10-01]: CCH applied it, and PPA's write-ahead store holds CCH's
+   envelopes. Still open: QUOTE and TRANSFER traffic does not reach Tazama until PPA is rebuilt from
+   current `main`, and real mTLS with the COMESA/DRPP CA.
