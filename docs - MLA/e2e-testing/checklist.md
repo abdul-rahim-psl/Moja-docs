@@ -16,7 +16,7 @@ is not used here.
 
 - [1. The run](#1-the-run)
 - [2. Definition of done](#2-definition-of-done)
-- [3. PPA correctness — definition of done (not yet run)](#3-ppa-correctness--definition-of-done-not-yet-run)
+- [3. PPA correctness — definition of done (partially run)](#3-ppa-correctness--definition-of-done-partially-run)
 
 ---
 

@@ -4,8 +4,8 @@
 
 **Status:** a menu, not a plan. Nothing here is sequenced or committed to; it is the set of possible next
 moves as things stand. Phase 7 is development-complete and waiting on a CI runner. Phase 8 is partly under
-way: our own test rig at `10.0.150.69` runs `main`, and CCH's own cluster deployment has not happened. The QA
-bugfix workstream has its fixes on `cch-mla` `main` (`f2fb624`), with the remaining findings open. Any item
+way: CCH reports `cch-mla` deployed on its own cluster and sending to the ingress gateway (Oscar Cobar,
+[2026-10-01]; not yet verified on the Paysys side), and our own test rig at `10.0.150.69` runs `main`. The QA bugfix workstream has its fixes on `cch-mla` `main` (`f2fb624`), with the remaining findings open. Any item
 here stops being covered by this menu once it is picked up and logged in `plan.md` §16, which this document
 does not replace.
 
@@ -18,6 +18,31 @@ trusting a stale local copy.
 ---
 
 ## A. Pure engineering — no external blocker, can start immediately
+
+20. **Verify CCH's report, then confirm to Oscar whether PPA sees CCH's traffic.** He asked for this explicitly
+    (`meetings and emails/oscar-message-2026-10-01-cch-mla-traffic.md`). Run the `write_ahead` query from
+    `plan.md` §16's [2026-10-01] PPA-host entry on `10.0.115.186`: `created_at` shows when each envelope
+    arrived, and a row whose `id` is absent from this side's capture fixtures is fresh live traffic.
+    `fspiop-source` cannot discriminate, because the captures came from CCH's staging environment and
+    use the same test DFSP IDs. The same
+    query settles where PPA's startup burst of 57 DLQ writes came from. PPA was down from 2026-09-30 09:19
+    EDT until 2026-10-01, so CCH traffic sent in that window could only have landed if MLA re-delivered it
+    afterwards.
+21. **Rebuild PPA on `10.0.115.186` from current `cch-ppa` `main`.** The running image (`cch-ppa-ppa`,
+    built locally from an unknown commit) very likely predates the schema fix `a625ed69`, so QUOTE and
+    TRANSFER traffic fails local validation and never reaches TMS. In the same pass: point `TMS_BASE_URL` and
+    `TMS_AUTH_LOGIN_URL` at the co-located Tazama core stack (host ports 5000 and 3020, not `localhost`), with
+    real Keycloak credentials; and stop publishing Postgres (5432, password `ppa`/`ppa`) and ValKey (6379,
+    no auth) on `0.0.0.0`. Keep the `restart: always` override at `/opt/cch-ppa/docker-compose.override.yml`,
+    and run compose from that directory without `-f`.
+22. **Deploy the internal Nginx reverse proxy on `10.0.115.186`.** It sits between the ingress gateway and
+    PPA, runs in Docker with `restart: always`, and the Nginx image's default config is backed up before it
+    is replaced (`plan.md` §16's [2026-10-01] entries). Design questions are open with the user: where TLS
+    ends and what the gateway forwards; the gateway's internal IP and the Nginx listen port; which hop
+    strips `/others`; the health-probe path (F-23); the image source (the `10.0.70.92:5000` registry or
+    `docker save | load`, since the host has no Docker Hub access); and whether the `10.0.150.69` test rig
+    keeps a direct path to PPA. Host constraints: SELinux `Enforcing` (bind mounts need `:Z`), and
+    Docker-published ports bypass firewalld.
 
 1. **Remaining QA findings.** Fixed and live-verified on `main`: F-01–F-16, F-25, F-26, F-28a. F-17 is
    deliberately deferred and F-33 is closed by decision (`plan.md` §16). Open and self-contained: F-18–F-22
@@ -62,13 +87,11 @@ or send them.
 8. **Email George about the QA bugfixes.** The JWS-removal email went out on its own [2026-09-23]
    (`meetings and emails/george-email-2026-09-23-jws-removal.md`). A second email covering the bugfixes is
    owed once that image is on GHCR and pinned (item 1).
-10. **Push CCH/techops on the manifest `kubectl apply`.** Handed to George Murage [2026-09-15]. No
-    confirmation has come in since the [2026-09-17] check-in that techops has applied it (`plan.md` §13.1).
 19. **Complete the mTLS certificate exchange with Oscar Cobar (COMESA/DRPP).** The architecture is settled
     [2026-09-25 to 09-28]: COMESA/DRPP hosts the CA, and mTLS terminates at Paysys's ingress gateway
     `mla-interconnect.paysyslabs.com`. Still open: receive Oscar's CA bundle; generate and send the server
-    CSR; agree who generates `cch-mla`'s client key/CSR and its CN; identify which host runs the "UAT Nginx"
-    (`plan.md` §16's [2026-09-28] entry, `deployment/MLA-deployment-kubernetes.md` §11).
+    CSR; agree who generates `cch-mla`'s client key/CSR and its CN (`plan.md` §16's [2026-09-28] entry,
+    `deployment/MLA-deployment-kubernetes.md` §11). The internal Nginx behind the gateway is item 22.
 13. **Ask George for his annotated event table.** It covers the ~52% of the 500-record export not yet
     reflected in the per-operation model (`plan.md` §14 item 2's follow-up, not yet received).
 14. **Ask Sam for a genuine FX-side rejection/timeout sample.** Still missing. Every FX-labelled folder in

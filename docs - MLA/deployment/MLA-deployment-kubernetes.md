@@ -121,9 +121,10 @@ were sent to George the same day. Full detail: §8 item 1, §11 Q5.
    [`certificate-setup-proposal.md`](certificate-setup-proposal.md) proposed.
 3. **COMESA/DRPP hosts and is accountable for that CA — the reverse of the 15-September proposal, where
    Paysys operated the Interconnect CA.**
-4. mTLS terminates at Paysys's own Tazama ingress gateway, `mla-interconnect.paysyslabs.com` — not at a
-   new gateway in front of PPA as the 15-September proposal had it. This is a genuine simplification: the
-   gateway already exists, rather than being new infrastructure to stand up.
+4. mTLS terminates at Paysys's own Tazama ingress gateway, `mla-interconnect.paysyslabs.com`, rather than
+   at a dedicated gateway under a Paysys-operated CA as the 15-September proposal had it. The ingress
+   gateway already exists. Behind it, an internal Nginx on the PPA host forwards to PPA, and that one is
+   new infrastructure (1 October update below).
 5. `cch-mla` itself handles the mTLS connection on the client side, through configuration — confirmed
    directly, since Oscar's side has no ingress/egress gateway of its own on the Switch side to originate
    it instead.
@@ -137,6 +138,28 @@ Paysys-operated one.
 **Status as of 2026-09-28.** CN/O/C values for the server certificate have been sent to Oscar; the CSR
 itself has not yet been generated. Oscar is preparing the CA bundle (root and intermediates) to send over
 the same secure channel. Full detail and the exact `openssl` CSR command: §7, §8 item 1, §11 Q4/Q5.
+
+**Update, 1 October 2026 — CCH reports MLA deployed and sending (unverified here); the UAT ingress path confirmed.** Oscar Cobar
+(CCH techops lead) reports that `cch-mla` is deployed on CCH's own cluster and has sent traffic to
+`mla-interconnect.paysyslabs.com`. He asks Paysys to confirm that PPA sees it
+([`../meetings and emails/oscar-message-2026-10-01-cch-mla-traffic.md`](<../meetings and emails/oscar-message-2026-10-01-cch-mla-traffic.md>)).
+That report is not yet verified on the Paysys side: no PPA write-ahead row has been traced to a CCH DFSP, and no ingress-gateway log has been checked. Oscar's evidence is not in this knowledge base. Which image digest CCH runs, and whether mTLS was in use, are
+not yet confirmed. The same day the user confirmed the UAT path, sketched in
+[`architecture/CCh-->PSL architecture.jpeg`](<architecture/CCh-->PSL architecture.jpeg>), and §2 below is
+updated to match:
+
+- The **ingress gateway** is an Nginx instance on a public IP behind `mla-interconnect.paysyslabs.com`.
+  DRPP's source IP is allow-listed there, and every other source is rejected.
+- An **internal Nginx reverse proxy** runs on the PPA host, `10.0.115.186`, takes traffic from the ingress
+  gateway, and forwards it to PPA. **It is not yet deployed.** It is to run in Docker with a restart policy,
+  and the Nginx image's default configuration is backed up before it is replaced.
+- PPA serves plain HTTP on every route (`cch-ppa` `9c5709e`), so it must be reachable only from the
+  internal Nginx.
+
+The PPA host itself: RHEL 8.10, SELinux `Enforcing`, firewalld active, no Docker Hub access (images come
+from the authenticated registry `10.0.70.92:5000`), and a Tazama core stack running alongside PPA. The host
+rebooted on 2026-09-30 and PPA stayed down until 2026-10-01, because its compose project had no restart
+policy. It now runs with `restart: always` (`plan.md` §16's [2026-10-01] entries).
 
 - [1. The ask, as received](#1-the-ask-as-received)
 - [2. Architecture — where MLA actually sits](#2-architecture--where-mla-actually-sits)
@@ -186,31 +209,39 @@ Two things in this email need resolving before anything is built against it, not
 This matches a sketch already in this folder
 ([`deployment pattern for mojaloop x tazama.jpeg`](deployment%20pattern%20for%20mojaloop%20x%20tazama.jpeg)),
 labeled "(as) formal ask," and confirms `strategy.md` §1's boundary statement empirically. That original
-sketch showed a point-to-point VPN for the MLA→PPA hop; **as of 2026-09-15 the agreed connectivity is a
-public, IP allow-listed endpoint with a dedicated mTLS ingress gateway instead** — see the 15 September
-update above and [`connectivity-options.md`](connectivity-options.md). The diagram below reflects the
-current design:
+sketch showed a point-to-point VPN for the MLA→PPA hop. **The current design is a public, IP allow-listed
+ingress gateway, then an internal Nginx in front of PPA**
+([`connectivity-options.md`](connectivity-options.md); the 25–28 September and 1 October updates above;
+[`architecture/CCh-->PSL architecture.jpeg`](<architecture/CCh-->PSL architecture.jpeg>)). The diagram below
+reflects it:
 
 ```
-┌──────────────────────────────────────┐                ┌────────────────────────────────────┐
-│   CCH DRPP (COMESA's cluster)        │                │  Multi-tenant (our cluster)        │
-│                                      │  Public IP     │                                    │
-│   Kafka (topic-event-audit)          │                │   Ingress gateway (mTLS) ──▶ PPA   │
-│        │                             │ allow-         │    ▲                    ──ISO 20022────────▶ Tazama TMS
-│        ▼                             │ listed         │    │                               │
-│   MLA (cross-border flow)  ──────────┼─────────────────────┘                               │
-│                                      │                │                                    │
-└──────────────────────────────────────┘                └────────────────────────────────────┘
+┌───────────────────────────────┐            ┌──────────────────────────────────────────────────────────┐
+│  CCH DRPP (COMESA's cluster)  │            │  Paysys                                                  │
+│                               │  public IP │                                                          │
+│  Kafka (topic-event-audit)    │  DRPP IP   │  Ingress gateway (Nginx)                                 │
+│        │                      │  allow-    │  mla-interconnect.paysyslabs.com                         │
+│        ▼                      │  listed    │        │                                                 │
+│  cch-mla ── Event Envelope ───┼───────────▶│        ▼   private network                               │
+│                               │            │  ┌─ PPA host 10.0.115.186 ────────────────────────────┐  │
+└───────────────────────────────┘            │  │ internal Nginx (Docker, not yet deployed)          │  │
+                                             │  │      │ plain HTTP                                  │  │
+                                             │  │      ▼                                             │  │
+                                             │  │ PPA ── ISO 20022 ──▶ Tazama TMS (core stack, same  │  │
+                                             │  │                      host)                         │  │
+                                             │  └────────────────────────────────────────────────────┘  │
+                                             └──────────────────────────────────────────────────────────┘
 ```
 
-- **MLA is deployed inside CCH's own cluster**, alongside (or at least network-adjacent to) the Kafka
+- **MLA is deployed inside CCH's own cluster** (reported deployed and sending by Oscar Cobar [2026-10-01], not yet verified on the Paysys side), alongside (or at least network-adjacent to) the Kafka
   broker carrying `topic-event-audit`. This is *why* Oscar's team is the one running `kubectl`, not us —
   MLA holds no Tazama-scoped credential and cannot leave CCH's boundary (`core-knowledge.md` §1).
-- **PPA and Tazama are deployed in our (Paysyslabs) cluster** — separately being stood up right now,
-  moving off the Core Test Harness (`plan.md` §11's own note on the 2026-09-09 meeting). This is *not*
-  CCH's environment and is not part of what gets handed to Oscar's team.
-- **The only boundary crossing is MLA → PPA, over mTLS, via a public, IP allow-listed endpoint** in front
-  of a dedicated ingress gateway on the Paysys side (not a VPN tunnel — see the 15 September update).
+- **PPA and Tazama run on the Paysys side**, on the PPA host `10.0.115.186`: PPA's own compose project
+  (`/opt/cch-ppa`) and a Tazama core stack (TMS on host port 5000, Auth Service on 3020, Keycloak on 8080).
+  This is *not* CCH's environment and is not part of what gets handed to Oscar's team.
+- **The only boundary crossing is MLA → the ingress gateway, over mTLS, via a public, IP allow-listed
+  endpoint** (not a VPN tunnel). The gateway forwards over Paysys's private network to the internal Nginx,
+  which forwards to PPA.
   Kafka reachability is entirely internal to CCH's own cluster/network — CCH does not need external
   connectivity for that half. The gateway's address is what makes `PPA_BASE_URL` resolvable and reachable
   from inside CCH's cluster at all; without it, no manifest value we hand over will connect to anything.
@@ -238,12 +269,10 @@ current design:
 - ~~A dedicated `KAFKA_GROUP_ID`.~~ **Resolved 2026-09-14/15** — `paysys_cch_mla`, confirmed by George
   against every existing DRPP-internal group (R-18, the one misconfiguration in this system capable of
   affecting live payments). Already in `cch-mla/deploy/kubernetes/01-configmap.yaml`.
-- The VPN's resulting reachable address for `PPA_BASE_URL` — **still open**: the meeting confirmed the
-  site-to-site VPN mechanism and that only IP addresses (not port/protocol scoping) need defining, but
-  the IPs themselves haven't been exchanged yet.
-- Who is issuing the mTLS certificate pair each side presents on that hop — **still open**: George is
-  investigating a neutral shared cert-manager between the two trust boundaries. Built against an interim,
-  reversible default in the meantime — see the 2026-09-15 update above.
+- ~~The reachable address for `PPA_BASE_URL`.~~ **Resolved**: the ingress gateway,
+  `https://mla-interconnect.paysyslabs.com/others` (§11 Q4). CCH fills it into `02-env-configmap.yaml`.
+- Who issues the mTLS certificate pair on that hop — **settled [2026-09-25 to 09-28]**: the COMESA/DRPP
+  CA (§8 item 1). The CSR and CA-bundle exchange is still open.
 - ~~Which registry their cluster's nodes can pull from (§6).~~ **Resolved 2026-09-14/15** — George is
   flexible on location and only needs a URL plus a valid auth token; GitLab Container Registry chosen
   (§6), image pushed, deploy token minted.
@@ -252,7 +281,7 @@ current design:
 
 `CLAUDE.md`'s rule applies directly here: the mechanism (manifests, config surface, image) can and should
 be built now, against a stated default where one is needed; **this piece of work cannot be called done
-while `PPA_BASE_URL` and mTLS provisioning are still open**, and that must stay
+while mTLS provisioning is still open and PPA's receipt of CCH's traffic is unconfirmed**, and that must stay
 visible rather than get quietly resolved with a guess.
 
 ---
@@ -298,7 +327,7 @@ Derived directly from `cch-mla/.env.template`, the single source of truth for ML
 | `KAFKA_GROUP_ID` | ConfigMap | Settled — `paysys_cch_mla`. Confirmed by George, 2026-09-14, against every existing DRPP-internal group (R-18). |
 | `KAFKA_FROM_BEGINNING` | ConfigMap | Settled — `false`. |
 | `KAFKA_AUDIT_TOPIC` | ConfigMap | Settled — `topic-event-audit`, 12 partitions, 7-day / 250MB retention, already on record. Asked of CCH as a confirmation for the deployment target (§11 Q3), not an unknown. |
-| `PPA_BASE_URL` | ConfigMap | **Open — depends on the P2P VPN's resulting address.** Must be the single stable PPA service address, never an individual replica (`core-knowledge.md` §3.4). |
+| `PPA_BASE_URL` | ConfigMap (`02-env-configmap.yaml`, CCH-owned) | **Settled — `https://mla-interconnect.paysyslabs.com/others`**, the ingress gateway (§11 Q4). Its `/others` path prefix is carried through to every request; exactly one Nginx hop must strip it, since PPA's routes sit at the root. Must be the single stable PPA service address, never an individual replica (`core-knowledge.md` §3.4). `PPA_HEALTH_BASE_URL` is not set in the manifests, so it defaults to this value, and the health probe goes to `/others/health/ready`, which matters for F-23 (`bugs/qa-sweep-2-findings.md`). |
 | `PPA_TIMEOUT_MS`, `PPA_MAX_RETRIES`, `PPA_RETRY_BASE_MS`, `PPA_CIRCUIT_BREAKER_THRESHOLD`, `PPA_REPROBE_INTERVAL_MS` | ConfigMap | Settled — carry the decided defaults from `.env.template` forward unchanged. |
 | `PPA_CLIENT_CERT_PATH`, `PPA_CLIENT_KEY_PATH`, `PPA_CA_CERT_PATH` | Secret volume mount | **Open — provisioning mechanism (§8).** File paths, not values — the app reads these from disk, so they map to a mounted Secret volume, not `envFrom`. |
 | `PII_SECRET_PATH` | Secret volume mount | **Settled [2026-09-18, spec confirmed 2026-09-22].** No rotation (`plan.md` §7.1 #2) — a single, long-lived key: HMAC-SHA-256, 256-bit base64-encoded, in a Kubernetes Secret named `cch-mla-pii-secret` — already the exact name this manifest's own `volumes` section uses below, confirmed to match by coincidence, not by having been checked against CCH's answer at the time it was written. |
@@ -374,6 +403,10 @@ blocker for this handoff.
   its own on the Switch side, so `cch-mla` itself must handle the mTLS connection, through configuration —
   confirmed [2026-09-28]. CN/O/C values for the server certificate have been sent to Oscar; the CSR has
   not yet been generated. Full detail: §8 item 1, §11 Q4/Q5.
+  **Behind the gateway [2026-10-01]**: the gateway forwards over Paysys's private network to an internal
+  Nginx on `10.0.115.186` (not yet deployed), which forwards plain HTTP to PPA. PPA's own published ports
+  must be closed to everything except that Nginx. Docker-published ports bypass the host's firewalld, so
+  this is done in the compose file, not with a firewall rule.
 - **TLS version and cipher suites — resolved 2026-09-20.** George confirmed TLS 1.2/1.3 is acceptable on
   the DRPP side, and any OpenSSL-supported cipher suite is fine — no fixed list to negotiate. See §11 Q5.
 - **No inbound Ingress for MLA.** All payment traffic arrives over Kafka; the only HTTP surface is
@@ -425,8 +458,8 @@ Three genuinely different secrets, each with its own open provisioning question:
    ([`../meetings and emails/sept-28.md - Conversation with Oscar.md`](<../meetings and emails/sept-28.md - Conversation with Oscar.md>))
    settles this differently from the 2026-09-15 target above: **COMESA/DRPP hosts and is accountable for
    the single interconnect CA, not Paysys**, and mTLS terminates at Paysys's own Tazama ingress gateway
-   (`mla-interconnect.paysyslabs.com`), not at a new gateway in front of PPA — so no new gateway needs to
-   be built. `cch-mla` presents the client certificate to that ingress, through configuration, since
+   (`mla-interconnect.paysyslabs.com`), which already exists. Behind it, a new internal Nginx on the PPA
+   host forwards to PPA (1 October update). `cch-mla` presents the client certificate to that ingress, through configuration, since
    Oscar's side has no gateway of its own to originate the connection instead. The two certificates and
    their roles:
    - **Server certificate** (presented by Paysys's ingress; `cch-mla` validates it): `CN =
@@ -455,8 +488,8 @@ Three genuinely different secrets, each with its own open provisioning question:
    bundle to trust the server certificate, and the target `https://mla-interconnect.paysyslabs.com/others/...`
    (see PR [psl-izyane-cch-frms/cch-mla#1](https://github.com/psl-izyane-cch-frms/cch-mla/pull/1)); and
    configure the ingress layer to verify client certificates against the COMESA/DRPP CA, enforce on
-   `/others` only, optionally allow-list `cch-mla`'s CN, and restrict origin access. Also still open: which
-   host runs the "UAT Nginx" — confirmed not to be the PPA VM, `10.0.115.186`.
+   `/others` only, optionally allow-list `cch-mla`'s CN, and restrict origin access. The internal Nginx
+   behind the gateway runs on the PPA host `10.0.115.186` and is to be deployed by Paysys (1 October update).
 2. ~~**DFSP JWS public keys (`JWS_PUBLIC_KEY_DIR`).**~~ **Dissolved [2026-09-23]** — MLA no longer validates DFSP signatures, so there is no key directory to provision. Original item: the mechanism is a watched directory of
    `<dfspId>.pem` files, chosen so adding a key never requires a restart (`engineering-rules.md` §8). At
    the 2026-09-09 meeting, Sam (Mojoloop Foundation) recommended MLA interface with **MCM (Mojaloop
@@ -602,22 +635,17 @@ to CCH and what stayed open, not a full epic/story pair).
 Consolidated from every "Open" row above. Six were asked; the 2026-09-14 meeting with George
 (`docs/docs - MLA/meetings and emails/14-sept-deployment-meeting.md`) answered four live:
 
-1. **Format.** **Still unanswered.** Plain Kubernetes manifests applied with `kubectl apply -f` (what
-   this document assumes, §1), or a Helm chart? The meeting didn't raise it; proceeding on the plain-
-   manifests assumption unless CCH's team says otherwise.
+1. **Format.** **Moot in practice, if CCH's report holds.** CCH reports `cch-mla` deployed [2026-10-01], not yet verified on the Paysys side. Whether it used these plain
+   manifests unchanged or adapted them is not recorded.
 2. **Registry — resolved.** Flexible on location; just needs a URL and a valid auth token. Settled on
    GHCR (`ghcr.io/psl-izyane-cch-frms/cch-mla`), image pushed — see §6's 2026-09-15 update above.
 3. **Kafka — mostly resolved.** Broker address is already known on George's side (no action needed from
    him); we owed him the variable name (`KAFKA_BROKERS`), now shared. Consumer group ID resolved —
    `paysys_cch_mla`, confirmed clash-free (R-18). `topic-event-audit`'s partition count/retention
    confirmation is still outstanding.
-4. **The PPA endpoint — mechanism resolved 2026-09-20, addresses still outstanding on both legs.**
-   Whitelisting (not the VPN originally sketched, nor a straight public allow-list without it) is the
-   confirmed approach, per George on Slack — superseding §7's earlier "public, IP allow-listed endpoint"
-   framing only in that whitelisting is now explicit, not a new architecture. DRPP's source IP has been
-   shared with Paysys. Still outstanding: the PPA hostname (or public IP if the hostname won't resolve
-   against a public DNS resolver) — the address given back was flagged 2026-09-20 as looking like an
-   internal IP, pending Paysys's network team.
+4. **The PPA endpoint — resolved.** The address is the ingress gateway, `mla-interconnect.paysyslabs.com`,
+   on a public IP, reached by IP allow-listing rather than a VPN (George, 2026-09-20). DRPP's source IP is
+   on the gateway's allow-list. CCH reports its MLA has sent traffic to it [2026-10-01], not yet verified on the Paysys side.
 5. **mTLS provisioning — architecture reversed 2026-09-25/28, CSR/CA-bundle exchange under way.** Two
    separate trust boundaries (DRPP and Paysyslabs) means neither side's cert-manager trusts the other's
    certificates by default. George's 2026-09-15 proposal — a dedicated Paysys-operated Interconnect CA
@@ -629,7 +657,8 @@ Consolidated from every "Open" row above. Six were asked; the 2026-09-14 meeting
    ([`../meetings and emails/sept-28.md - Conversation with Oscar.md`](<../meetings and emails/sept-28.md - Conversation with Oscar.md>)):
    **COMESA/DRPP now hosts the single interconnect CA, not Paysys**, and mTLS terminates at **Paysys's own
    existing Tazama ingress gateway** (`mla-interconnect.paysyslabs.com`), not a new gateway in front of
-   PPA — so no new gateway needs to be built. `cch-mla` presents the client certificate; Paysys's ingress
+   PPA. That gateway already exists; behind it, a new internal Nginx on `10.0.115.186` forwards to PPA
+   (1 October update). `cch-mla` presents the client certificate; Paysys's ingress
    presents the server certificate; both signed by the COMESA/DRPP CA. Full detail, including the current
    CSR/CA-bundle exchange status, §8 item 1's 2026-09-25/28 update. **TLS version/cipher suites confirmed
    2026-09-20**: TLS 1.2/1.3 and any OpenSSL-supported cipher suite are acceptable to George's side —
@@ -661,16 +690,17 @@ items already being tracked, not new asks created by this deployment work.
 4. ~~Stand up the agreed ingress-gateway architecture on the Paysys side
    ([`certificate-setup-proposal.md`](certificate-setup-proposal.md)) and reissue MLA's client certificate
    under the gateway's own Interconnect CA, retiring the interim CA once that's live.~~ **Superseded
-   [2026-09-25/28]** — no new gateway is being built; mTLS terminates at the existing Tazama ingress
+   [2026-09-25/28]** — no Paysys-operated Interconnect CA or dedicated gateway; mTLS terminates at the existing Tazama ingress
    gateway instead, under a COMESA/DRPP-hosted CA (§8 item 1, §11 Q5). Current next steps: receive Oscar's
    CA bundle; generate and send the server CSR; agree `cch-mla`'s own client CN and get it signed; wire
-   `cch-mla`'s config (PR #1); configure the ingress listener. Full detail in §8 item 1's 2026-09-25/28
-   update.
+   `cch-mla`'s config (PR #1); configure the ingress listener; deploy the internal Nginx on `10.0.115.186`
+   in front of PPA. Full detail in §8 item 1 and the 1 October update.
 5. Reply to George confirming the four decisions recorded in the 15 September update above, and send the
    registry URL + deploy token, `KAFKA_BROKERS`'s variable name, and the digest-pinning acknowledgement.
    **Partially superseded 2026-09-17** — access is being granted directly on GHCR per-username instead
-   (see §6's 2026-09-17 update); invite `KhaledSaiidi` and `orcr` (Read role) — still open as of this entry.
+   (see §6's 2026-09-17 update); invite `KhaledSaiidi` and `orcr` (Read role). CCH reports `cch-mla` deployed [2026-10-01], which would mean it obtained
+   the image. Unverified here, and which digest it runs is unknown.
 6. Live-verify against CCH's actual cluster before calling any of this done, per `engineering-rules.md`
-   §11 — a manifest that has only been read, never applied, is a design, not a deployment. Nothing in
-   this update was applied to CCH's cluster; only the mechanism (image, registry, manifests, interim
-   mTLS, the JWS bypass flag) was produced, pushed, and locally live-verified.
+   §11. CCH reports it applied and sent traffic [2026-10-01]. The Paysys-side half of that proof is
+   still open: PPA's write-ahead store showing CCH's envelopes, which is what Oscar asked Paysys to
+   confirm.
