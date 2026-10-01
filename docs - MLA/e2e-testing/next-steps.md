@@ -21,17 +21,29 @@ trusting a stale local copy.
 
 20. **Reply to Oscar.** CCH's delivery to PPA is verified (`plan.md` §16's [2026-10-01] verification entry):
     all six correlation IDs from his evidence are in PPA's write-ahead store. The reply should also say that
-    none of it has reached Tazama yet (`processed_pairs` is empty since 2026-09-28; item 21 fixes it), and ask for CCH's MLA logs and
+    the old PPA image dead-lettered its QUOTE and TRANSFER messages, and that PPA has since been rebuilt and
+    proven end to end to TMS with a real corridor [2026-10-01], and ask for CCH's MLA logs and
     metrics covering the PPA outage, 2026-09-30 13:19 UTC to about 2026-10-01 05:35 UTC. About 12 scheduled
     batches fell inside that window, but only 153 envelopes arrived afterwards, so roughly 500 are
     unaccounted for.
-21. **Rebuild PPA on `10.0.115.186` from current `cch-ppa` `main`.** The running image (`cch-ppa-ppa`,
-    built locally from an unknown commit) very likely predates the schema fix `a625ed69`, so QUOTE and
-    TRANSFER traffic fails local validation and never reaches TMS. In the same pass: point `TMS_BASE_URL` and
-    `TMS_AUTH_LOGIN_URL` at the co-located Tazama core stack (host ports 5000 and 3020, not `localhost`), with
-    real Keycloak credentials; and stop publishing Postgres (5432, password `ppa`/`ppa`) and ValKey (6379,
-    no auth) on `0.0.0.0`. Keep the `restart: always` override at `/opt/cch-ppa/docker-compose.override.yml`,
-    and run compose from that directory without `-f`.
+21. **Confirm CCH's own traffic reaches Tazama on the rebuilt PPA.** The rig's corridor did [2026-10-01]
+    (`plan.md` §16). The next CCH batch, on its 90-minute cycle, should add `processed_pairs` rows for all
+    four message types and zero `LOCAL_VALIDATION_FAILED`. Also open from that entry: whether TMS's restart
+    shortly before the check is related; rule-level evaluation of the corridor; and whether to replay about
+    1,130 of CCH's envelopes the old image dead-lettered (operator replay, US-PPA-15).
+23. **Give PPA its own Keycloak user.** PPA uses `tazama-user@tazama.org` with the publicly documented
+    default password. A dedicated user in `/tazama-tms` only, with a real password, is the identity for
+    anything beyond UAT. Also: sync the PPA host's clock (`timedatectl` reports it unsynchronized; it has
+    drifted about 51 s), and stop publishing Postgres and ValKey on `0.0.0.0` in PPA's compose file.
+22. **Deploy the internal Nginx on `10.0.115.186`, terminating mTLS.** The plan is
+    `deployment/architecture/internal-nginx-mtls-plan.md`: discovery, build, a dry run with throwaway
+    certificates, the real certificate exchange with Oscar, and a zero-downtime cut-over. Its Nginx config
+    passed an offline check on 2026-10-01; nothing is on the host yet. It depends on decisions D1–D8 in that
+    plan, chiefly that the ingress gateway does TLS passthrough.
+23. **Give PPA its own Keycloak user.** PPA uses `tazama-user@tazama.org` with the publicly documented
+    default password. A dedicated user in `/tazama-tms` only, with a real password, is the identity for
+    anything beyond UAT. Also: sync the PPA host's clock (`timedatectl` reports it unsynchronized; it has
+    drifted about 51 s), and stop publishing Postgres and ValKey on `0.0.0.0` in PPA's compose file.
 22. **Deploy the internal Nginx reverse proxy on `10.0.115.186`.** It sits between the ingress gateway and
     PPA, runs in Docker with `restart: always`, and the Nginx image's default config is backed up before it
     is replaced (`plan.md` §16's [2026-10-01] entries). Design questions are open with the user: where TLS
@@ -85,8 +97,9 @@ or send them.
    (`meetings and emails/george-email-2026-09-23-jws-removal.md`). A second email covering the bugfixes is
    owed once that image is on GHCR and pinned (item 1).
 19. **Complete the mTLS certificate exchange with Oscar Cobar (COMESA/DRPP).** The architecture is settled
-    [2026-09-25 to 09-28]: COMESA/DRPP hosts the CA, and mTLS terminates at Paysys's ingress gateway
-    `mla-interconnect.paysyslabs.com`. Still open: receive Oscar's CA bundle; generate and send the server
+    [2026-09-25 to 09-28]: COMESA/DRPP hosts the CA. The ingress gateway `mla-interconnect.paysyslabs.com`
+    passes TLS through, and mTLS terminates at the internal Nginx on `10.0.115.186`
+    (`deployment/architecture/internal-nginx-mtls-plan.md`). Still open: receive Oscar's CA bundle; generate and send the server
     CSR; agree who generates `cch-mla`'s client key/CSR and its CN (`plan.md` §16's [2026-09-28] entry,
     `deployment/MLA-deployment-kubernetes.md` §11). The internal Nginx behind the gateway is item 22.
 13. **Ask George for his annotated event table.** It covers the ~52% of the 500-record export not yet

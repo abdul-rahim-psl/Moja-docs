@@ -9,8 +9,10 @@ fed into is in [`MLA-deployment-kubernetes.md`](MLA-deployment-kubernetes.md)'s 
 Paysys-operated Interconnect CA, terminating at a new mTLS ingress gateway in front of PPA — was reversed
 in a secure-chat exchange with Oscar Cobar (COMESA/DRPP), the Infotex contact:
 [`../meetings and emails/sept-28.md - Conversation with Oscar.md`](<../meetings and emails/sept-28.md - Conversation with Oscar.md>).
-COMESA/DRPP now hosts the single interconnect CA, and mTLS terminates at Paysys's own Tazama ingress
-gateway (`mla-interconnect.paysyslabs.com`), with `cch-mla` presenting the client certificate — the CA
+COMESA/DRPP now hosts the single interconnect CA. The ingress gateway (`mla-interconnect.paysyslabs.com`)
+passes TLS through, and mTLS terminates at an internal Nginx on the PPA host
+([`architecture/internal-nginx-mtls-plan.md`](architecture/internal-nginx-mtls-plan.md)), with `cch-mla`
+presenting the client certificate — the CA
 ownership and the two certificates' roles are the reverse of what this document proposes below. Kept here
 as the historical proposal; [`MLA-deployment-kubernetes.md`](MLA-deployment-kubernetes.md) §7/§8/§11
 carries the current design.

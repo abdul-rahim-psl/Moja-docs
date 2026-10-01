@@ -121,10 +121,10 @@ were sent to George the same day. Full detail: §8 item 1, §11 Q5.
    [`certificate-setup-proposal.md`](certificate-setup-proposal.md) proposed.
 3. **COMESA/DRPP hosts and is accountable for that CA — the reverse of the 15-September proposal, where
    Paysys operated the Interconnect CA.**
-4. mTLS terminates at Paysys's own Tazama ingress gateway, `mla-interconnect.paysyslabs.com`, rather than
-   at a dedicated gateway under a Paysys-operated CA as the 15-September proposal had it. The ingress
-   gateway already exists. Behind it, an internal Nginx on the PPA host forwards to PPA, and that one is
-   new infrastructure (1 October update below).
+4. mTLS terminates on the Paysys side, rather than at a dedicated gateway under a Paysys-operated CA as
+   the 15-September proposal had it. Oscar's notes name the ingress gateway, `mla-interconnect.paysyslabs.com`.
+   Paysys terminates it one hop further in [2026-10-01]: the ingress passes TLS through untouched, and the
+   internal Nginx on the PPA host, new infrastructure, terminates it ([`architecture/internal-nginx-mtls-plan.md`](architecture/internal-nginx-mtls-plan.md)).
 5. `cch-mla` itself handles the mTLS connection on the client side, through configuration — confirmed
    directly, since Oscar's side has no ingress/egress gateway of its own on the Switch side to originate
    it instead.
@@ -399,9 +399,10 @@ blocker for this handoff.
   Paysys.
   **Update 2026-09-25/28 — termination point reversed, per Oscar Cobar (COMESA/DRPP), the Infotex
   contact** ([`../meetings and emails/sept-28.md - Conversation with Oscar.md`](<../meetings and emails/sept-28.md - Conversation with Oscar.md>)).
-  mTLS terminates on **Paysys's own Tazama ingress gateway**, at `mla-interconnect.paysyslabs.com` — not
-  at a new gateway in front of PPA as [`certificate-setup-proposal.md`](certificate-setup-proposal.md)
-  had proposed. Traffic is one-way: `cch-mla` always initiates the request to Tazama's PPA; PPA replies
+  MLA connects to `mla-interconnect.paysyslabs.com`, the ingress gateway, which admits DRPP's IP and passes
+  TLS through untouched. **mTLS terminates at the internal Nginx on the PPA host** [2026-10-01], not under
+  the Paysys-operated CA [`certificate-setup-proposal.md`](certificate-setup-proposal.md) had proposed
+  ([`architecture/internal-nginx-mtls-plan.md`](architecture/internal-nginx-mtls-plan.md)). Traffic is one-way: `cch-mla` always initiates the request to Tazama's PPA; PPA replies
   synchronously on the same connection and never calls MLA. Oscar's side has no ingress/egress gateway of
   its own on the Switch side, so `cch-mla` itself must handle the mTLS connection, through configuration —
   confirmed [2026-09-28]. CN/O/C values for the server certificate have been sent to Oscar; the CSR has
@@ -460,9 +461,9 @@ Three genuinely different secrets, each with its own open provisioning question:
    Infotex contact.** A secure-chat exchange
    ([`../meetings and emails/sept-28.md - Conversation with Oscar.md`](<../meetings and emails/sept-28.md - Conversation with Oscar.md>))
    settles this differently from the 2026-09-15 target above: **COMESA/DRPP hosts and is accountable for
-   the single interconnect CA, not Paysys**, and mTLS terminates at Paysys's own Tazama ingress gateway
-   (`mla-interconnect.paysyslabs.com`), which already exists. Behind it, a new internal Nginx on the PPA
-   host forwards to PPA (1 October update). `cch-mla` presents the client certificate to that ingress, through configuration, since
+   the single interconnect CA, not Paysys**, and mTLS terminates on the Paysys side: the ingress
+   gateway (`mla-interconnect.paysyslabs.com`) passes TLS through, and a new internal Nginx on the PPA host
+   terminates it and forwards to PPA (1 October update; [`architecture/internal-nginx-mtls-plan.md`](architecture/internal-nginx-mtls-plan.md)). `cch-mla` presents the client certificate, through configuration, since
    Oscar's side has no gateway of its own to originate the connection instead. The two certificates and
    their roles:
    - **Server certificate** (presented by Paysys's ingress; `cch-mla` validates it): `CN =
@@ -658,10 +659,9 @@ Consolidated from every "Open" row above. Six were asked; the 2026-09-14 meeting
    (`cch-mla/deploy/kubernetes/README.md`; §8 item 1's 2026-09-15/21 updates). **Superseded [2026-09-25 to
    09-28]** by a secure-chat exchange with Oscar Cobar (COMESA/DRPP), the Infotex contact
    ([`../meetings and emails/sept-28.md - Conversation with Oscar.md`](<../meetings and emails/sept-28.md - Conversation with Oscar.md>)):
-   **COMESA/DRPP now hosts the single interconnect CA, not Paysys**, and mTLS terminates at **Paysys's own
-   existing Tazama ingress gateway** (`mla-interconnect.paysyslabs.com`), not a new gateway in front of
-   PPA. That gateway already exists; behind it, a new internal Nginx on `10.0.115.186` forwards to PPA
-   (1 October update). `cch-mla` presents the client certificate; Paysys's ingress
+   **COMESA/DRPP now hosts the single interconnect CA, not Paysys**, and mTLS terminates on the Paysys side: the existing
+   ingress gateway (`mla-interconnect.paysyslabs.com`) passes TLS through, and a new internal Nginx on
+   `10.0.115.186` terminates it and forwards to PPA (1 October update; [`architecture/internal-nginx-mtls-plan.md`](architecture/internal-nginx-mtls-plan.md)). `cch-mla` presents the client certificate; Paysys's ingress
    presents the server certificate; both signed by the COMESA/DRPP CA. Full detail, including the current
    CSR/CA-bundle exchange status, §8 item 1's 2026-09-25/28 update. **TLS version/cipher suites confirmed
    2026-09-20**: TLS 1.2/1.3 and any OpenSSL-supported cipher suite are acceptable to George's side —
@@ -693,8 +693,8 @@ items already being tracked, not new asks created by this deployment work.
 4. ~~Stand up the agreed ingress-gateway architecture on the Paysys side
    ([`certificate-setup-proposal.md`](certificate-setup-proposal.md)) and reissue MLA's client certificate
    under the gateway's own Interconnect CA, retiring the interim CA once that's live.~~ **Superseded
-   [2026-09-25/28]** — no Paysys-operated Interconnect CA or dedicated gateway; mTLS terminates at the existing Tazama ingress
-   gateway instead, under a COMESA/DRPP-hosted CA (§8 item 1, §11 Q5). Current next steps: receive Oscar's
+   [2026-09-25/28]** — no Paysys-operated Interconnect CA or dedicated gateway; mTLS terminates at the internal Nginx on the PPA host,
+   behind a passthrough ingress gateway, under a COMESA/DRPP-hosted CA (§8 item 1, §11 Q5). Current next steps: receive Oscar's
    CA bundle; generate and send the server CSR; agree `cch-mla`'s own client CN and get it signed; wire
    `cch-mla`'s config (PR #1); configure the ingress listener; deploy the internal Nginx on `10.0.115.186`
    in front of PPA. Full detail in §8 item 1 and the 1 October update.
@@ -705,5 +705,6 @@ items already being tracked, not new asks created by this deployment work.
    it runs is unknown.
 6. Live-verify against CCH's actual cluster before calling any of this done, per `engineering-rules.md`
    §11. Done for delivery [2026-10-01]: CCH applied it, and PPA's write-ahead store holds CCH's
-   envelopes. Still open: QUOTE and TRANSFER traffic does not reach Tazama until PPA is rebuilt from
-   current `main`, and real mTLS with the COMESA/DRPP CA.
+   envelopes. PPA was rebuilt to current `main` and reaches Tazama: a real corridor produced all four
+   messages, each accepted by TMS [2026-10-01]. Still open: CCH's own traffic on the new image, and
+   real mTLS with the COMESA/DRPP CA.
