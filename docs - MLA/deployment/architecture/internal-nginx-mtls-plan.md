@@ -8,7 +8,9 @@ topology is the user-confirmed sketch [`CCh-->PSL architecture.jpeg`](<CCh-->PSL
 design decision recorded here was made by the user on 2026-10-01: **mTLS terminates at the internal Nginx,
 not at the ingress gateway, and the ingress gateway passes TLS through untouched.**
 
-**Status.** Plan only; nothing is built on the host. §4.4's Nginx config was checked offline on 2026-10-01: it ran in `nginx:1.30.5-alpine` against a stand-in PPA that echoes the request it receives, using throwaway certificates, and passed every row of §5's table. Nothing else in this plan is verified. Steps that need a decision from someone other
+**Status.** The container `ppa-mtls-nginx` runs on the host with the stock config and no published ports,
+from `/opt/ppa-mtls-nginx/docker-compose.yml`, and the default config is backed up per §4.2 (2026-10-01,
+`plan.md` §16). Nothing from §4.4 onward is on the host yet. §4.4's Nginx config was checked offline on 2026-10-01: it ran in `nginx:1.30.5-alpine` against a stand-in PPA that echoes the request it receives, using throwaway certificates, and passed every row of §5's table. Nothing else in this plan is verified. Steps that need a decision from someone other
 than engineering are marked **[decision]** and listed in §8.
 
 ---
@@ -349,7 +351,7 @@ COMESA-signed one. The overlap step keeps traffic flowing throughout:
 
 | # | Decision | Owner | Blocks |
 | --- | --- | --- | --- |
-| D1 | The ingress does L4 passthrough (no decryption) for this hostname | Whoever administers the ingress (Paysys network/infra) | Phase E |
+| D1 | The ingress does L4 passthrough (no decryption) for this hostname | Paysys infra team, which runs the ingress Nginx. Not yet requested; their approval goes through several levels. | Phase E |
 | D2 | PROXY protocol between ingress and internal Nginx (real client IP in logs and allow rules) | Same | Phase E config |
 | D3 | The ingress's internal IP and the internal Nginx's port (8443 proposed) | Same | §4.4, §4.6 |
 | D4 | `cch-mla`'s client CN, pinned by the internal Nginx | CCH (Oscar) with Paysys | Phase D, §4.4 |

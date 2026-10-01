@@ -227,7 +227,7 @@ reflects it:
 │        ▼                      │  listed    │        │                                                 │
 │  cch-mla ── Event Envelope ───┼───────────▶│        ▼   private network                               │
 │                               │            │  ┌─ PPA host 10.0.115.186 ────────────────────────────┐  │
-└───────────────────────────────┘            │  │ internal Nginx (Docker, not yet deployed)          │  │
+└───────────────────────────────┘            │  │ internal Nginx (Docker, not yet configured)        │  │
                                              │  │      │ plain HTTP                                  │  │
                                              │  │      ▼                                             │  │
                                              │  │ PPA ── ISO 20022 ──▶ Tazama TMS (core stack, same  │  │
@@ -408,7 +408,7 @@ blocker for this handoff.
   confirmed [2026-09-28]. CN/O/C values for the server certificate have been sent to Oscar; the CSR has
   not yet been generated. Full detail: §8 item 1, §11 Q4/Q5.
   **Behind the gateway [2026-10-01]**: the gateway forwards over Paysys's private network to an internal
-  Nginx on `10.0.115.186` (not yet deployed), which forwards plain HTTP to PPA. PPA's own published ports
+  Nginx on `10.0.115.186` (running since 2026-10-01, not yet configured), which forwards plain HTTP to PPA. PPA's own published ports
   must be closed to everything except that Nginx. Docker-published ports bypass the host's firewalld, so
   this is done in the compose file, not with a firewall rule.
 - **TLS version and cipher suites — resolved 2026-09-20.** George confirmed TLS 1.2/1.3 is acceptable on

@@ -38,8 +38,10 @@ trusting a stale local copy.
 22. **Deploy the internal Nginx on `10.0.115.186`, terminating mTLS.** The plan is
     `deployment/architecture/internal-nginx-mtls-plan.md`: discovery, build, a dry run with throwaway
     certificates, the real certificate exchange with Oscar, and a zero-downtime cut-over. Its Nginx config
-    passed an offline check on 2026-10-01; nothing is on the host yet. It depends on decisions D1–D8 in that
-    plan, chiefly that the ingress gateway does TLS passthrough.
+    passed an offline check on 2026-10-01. The container `ppa-mtls-nginx` runs on the host with the stock
+    config, no published ports and the default config backed up (`plan.md` §16, 2026-10-01); configuring it
+    is next. It depends on decisions D1–D8 in that plan, chiefly that the ingress gateway does TLS
+    passthrough, which the Paysys infra team owns and has not yet been asked about.
 23. **Give PPA its own Keycloak user.** PPA uses `tazama-user@tazama.org` with the publicly documented
     default password. A dedicated user in `/tazama-tms` only, with a real password, is the identity for
     anything beyond UAT. Also: sync the PPA host's clock (`timedatectl` reports it unsynchronized; it has
