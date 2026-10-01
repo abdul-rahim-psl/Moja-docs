@@ -1,0 +1,144 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
+# End-to-End Happy-Path Test — MLA ↔ PPA <!-- omit in toc -->
+
+**What this is.** The record of the functional happy-path run that proved MLA's *core* job — start to
+finish, against a real broker and the **real PPA**, built separately by another engineer and confirmed
+live [2026-09-17] at `http://10.0.115.186:3000` — for one clean, unmodified cross-border transaction, no
+faults injected. Everything live-verified elsewhere (`plan.md` §16) proves individual mechanisms and
+failure paths in isolation; this is the one run that walked the *whole* pipeline in one sitting, in the
+order a payment actually moves through it, and answered "does the core flow work?" with a yes.
+
+**What this is not.** Not a fault, retry, breaker, rejection, chaos, load, or multi-instance test —
+`tools/scenario-library` already covers those (`environment-simulation.md` §1, `plan.md` §4/§10). Not a
+test against `ppa-stub` — by explicit instruction [2026-09-17], the real PPA is the target, and `ppa-stub`
+is not used here.
+
+- [1. The run](#1-the-run)
+- [2. Definition of done](#2-definition-of-done)
+- [3. PPA correctness — definition of done (partially run)](#3-ppa-correctness--definition-of-done-partially-run)
+
+---
+
+## 1. The run
+
+**Confirmed live [2026-09-17]:** `http://10.0.115.186:3000` — `GET /health/ready` → `{"ready":true,"checks":{"writeAheadStore":true}}`; `GET /documentation`/`/documentation/json` serve an OpenAPI 3.0.3 doc titled "PPA Ingress API" listing `POST /QUOTES`, `/FXQUOTES`, `/TRANSFERS`, `/FXTRANSFERS` and the two health routes, with a request schema matching `core-knowledge.md` §5's Event Envelope field-for-field and example payloads using this project's own `test-mwk-dfsp`/`test-zmw-dfsp` ids. This is a genuinely separate, independently-built PPA — not `ppa-stub`, and not tracked in this docs folder (`strategy.md` §1).
+
+**mTLS resolved [2026-09-17], by user instruction, not by confirmation from the PPA side:** the real instance is plain HTTP with no discoverable mTLS port (443/3443/4443/8443/3001/4000 all checked, none listening). Rather than block on the other side standing one up, MLA gained a dev-only bypass — `PPA_MTLS_DISABLED` (`.env.template`, `src/clients/ppa.client.ts`), default `false`, loudly observable (boot-time `WARN` log, `mla_ppa_mtls_bypassed` metric) — mirroring the existing `JWS_VALIDATION_DISABLED` pattern per `CLAUDE.md`'s external-decisions rule. **This is a real, standing security gap while it's on**: MLA↔PPA traffic is unauthenticated and unencrypted for as long as `PPA_MTLS_DISABLED=true`, and nothing in this repo enforces turning it off again — that's an operational discipline, not a mechanism. Full explanation: `learning/MLA/mTLS understanding.md`.
+
+**Config used:**
+```
+PPA_BASE_URL=http://10.0.115.186:3000
+PPA_HEALTH_BASE_URL=http://10.0.115.186:3000
+PPA_MTLS_DISABLED=true
+```
+
+**Fixture:** `__tests__/fixtures/DRPP_Kafka_E2E_Pack/01_MWK_to_ZMW_PRIMARY/raw_messages.json` — one complete corridor transaction (20 records, 1 partition), touching all four `eventType`s (QUOTE, FXQUOTE, TRANSFER, FXTRANSFER) plus party lookups, no rejection or fault shape mixed in. Re-signed against locally-generated throwaway keypairs (`npm run keys:generate -- test-mwk-dfsp test-zmw-dfsp test-fxp2 hub-region-stg`) — the captured signatures belong to real DFSPs whose private keys aren't held, so an unmodified feed would fail JWS by design.
+
+**Live-verified [2026-09-17]:**
+
+- [x] MLA booted against this config: `/health/ready` → `{"status":"UP","kafka":"UP","piiSecret":"UP","jwsKeyStore":"UP"}`; boot log carried the designed `PPA_MTLS_DISABLED=true` `WARN` line; `mla_ppa_mtls_bypassed{service="cch-mla"} 1`.
+- [x] `npm run feeder -- --file __tests__/fixtures/DRPP_Kafka_E2E_Pack/01_MWK_to_ZMW_PRIMARY/raw_messages.json --resign 0-19` — fed 20 records (6 skipped by `--resign` itself as unsignable, the structural egress/party-lookup halves — expected).
+- [x] All 8 canonical records forwarded and accepted by the **real PPA** — `mla_forwarded_total`: `FXQUOTE=2`, `QUOTE=2`, `FXTRANSFER=2`, `TRANSFER=2`. `mla_ppa_delivery_outcomes_total{outcome="success"}=8` — no `client-error`, `server-error`, `timeout`, `tls-handshake-failure`, or `network-error` outcomes at all.
+- [x] `mla_skipped_total`: `egress=11`, `party-lookup=1`. `11+1+8=20` — every fed record accounted for in exactly one bucket.
+- [x] `mla_tokenization_failures_total=0`; `mla_consumer_lag` is `0` on every one of the 12 partitions once the run settled — offsets fully committed, confirming the whole pipeline including the final "commit offset only on HTTP 200" step (`core-knowledge.md` §3.2 step 9).
+- [x] MLA's own logs show each of the 8 as `Forwarded <EVENTTYPE> (id=...)` with a distinct `correlationId` per line.
+
+**What this run does and does not prove.** It proves MLA's full pipeline — Kafka consumption, canonical `start`/`egress` selection, event-type classification, base64 decode, genuine JWS verification against locally re-signed fixtures, PII tokenization, schema-valid envelope construction, and delivery — produced 8 correct envelopes and that the real PPA's ingress accepted every one with HTTP 200, advancing MLA's Kafka offset accordingly. It does **not** prove anything about what PPA did after accepting them (translation, correlation, TMS dispatch — `core-knowledge.md` §6.1 steps 3–9): this run has no visibility into PPA's own store or logs. It also does not prove mTLS itself works, since mTLS was bypassed for this run by design — that remains to be tested the day the real PPA (or a gateway in front of it) actually terminates it.
+
+**Left open:** whether `PPA_MTLS_DISABLED=true` stays the working mode going forward, or whether/when the PPA side adds real mTLS, is not this repo's decision. Nothing about PPA's own processing of the 8 delivered envelopes has been confirmed — would need to ask the PPA engineer directly.
+
+---
+
+## 2. Definition of done
+
+**Met [2026-09-17].** MLA's core job — consume from Kafka, select the canonical record, classify it,
+decode it where needed, verify the DFSP's signature, tokenize PII, build a schema-valid envelope, deliver
+it to PPA, and advance the offset only on HTTP 200 — ran start to finish against the real PPA with no
+unexpected skip, no rejection, no alert, and no breaker trip, for every record in the chosen corridor.
+This is **not** a substitute for `npm run scenario:all` (which additionally proves the fault, chaos, and
+concurrency paths — `plan.md` §10), and it does not by itself close any phase or story in `plan.md` §16 —
+recorded separately there (Phase 8 partial, 2026-09-17) as this run's own live verification.
+
+**Explicitly out of scope, by design** (edge cases, not the core flow): transfer/FX-quote rejections, duplicate/dropped/corrupt records, out-of-order partition arrival, PPA 4xx/5xx/timeout, retry exhaustion, circuit-breaker trips and recovery, key-store or PII-secret outages, MLA/broker restarts mid-feed, and the `TxSts: "ABOR"` gap (`plan.md` §14 Q3) — all already covered by `tools/scenario-library` or separately tracked, and deliberately not tested here.
+
+---
+
+## 3. PPA correctness — definition of done (partially run)
+
+**§1 tested MLA's job, not PPA's.** An HTTP 200 from PPA's ingress only means "durably persisted, per `core-knowledge.md` §6.1 step 2" — persist happens **before** structural validation, so it says nothing about steps 3–9 (validation, idempotency, correlation, translation, TMS dispatch) actually running correctly. This section is what "PPA's own job is correct" would mean, broken into checkable pieces against PPA's documented nine-step pipeline (`core-knowledge.md` §6), the ISO 20022 translation reference (§7), and the correlation/durability model (§8).
+
+**Updated [2026-09-17]: PPA's source is now available locally**, at `/home/abdul-rahim/mojaloop/cch-ppa` — this changes what's checkable, so re-read before assuming the older "zero visibility" framing still applies. Critically, `cch-ppa`'s own `docker-compose.yml` stands up a **complete, self-contained local stack**: the PPA process itself, Postgres (its write-ahead store), and ValKey (its correlation cache) — with mTLS certs and a separate operator/DLQ-replay port already wired. This is genuinely separate infrastructure from the mystery remote instance at `10.0.115.186:3000` (not yet confirmed to be the same deployment), and it means most of the checks below no longer require anyone else's cooperation at all — they require *standing the stack up and looking*, which is work this session can do directly. Every item is marked with what it actually takes:
+- **[MLA-side]** — triggerable and observable purely by feeding MLA specific input and reading PPA's HTTP response or MLA's own metrics.
+- **[code-level]** — answerable by reading `cch-ppa`'s own source directly against the spec below. Proves the *implementation exists and matches intent*, not that a specific run behaved correctly — static, not live.
+- **[local-stack]** — requires standing up `cch-ppa`'s own `docker-compose.yml` and inspecting Postgres/ValKey/the DLQ directly, or deliberately faulting a dependency — fully within this session's control; stood up and in use since [2026-09-21] (`e2e-testing/locally-up.md`).
+- **[remote-instance]** — about the *specific* already-completed §1 run against the deployed instance at `10.0.115.186:3000` — that data lives only there; a local stack proves the mechanism works, not what that one remote instance actually did with those 8 envelopes.
+- **[Tazama]** — checkable independently only if the target Tazama instance (local `docker-compose.yml`'s TMS pointer, or the already-running local `tazama-tms-1` stack) is confirmed to be what either PPA instance actually dispatches to — not yet confirmed for either.
+
+### 3.1 Reachability gate & durable persist (steps 1–2)
+
+- [x] **[remote-instance]** Live-verified [2026-09-21] — SSH access to `10.0.115.186` obtained (key-based, `~/.ssh/ppa_10_0_115_186`), `sudo docker exec cch-ppa-postgres-1 psql -U ppa -d ppa` queried directly. **All 8 envelopes present in the real deployed PPA's `write_ahead` table, byte-for-byte**, confirming this run's own row-level detail (see §19's own entry). Full breakdown: `plan.md` §16's corresponding entry.
+- [x] **[local-stack]** Live-verified [2026-09-21] (`e2e-testing/locally-up.md` §2) — all 8 envelopes from a local corridor feed confirmed present in `cch-ppa`'s own write-ahead store (`select id, event_type, msg_type, status, iso_message_type from write_ahead`), each keyed on `(id, msg_type)` per the local stack's own schema. Not yet done: the specific outage-fault variant (stopping ValKey/Postgres mid-feed to confirm the `503`/nothing-persisted path) — that remains open.
+
+### 3.2 Structural validation (step 3)
+
+- [ ] **[code-level]** Confirm the implementation actually validates `msgType`/`eventType`/`id`/`fspiop-source`/`body` and routes a failure to the DLQ with a masked log, per §6.1 step 3 — read `src/services` for the validation step and where its failure path leads.
+- [ ] **[local-stack]** POST a deliberately malformed envelope (missing `id`, or an `eventType` outside the four valid values) at the local stack — confirm it still returns `200` (persist precedes validation) but lands in Postgres as a DLQ entry, not silently treated as valid.
+
+### 3.3 Idempotency (step 4)
+
+- [ ] **[code-level]** Confirm the idempotency check is a genuine atomic check-and-set against the write-ahead store (Postgres), keyed on `{id}:{isoMessageType}`, not a read-then-write — `git log` already shows a dedicated commit for this (`39c853c feat: classification setup and idempotency`).
+- [ ] **[local-stack]** Re-feed the identical corridor a second time at the local stack and confirm, directly in Postgres, that the second delivery of each `{id}:{isoMessageType}` pair was recognized as a duplicate and produced no second translation or TMS dispatch.
+
+### 3.4 Trigger/cache classification & correlation accumulation (steps 5–6, §8.1)
+
+- [ ] **[code-level]** Confirm the trigger/cache table (`core-knowledge.md` §6.5) is implemented as two independent properties, not conflated — the review finding this design avoids (R-01) is specifically about a component that fires a trigger *without* also caching, or vice versa.
+- [x] **[local-stack]** Live-verified [2026-09-21] (`e2e-testing/locally-up.md` §2) — actual keying differs from what this item assumed, and is more informative: one `correlation:<transferId>` hash accumulates every merged field for the whole transaction (`quote`, `quoteCallback`, `fxQuote`, `fxQuoteCallback`, `fxTransfer`, `pain001Pin`, `pain013Pin`, `pacs008Pin`), with `quote-id-map:<quoteId>` and `fxtransfer-id-map:<fxTransferId>` as separate lookup indices resolving an event's own id to that transaction's anchor — not two flat keys named after `conversionRequestId`/`commitRequestId` directly. PII fields inside the cached `quote` confirmed still tokenized (`tkn_...` prefixes) at this layer. **Sequencing note for next time**: the correlation TTL (300s default) can lapse between feeding and checking if other verification work happens first — check ValKey immediately after a feed, not after Postgres.
+- [ ] **[local-stack / Tazama]** Confirm the resulting pacs.008 carries the cached FX enrichment (`InstdAmt`/`XchgRate`, §7.3's "From cached FX Quote" row) — still open, but now reachable: the schema-completeness gap that blocked it is closed (bottom of this section, [2026-09-29]).
+
+### 3.5 Domestic vs. cross-border discriminator (step 7, §6.6)
+
+- [ ] **[code-level]** Confirm the discriminator logic exists and matches §6.6 exactly: domestic ⟺ no FX-quote state cached **and** no `determiningTransferId` in the body ⇒ silently discarded (counter only, no DLQ, no alert) — `git log` shows a dedicated commit (`0402046 feat: determining domestic and cross-border implementation`).
+- [ ] **[local-stack]** §1's corridor was cross-border throughout — the domestic path has never been exercised. Feed a TRANSFER-only corridor with no FXQUOTE/FXTRANSFER legs at the local stack, and confirm directly (metrics/logs) that it was silently discarded — no TMS message, no DLQ entry, no alert, only a counter incrementing.
+- [ ] **[local-stack]** The race case — `determiningTransferId` present but FX-quote state not yet cached — still classifies as cross-border and still emits a (degraded) pacs.008. Needs a deliberately timed feed (FX quote delayed past the transfer prepare).
+
+### 3.6 ISO 20022 translation correctness (§7.1–§7.4)
+
+- [ ] **[code-level]** Read the actual field-mapping implementation (`0177939 feat: All the translation stories`) against the reference tables — in particular the two failure modes that produce **no error anywhere** downstream, so they must be checked positively in the code, not assumed correct:
+  - `GrpHdr.MsgId` on every message is a PPA-generated ULID, pinned at first assembly — never copied from any wire `extensionList` key.
+  - pacs.002's `OrgnlInstrId`/`OrgnlEndToEndId` are resolved from the cached `transferId → {InstrId, EndToEndId}` mapping, never assumed equal to `transactionId`.
+  - `TxSts` is translated through an explicit table (`COMMITTED`→`ACSC`, not `ACCC`), not passed through as a raw string.
+  - Payee `Cdtr.BirthDt`/`CityOfBirth`/`CtryOfBirth` are set to the documented sentinels (`1900-01-01`/`"Unknown"`/`"ZZ"`), not left blank or fabricated.
+  - Agent identifiers use `FinInstnId.ClrSysMmbId.MmbId`, not the Mojaloop wire's own `FinInstnId.Othr.Id`.
+- [ ] **[local-stack / Tazama]** For a run against the local stack, confirm the messages a reachable Tazama instance actually received match the above — proves the code runs correctly, not just reads correctly.
+
+### 3.7 Local schema validation & the pacs.008 completeness check (§7.5)
+
+- [ ] **[code-level]** Confirm pinned local ajv schemas exist for all four message types and are validated with `removeAdditional: 'all'` before dispatch (`55b5c8c feat: ppa-13 validation through ajv`, `0786808 feat: added ajv validation to verify tms schema compatability`), and that the pacs.008 field-completeness check (`EndToEndId`, `Dbtr`, `Cdtr`, `DbtrAcct`, `CdtrAcct`) exists as a check distinct from schema shape validation.
+- [x] **[local-stack]** Live-verified [2026-09-21], though unintentionally rather than by deliberately crafting a malformed case: `e2e-testing/locally-up.md`'s corridor run produced exactly this scenario for free — `pain.001`, `pain.013`, and `pacs.008` are all genuinely incomplete against the pinned schema today (`cch-ppa/README.md`'s own documented gap, not something this feed caused), and all three failed closed with `status='failed'`/`LOCAL_VALIDATION_FAILED` in `write_ahead`, never reaching TMS dispatch. `pacs.002` then correctly refused to synthesize (`IDENTITY_UNRESOLVED`, R-04) rather than fabricate identifiers for a transfer whose `pacs.008` never resolved. A deliberately-crafted malformed case (rather than this incidental one) would still be worth doing to isolate the completeness check from the broader schema-shape gap, but the fail-closed behavior itself is now confirmed live.
+
+### 3.8 Dispatch to TMS (§7.6)
+
+- [ ] **[local-stack / Tazama, if target confirmed]** Exactly **four** Tazama messages ingested for one transaction — one each of `pain.001.001.11`, `pain.013.001.09`, `pacs.008.001.10`, `pacs.002.001.12` — matching `strategy.md` §1's "one cross-border payment produces exactly four Tazama messages" claim. Confirm what Tazama target the local stack's `.env` actually points at first (the already-running local `tazama-tms-1` stack is one candidate, per `docker ps` — not yet confirmed to be it).
+- [ ] **[code-level]** Confirm every PPA→TMS call is built with mutual TLS and a Keycloak-issued bearer token, and that the token is refreshed proactively before expiry, not reactively.
+- [ ] **[local-stack]** A simulated TMS 5xx/timeout produces retry-with-jitter (×3) before DLQ; a simulated 4xx DLQs immediately with no retry.
+
+### 3.9 Correlation TTL, parking, and out-of-order arrival (§8.2–§8.4)
+
+- [ ] **[code-level]** Confirm a parking mechanism exists that writes accumulated leg state to the DLQ before ValKey's TTL lapses (`9651f02 feat: parking and out of order with fixes and review`).
+- [ ] **[local-stack]** A leg parked before its ValKey TTL lapses (pacs.008 sent, pacs.002 not yet) is correctly recovered from the DLQ when the delayed fulfil finally arrives — needs a deliberately-delayed corridor feed against the local stack, with ValKey's TTL shortened for the test or the feed delayed past it.
+- [ ] **[local-stack]** A pacs.002 trigger arriving before any correlation state exists (fulfil-before-prepare) is held and retried within PPA's bounded window rather than dead-lettered immediately, and resolves once the prepare's pacs.008 lands.
+
+### 3.10 The DLQ (§8.5)
+
+- [ ] **[code-level]** Confirm a DLQ replay mechanism exists and is operator-triggered only, never automatic (`5be6c77 feat: dlq replay (unreviewed)` — flagged in its own commit message as unreviewed, worth a closer read before trusting it).
+- [x] **[local-stack]** Live-verified [2026-09-21], via the incidental DLQ entries §3.7 already produced (`status='failed'` rows in `write_ahead` — there is no separate DLQ table; failed rows in this same table are the DLQ, per the schema's own `write_ahead_status_idx` on `status`). `jsonb_pretty(envelope)` on the `QUOTE` request row showed `body.payee.partyIdInfo.partyIdentifier`, `body.payer.partyIdInfo.partyIdentifier`, and `body.payer.personalInfo.complexName` all carrying `tkn_...` prefixes — PII tokenized, never raw, confirmed directly in Postgres.
+- [x] **[remote-instance]** Same check repeated directly against `10.0.115.186` [2026-09-21] — same result: the QUOTE request's `write_ahead` row shows `payee.partyIdInfo.partyIdentifier`, `payer.partyIdInfo.partyIdentifier`, and `payer.personalInfo.complexName` all `tkn_...`-prefixed. **A genuine new finding surfaced by looking at this specific row closely**: `payee.personalInfo.complexName` is present as a *raw, untokenized* object (`{"lastName": "Banda", "firstName": "Chikondi"}`) sitting directly beside the tokenized payer fields in the same envelope, on a real (if test) deployed instance's own DLQ. This is **not an engineering bug** — `core-knowledge.md` §4.1 / `cch-pii-user-stories.md`'s Fields-to-Tokenize table only lists **"Payer legal name"** as tokenize-required for Quote request; there is no "Payee legal name" row at all, and MLA correctly implements exactly what's specified. It is a **spec-level gap**: the table gives an explicit cryptographic-binding rationale for every field marked exempt (the ILP-packet rows), but no rationale for why payee's legal name is excluded from tokenization while payer's is included — and a real name is PII regardless of which party it belongs to. Not previously tracked anywhere in the open registers (checked `core-knowledge.md` §13, `qa-review-findings.md` — the existing "payee name" items, R-12 and FSD Open Item #4, are about a different problem, payee display name having no *source* for ISO translation, not about this tokenization asymmetry). **Flagged to the user [2026-09-21]** per `CLAUDE.md`'s external-decisions rule — this is CCH/the story author's call, not engineering's, since it's a requirements gap, not a code defect. **Resolved [2026-09-24]**: the user, as story author, added payee `complexName`, `payee.name` and `payer.name` to the Fields-to-Tokenize table, and MLA now tokenizes all three (F-28a, `plan.md` §16).
+
+### Definition of done for this section
+
+**Still not fully met, but substantially advanced [2026-09-21]** — `cch-ppa`'s own `docker-compose.yml` is now actually stood up locally (`e2e-testing/locally-up.md`) and the corridor fed through it twice. Four `[local-stack]` items are now live-verified rather than merely achievable: §3.1's local persist check, §3.4's correlation-cache accumulation, §3.7's fail-closed behavior on incomplete ISO messages, and §3.10's DLQ-tokenization check. **A genuine, pre-existing finding surfaced by this run**: `pain.001`/`pain.013`/`pacs.008` all fail local schema validation today (matching `cch-ppa/README.md`'s own documented gap, now confirmed live rather than only known from the source), which is also why §3.4's third bullet, §3.6, §3.8, and §3.9 remain untestable as things stand — none of them can be exercised until a message actually reaches TMS dispatch, and none of today's four message types did. Still genuinely open: the deliberate fault-injection variants (§3.1's outage case, §3.2's malformed-envelope case, §3.3's duplicate-redelivery case, §3.5's domestic/race cases), the code-level reads (§3.2, §3.3, §3.4, §3.5, §3.6, §3.7, §3.8, §3.10), and everything downstream of TMS dispatch (§3.6's Tazama-side confirmation, §3.8, §3.9) — the last group blocked on the schema-completeness gap above, not on local-stack access.
+
+**Further advanced, same day**: SSH access to the *remote* `10.0.115.186` instance was obtained, closing the "stays out of reach regardless" gap above. §3.1's and §3.10's `[remote-instance]` items are now both live-verified directly against it — same shape as the local-stack findings (`pain.001`/`pain.013`/`pacs.008` all `LOCAL_VALIDATION_FAILED`, `pacs.002` correctly `IDENTITY_UNRESOLVED` per R-04, FXQUOTE/FXTRANSFER both `completed`), now proven on the specific instance §1's original run actually used, not just inferred from the local stack running the same code. One genuine new finding surfaced only by inspecting this remote row closely: **`payee.personalInfo.complexName` is never tokenized**, on either instance — see §3.10's own entry for the full detail; it's a spec gap, not a code defect, and has been flagged to the user. Where the real deployed instance's own TMS target actually points is still unknown — that part still needs the PPA engineer or further discovery.
+
+**The schema-completeness gap itself is closed [2026-09-29]** — fixed in `cch-ppa` by Umair Khan (commit `a625ed69`) and independently live-verified against a real local MLA→PPA→TMS chain, all 5 real corridors, zero schema-validation failures (`plan.md` §16's [2026-09-29] entry; `strategy.md` §1). This unblocks §3.6, §3.8, and §3.9's `[local-stack / Tazama]` items and §3.4's third bullet, which were specifically waiting on a message actually reaching TMS dispatch — none of those items are separately re-verified by this entry and each still needs its own pass. §3.4's `InstdAmt`/`XchgRate` FX-enrichment check in particular is now reachable and still unchecked.

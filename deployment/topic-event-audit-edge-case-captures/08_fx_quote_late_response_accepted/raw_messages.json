@@ -1,0 +1,654 @@
+[
+  {
+    "content": {
+      "headers": {
+        "accept": "application/vnd.interoperability.iso20022.fxQuotes+json;version=2.0",
+        "connection": "keep-alive",
+        "content-length": "825",
+        "content-type": "application/vnd.interoperability.iso20022.fxQuotes+json;version=2.0",
+        "date": "Thu, 10 Sep 2026 11:31:28 GMT",
+        "fspiop-destination": "e2e-sim-fxp1",
+        "fspiop-source": "e2e-sim1",
+        "host": "moja-quoting-service"
+      },
+      "payload": {
+        "CdtTrfTxInf": {
+          "Cdtr": {
+            "FinInstnId": {
+              "Othr": {
+                "Id": "e2e-sim-fxp1"
+              }
+            }
+          },
+          "Dbtr": {
+            "FinInstnId": {
+              "Othr": {
+                "Id": "e2e-sim1"
+              }
+            }
+          },
+          "InstrForCdtrAgt": {
+            "InstrInf": "SEND"
+          },
+          "IntrBkSttlmAmt": {
+            "ActiveCurrencyAndAmount": "0",
+            "Ccy": "XTS"
+          },
+          "PmtId": {
+            "EndToEndId": "01M25HCJ640BSA1RDPZFF1MKY1",
+            "InstrId": "01M25HCJ6419TGXYB4EZT2Z9Q4",
+            "TxId": "01M25HCJ61Q8GND43YDGKEWR3D"
+          },
+          "UndrlygCstmrCdtTrf": {
+            "Cdtr": {
+              "Id": {
+                "OrgId": {
+                  "Othr": {
+                    "Id": "e2e-sim-fxp1"
+                  }
+                }
+              }
+            },
+            "CdtrAgt": {
+              "FinInstnId": {
+                "Othr": {
+                  "Id": "e2e-sim-fxp1"
+                }
+              }
+            },
+            "Dbtr": {
+              "Id": {
+                "OrgId": {
+                  "Othr": {
+                    "Id": "e2e-sim1"
+                  }
+                }
+              }
+            },
+            "DbtrAgt": {
+              "FinInstnId": {
+                "Othr": {
+                  "Id": "e2e-sim1"
+                }
+              }
+            },
+            "InstdAmt": {
+              "ActiveOrHistoricCurrencyAndAmount": "100",
+              "Ccy": "XXX"
+            }
+          }
+        },
+        "GrpHdr": {
+          "CreDtTm": "2026-09-10T11:31:28.597Z",
+          "MsgId": "01M25HCJ6MGTP564H7KMTPC74M",
+          "NbOfTxs": "1",
+          "PmtInstrXpryDtTm": "2026-09-10T11:31:43.580Z",
+          "SttlmInf": {
+            "SttlmMtd": "CLRG"
+          }
+        }
+      },
+      "transformedPayload": {
+        "conversionRequestId": "01M25HCJ61Q8GND43YDGKEWR3D",
+        "conversionTerms": {
+          "amountType": "SEND",
+          "conversionId": "01M25HCJ6419TGXYB4EZT2Z9Q4",
+          "counterPartyFsp": "e2e-sim-fxp1",
+          "determiningTransferId": "01M25HCJ640BSA1RDPZFF1MKY1",
+          "expiration": "2026-09-10T11:31:43.580Z",
+          "initiatingFsp": "e2e-sim1",
+          "sourceAmount": {
+            "amount": "100",
+            "currency": "XXX"
+          },
+          "targetAmount": {
+            "amount": "0",
+            "currency": "XTS"
+          }
+        }
+      }
+    },
+    "id": "da46ec4d-23fb-4345-98b2-a5149ec9a5ce",
+    "metadata": {
+      "event": {
+        "action": "start",
+        "createdAt": "2026-09-10T11:31:28.635Z",
+        "id": "1d5af3fc-2f5e-4eb4-8216-405279626085",
+        "state": {
+          "status": "success"
+        },
+        "type": "audit"
+      },
+      "protocol.createdAt": 1789039888636,
+      "trace": {
+        "service": "",
+        "spanId": "698bb5aa500a9e59",
+        "startTimestamp": "2026-09-10T11:31:28.624Z",
+        "tags": {
+          "auditType": "transactionFlow",
+          "contentType": "httpRequest",
+          "conversionId": "01M25HCJ6419TGXYB4EZT2Z9Q4",
+          "conversionRequestId": "01M25HCJ61Q8GND43YDGKEWR3D",
+          "destination": "e2e-sim-fxp1",
+          "determiningTransferId": "01M25HCJ640BSA1RDPZFF1MKY1",
+          "httpMethod": "post",
+          "httpPath": "/fxQuotes",
+          "operation": "postFxQuotes",
+          "serviceName": "quoting-service",
+          "source": "e2e-sim1",
+          "tracestate": "mojaloop=eyJzcGFuSWQiOiI2OThiYjVhYTUwMGE5ZTU5In0=",
+          "transactionAction": "post",
+          "transactionId": "01M25HCJ640BSA1RDPZFF1MKY1",
+          "transactionType": "quote"
+        },
+        "traceId": "811bf8571cba6ea25fc0c0e078d2fd6c",
+        "tracestates": {
+          "mojaloop": {
+            "spanId": "698bb5aa500a9e59"
+          }
+        }
+      }
+    },
+    "type": "application/json"
+  },
+  {
+    "content": {
+      "headers": {
+        "Accept": "application/vnd.interoperability.iso20022.fxQuotes+json;version=2.0",
+        "Content-Type": "application/vnd.interoperability.iso20022.fxQuotes+json;version=2.0",
+        "Date": "Thu, 10 Sep 2026 11:31:28 GMT",
+        "FSPIOP-Destination": "e2e-sim-fxp1",
+        "FSPIOP-Source": "e2e-sim1",
+        "traceparent": "00-811bf8571cba6ea25fc0c0e078d2fd6c-85ac681e706eaec9-00",
+        "tracestate": "mojaloop=eyJzcGFuSWQiOiI4NWFjNjgxZTcwNmVhZWM5In0="
+      },
+      "method": "POST",
+      "payload": {
+        "CdtTrfTxInf": {
+          "Cdtr": {
+            "FinInstnId": {
+              "Othr": {
+                "Id": "e2e-sim-fxp1"
+              }
+            }
+          },
+          "Dbtr": {
+            "FinInstnId": {
+              "Othr": {
+                "Id": "e2e-sim1"
+              }
+            }
+          },
+          "InstrForCdtrAgt": {
+            "InstrInf": "SEND"
+          },
+          "IntrBkSttlmAmt": {
+            "ActiveCurrencyAndAmount": "0",
+            "Ccy": "XTS"
+          },
+          "PmtId": {
+            "EndToEndId": "01M25HCJ640BSA1RDPZFF1MKY1",
+            "InstrId": "01M25HCJ6419TGXYB4EZT2Z9Q4",
+            "TxId": "01M25HCJ61Q8GND43YDGKEWR3D"
+          },
+          "UndrlygCstmrCdtTrf": {
+            "Cdtr": {
+              "Id": {
+                "OrgId": {
+                  "Othr": {
+                    "Id": "e2e-sim-fxp1"
+                  }
+                }
+              }
+            },
+            "CdtrAgt": {
+              "FinInstnId": {
+                "Othr": {
+                  "Id": "e2e-sim-fxp1"
+                }
+              }
+            },
+            "Dbtr": {
+              "Id": {
+                "OrgId": {
+                  "Othr": {
+                    "Id": "e2e-sim1"
+                  }
+                }
+              }
+            },
+            "DbtrAgt": {
+              "FinInstnId": {
+                "Othr": {
+                  "Id": "e2e-sim1"
+                }
+              }
+            },
+            "InstdAmt": {
+              "ActiveOrHistoricCurrencyAndAmount": "100",
+              "Ccy": "XXX"
+            }
+          }
+        },
+        "GrpHdr": {
+          "CreDtTm": "2026-09-10T11:31:28.597Z",
+          "MsgId": "01M25HCJ6MGTP564H7KMTPC74M",
+          "NbOfTxs": "1",
+          "PmtInstrXpryDtTm": "2026-09-10T11:31:43.580Z",
+          "SttlmInf": {
+            "SttlmMtd": "CLRG"
+          }
+        }
+      },
+      "url": "http://moja-e2e-sim-fxp1-sdk:4000/fxQuotes"
+    },
+    "id": "7016fe42-5218-4317-91c6-66d3dd5c91c4",
+    "metadata": {
+      "event": {
+        "action": "egress",
+        "createdAt": "2026-09-10T11:31:28.716Z",
+        "id": "83a075e2-26f2-4231-8848-c2f128c6d2b2",
+        "state": {
+          "status": "success"
+        },
+        "type": "audit"
+      },
+      "protocol.createdAt": 1789039888719,
+      "trace": {
+        "parentSpanId": "1ed5feb68c5dab90",
+        "service": "qs_fxQuote_forwardFxQuoteRequest",
+        "spanId": "85ac681e706eaec9",
+        "startTimestamp": "2026-09-10T11:31:28.662Z",
+        "tags": {
+          "auditType": "transactionFlow",
+          "contentType": "httpRequest",
+          "conversionId": "01M25HCJ6419TGXYB4EZT2Z9Q4",
+          "destination": "e2e-sim-fxp1",
+          "determiningTransferId": "01M25HCJ640BSA1RDPZFF1MKY1",
+          "httpMethod": "POST",
+          "httpUrl": "http://moja-e2e-sim-fxp1-sdk:4000/fxQuotes",
+          "operation": "postFxQuotes",
+          "serviceName": "quoting-service-handler",
+          "source": "e2e-sim1",
+          "tracestate": "mojaloop=eyJzcGFuSWQiOiI4NWFjNjgxZTcwNmVhZWM5In0=",
+          "transactionAction": "post",
+          "transactionId": "01M25HCJ640BSA1RDPZFF1MKY1",
+          "transactionType": "fxquote"
+        },
+        "traceId": "811bf8571cba6ea25fc0c0e078d2fd6c",
+        "tracestates": {
+          "mojaloop": {
+            "spanId": "85ac681e706eaec9"
+          }
+        }
+      }
+    },
+    "type": "application/json"
+  },
+  {
+    "content": {
+      "headers": {
+        "accept-encoding": "gzip, compress, deflate, br",
+        "authorization": "Bearer 7718fa9b-be13-3fe7-87f0-a12cf1628168",
+        "connection": "keep-alive",
+        "content-length": "174",
+        "content-type": "application/vnd.interoperability.iso20022.fxQuotes+json;version=2.0",
+        "date": "Thu, 10 Sep 2026 11:31:28 GMT",
+        "fspiop-destination": "e2e-sim1",
+        "fspiop-source": "e2e-sim-fxp1",
+        "host": "moja-quoting-service",
+        "traceparent": "00-811bf8571cba6ea25fc0c0e078d2fd6c-85ac681e706eaec9-00",
+        "tracestate": "mojaloop=eyJzcGFuSWQiOiI4NWFjNjgxZTcwNmVhZWM5In0=",
+        "user-agent": "axios/1.13.6"
+      },
+      "payload": {
+        "GrpHdr": {
+          "CreDtTm": "2026-09-10T11:31:28.802Z",
+          "MsgId": "01M25HCJD2DCG44JRF8PJV8YS6"
+        },
+        "TxInfAndSts": {
+          "StsRsnInf": {
+            "AddtlInf": "Internal server error",
+            "Rsn": {
+              "Prtry": "2001"
+            }
+          }
+        }
+      },
+      "transformedPayload": {
+        "errorInformation": {
+          "errorCode": "2001",
+          "errorDescription": "Internal server error"
+        }
+      }
+    },
+    "id": "ad92a264-544a-4a2f-820e-c58cc58cf61d",
+    "metadata": {
+      "event": {
+        "action": "start",
+        "createdAt": "2026-09-10T11:31:28.859Z",
+        "id": "829fd114-bd01-4656-b8b1-4888a2c8e5be",
+        "state": {
+          "status": "success"
+        },
+        "type": "audit"
+      },
+      "protocol.createdAt": 1789039888861,
+      "trace": {
+        "flags": "00",
+        "parentSpanId": "85ac681e706eaec9",
+        "sampled": 0,
+        "service": "FxQuotesByIDAndErrorPut",
+        "spanId": "aa307253f3564155",
+        "startTimestamp": "2026-09-10T11:31:28.814Z",
+        "tags": {
+          "auditType": "transactionFlow",
+          "contentType": "httpRequest",
+          "destination": "e2e-sim1",
+          "httpMethod": "put",
+          "httpPath": "/fxQuotes/01M25HCJ61Q8GND43YDGKEWR3D/error",
+          "operation": "putFxQuotesErrorByID",
+          "serviceName": "quoting-service",
+          "source": "e2e-sim-fxp1",
+          "tracestate": "mojaloop=eyJzcGFuSWQiOiJhYTMwNzI1M2YzNTY0MTU1In0=",
+          "transactionAction": "put",
+          "transactionType": "quote"
+        },
+        "traceId": "811bf8571cba6ea25fc0c0e078d2fd6c",
+        "tracestates": {
+          "mojaloop": {
+            "spanId": "aa307253f3564155"
+          }
+        }
+      }
+    },
+    "type": "application/json"
+  },
+  {
+    "content": {
+      "headers": {
+        "Content-Type": "application/vnd.interoperability.iso20022.fxQuotes+json;version=2.0",
+        "Date": "Thu, 10 Sep 2026 11:31:28 GMT",
+        "FSPIOP-Destination": "e2e-sim1",
+        "FSPIOP-Source": "e2e-sim-fxp1",
+        "traceparent": "00-811bf8571cba6ea25fc0c0e078d2fd6c-e11ef8ff4ba2b91d-30",
+        "tracestate": "mojaloop=eyJzcGFuSWQiOiJlMTFlZjhmZjRiYTJiOTFkIn0="
+      },
+      "method": "PUT",
+      "payload": {
+        "GrpHdr": {
+          "CreDtTm": "2026-09-10T11:31:28.802Z",
+          "MsgId": "01M25HCJD2DCG44JRF8PJV8YS6"
+        },
+        "TxInfAndSts": {
+          "StsRsnInf": {
+            "AddtlInf": "Internal server error",
+            "Rsn": {
+              "Prtry": "2001"
+            }
+          }
+        }
+      },
+      "url": "http://moja-e2e-sim1-sdk:4000/fxQuotes/01M25HCJ61Q8GND43YDGKEWR3D/error"
+    },
+    "id": "7d70b31f-9ae7-422c-8b08-88198aa800f6",
+    "metadata": {
+      "event": {
+        "action": "egress",
+        "createdAt": "2026-09-10T11:31:28.890Z",
+        "id": "4f230b89-eb94-463c-b333-fdd4a4e6f7bd",
+        "state": {
+          "status": "success"
+        },
+        "type": "audit"
+      },
+      "protocol.createdAt": 1789039888892,
+      "trace": {
+        "flags": "00",
+        "parentSpanId": "2b620967dae28a8e",
+        "sampled": 0,
+        "service": "qs_fxQuote_forwardFxQuoteError",
+        "spanId": "e11ef8ff4ba2b91d",
+        "startTimestamp": "2026-09-10T11:31:28.882Z",
+        "tags": {
+          "auditType": "transactionFlow",
+          "contentType": "httpRequest",
+          "destination": "e2e-sim1",
+          "httpMethod": "PUT",
+          "httpUrl": "http://moja-e2e-sim1-sdk:4000/fxQuotes/01M25HCJ61Q8GND43YDGKEWR3D/error",
+          "serviceName": "quoting-service-handler",
+          "source": "e2e-sim-fxp1",
+          "tracestate": "mojaloop=eyJzcGFuSWQiOiJlMTFlZjhmZjRiYTJiOTFkIn0=",
+          "transactionAction": "put",
+          "transactionType": "fxquote"
+        },
+        "traceId": "811bf8571cba6ea25fc0c0e078d2fd6c",
+        "tracestates": {
+          "mojaloop": {
+            "spanId": "e11ef8ff4ba2b91d"
+          }
+        }
+      }
+    },
+    "type": "application/json"
+  },
+  {
+    "content": {
+      "headers": {
+        "accept": "application/vnd.interoperability.iso20022.fxQuotes+json;version=2.0",
+        "connection": "keep-alive",
+        "content-length": "827",
+        "content-type": "application/vnd.interoperability.iso20022.fxQuotes+json;version=2.0",
+        "date": "Thu, 10 Sep 2026 11:32:08 GMT",
+        "fspiop-destination": "e2e-sim1",
+        "fspiop-source": "e2e-sim-fxp1",
+        "host": "moja-quoting-service"
+      },
+      "payload": {
+        "CdtTrfTxInf": {
+          "Cdtr": {
+            "FinInstnId": {
+              "Othr": {
+                "Id": "e2e-sim-fxp1"
+              }
+            }
+          },
+          "Dbtr": {
+            "FinInstnId": {
+              "Othr": {
+                "Id": "e2e-sim1"
+              }
+            }
+          },
+          "InstrForCdtrAgt": {
+            "InstrInf": "SEND"
+          },
+          "IntrBkSttlmAmt": {
+            "ActiveCurrencyAndAmount": "200",
+            "Ccy": "XTS"
+          },
+          "PmtId": {
+            "EndToEndId": "01M25HCJ640BSA1RDPZFF1MKY1",
+            "InstrId": "01M25HCJ6419TGXYB4EZT2Z9Q4",
+            "TxId": "01M25HCJ61Q8GND43YDGKEWR3D"
+          },
+          "UndrlygCstmrCdtTrf": {
+            "Cdtr": {
+              "Id": {
+                "OrgId": {
+                  "Othr": {
+                    "Id": "e2e-sim-fxp1"
+                  }
+                }
+              }
+            },
+            "CdtrAgt": {
+              "FinInstnId": {
+                "Othr": {
+                  "Id": "e2e-sim-fxp1"
+                }
+              }
+            },
+            "Dbtr": {
+              "Id": {
+                "OrgId": {
+                  "Othr": {
+                    "Id": "e2e-sim1"
+                  }
+                }
+              }
+            },
+            "DbtrAgt": {
+              "FinInstnId": {
+                "Othr": {
+                  "Id": "e2e-sim1"
+                }
+              }
+            },
+            "InstdAmt": {
+              "ActiveOrHistoricCurrencyAndAmount": "100",
+              "Ccy": "XXX"
+            }
+          }
+        },
+        "GrpHdr": {
+          "CreDtTm": "2026-09-10T11:32:08.686Z",
+          "MsgId": "01M25HDSBD8F3J43X56N63PRCE",
+          "NbOfTxs": "1",
+          "PmtInstrXpryDtTm": "2026-09-10T11:31:43.580Z",
+          "SttlmInf": {
+            "SttlmMtd": "CLRG"
+          }
+        }
+      },
+      "transformedPayload": {
+        "conversionTerms": {
+          "amountType": "SEND",
+          "conversionId": "01M25HCJ6419TGXYB4EZT2Z9Q4",
+          "counterPartyFsp": "e2e-sim-fxp1",
+          "determiningTransferId": "01M25HCJ640BSA1RDPZFF1MKY1",
+          "expiration": "2026-09-10T11:31:43.580Z",
+          "initiatingFsp": "e2e-sim1",
+          "sourceAmount": {
+            "amount": "100",
+            "currency": "XXX"
+          },
+          "targetAmount": {
+            "amount": "200",
+            "currency": "XTS"
+          }
+        }
+      }
+    },
+    "id": "032a4f09-a4e0-44d6-99a3-eaba83d0c08c",
+    "metadata": {
+      "event": {
+        "action": "start",
+        "createdAt": "2026-09-10T11:32:08.729Z",
+        "id": "0824a017-7ab5-4161-b8c4-2223e7348a91",
+        "state": {
+          "status": "success"
+        },
+        "type": "audit"
+      },
+      "protocol.createdAt": 1789039928730,
+      "trace": {
+        "service": "FxQuotesByIdPut",
+        "spanId": "447b3e231e5d4a39",
+        "startTimestamp": "2026-09-10T11:32:08.693Z",
+        "tags": {
+          "auditType": "transactionFlow",
+          "contentType": "httpRequest",
+          "conversionId": "01M25HCJ6419TGXYB4EZT2Z9Q4",
+          "destination": "e2e-sim1",
+          "determiningTransferId": "01M25HCJ640BSA1RDPZFF1MKY1",
+          "httpMethod": "put",
+          "httpPath": "/fxQuotes/01M25HCJ61Q8GND43YDGKEWR3D",
+          "operation": "putFxQuotesByID",
+          "serviceName": "quoting-service",
+          "source": "e2e-sim-fxp1",
+          "tracestate": "mojaloop=eyJzcGFuSWQiOiI0NDdiM2UyMzFlNWQ0YTM5In0=",
+          "transactionAction": "put",
+          "transactionId": "01M25HCJ640BSA1RDPZFF1MKY1",
+          "transactionType": "quote"
+        },
+        "traceId": "839736aabb81c0f99a27aef51d7ccd7b",
+        "tracestates": {
+          "mojaloop": {
+            "spanId": "447b3e231e5d4a39"
+          }
+        }
+      }
+    },
+    "type": "application/json"
+  },
+  {
+    "content": {
+      "headers": {
+        "content-type": "application/vnd.interoperability.iso20022.fxQuotes+json;version=2.0",
+        "date": "Thu, 10 Sep 2026 11:32:08 GMT",
+        "fspiop-destination": "e2e-sim-fxp1",
+        "fspiop-http-method": "PUT",
+        "fspiop-signature": "{\"signature\":\"kguMnEBZUUhELkFIeZ5CvfjphtRieqi4PTHFMPt8FaZ7EGcvrpzQXdhuSdIASChZ-If8x785lGDQtUQS0myuIItekvwkWf0xDJH75RmvS5JdIz5owUSmSyILEuIRIGsMOsaTCixTYmEeQz_Ylf51U2Jxu-FrQBRTt4JEGKh_8Q7oRruuJj4ASfvsXfKNpq81QH5azWR0pFtF21iRk4TeUGo56qaEjWIs_qdCnoChaPr3bunBoV00m4KIX7jAMshVWcYA4xkLXd0z6TGEdLWvjwLK4jom3ol-u9J9sdDJa_fd0_DI_dMnbEs8jfLNUBoK__7s3-mzkStL4xFqlorTPw\",\"protectedHeader\":\"eyJhbGciOiJSUzI1NiIsIkZTUElPUC1VUkkiOiIvZnhRdW90ZXMvMDFNMjVIQ0o2MVE4R05ENDNZREdLRVdSM0QvZXJyb3IiLCJGU1BJT1AtSFRUUC1NZXRob2QiOiJQVVQiLCJGU1BJT1AtU291cmNlIjoiSHViIiwiRlNQSU9QLURlc3RpbmF0aW9uIjoiZTJlLXNpbS1meHAxIiwiRGF0ZSI6IlRodSwgMTAgU2VwIDIwMjYgMTE6MzI6MDggR01UIn0\"}",
+        "fspiop-source": "Hub",
+        "fspiop-uri": "/fxQuotes/01M25HCJ61Q8GND43YDGKEWR3D/error",
+        "traceparent": "00-839736aabb81c0f99a27aef51d7ccd7b-78f04c1188c6a8ec-00",
+        "tracestate": "mojaloop=eyJzcGFuSWQiOiI3OGYwNGMxMTg4YzZhOGVjIn0="
+      },
+      "method": "PUT",
+      "payload": {
+        "GrpHdr": {
+          "CreDtTm": "2026-09-10T11:32:08.802Z",
+          "MsgId": "01M25HDSF2S2BC40T7HCHHXM3Q"
+        },
+        "TxInfAndSts": {
+          "StsRsnInf": {
+            "AddtlInf": "Generic validation error - Update for fx quote 01M25HCJ61Q8GND43YDGKEWR3D failed: \"accept\" header should ",
+            "Rsn": {
+              "Prtry": "3100"
+            }
+          }
+        }
+      },
+      "url": "http://moja-e2e-sim-fxp1-sdk:4000/fxQuotes/01M25HCJ61Q8GND43YDGKEWR3D/error"
+    },
+    "id": "39060ae1-0ac8-4d7b-b63e-a8cf7b8daa7a",
+    "metadata": {
+      "event": {
+        "action": "egress",
+        "createdAt": "2026-09-10T11:32:08.808Z",
+        "id": "79ae556b-0df5-4cbb-a20f-0a160e1eb774",
+        "state": {
+          "status": "success"
+        },
+        "type": "audit"
+      },
+      "protocol.createdAt": 1789039928810,
+      "trace": {
+        "parentSpanId": "837812381282bbfe",
+        "service": "qs_fxQuote_sendErrorCallback",
+        "spanId": "78f04c1188c6a8ec",
+        "startTimestamp": "2026-09-10T11:32:08.796Z",
+        "tags": {
+          "auditType": "transactionFlow",
+          "contentType": "httpRequest",
+          "destination": "e2e-sim1",
+          "httpMethod": "PUT",
+          "httpUrl": "http://moja-e2e-sim-fxp1-sdk:4000/fxQuotes/01M25HCJ61Q8GND43YDGKEWR3D/error",
+          "serviceName": "quoting-service-handler",
+          "source": "e2e-sim-fxp1",
+          "tracestate": "mojaloop=eyJzcGFuSWQiOiI3OGYwNGMxMTg4YzZhOGVjIn0=",
+          "transactionAction": "put",
+          "transactionType": "fxquote"
+        },
+        "traceId": "839736aabb81c0f99a27aef51d7ccd7b",
+        "tracestates": {
+          "mojaloop": {
+            "spanId": "78f04c1188c6a8ec"
+          }
+        }
+      }
+    },
+    "type": "application/json"
+  }
+]

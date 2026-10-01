@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cch-mla
+  namespace: mla
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cch-mla
+  template:
+    metadata:
+      labels:
+        app: cch-mla
+    spec:
+      containers:
+        - name: cch-mla
+          image: "cch-mla:dryrun"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3001
+          envFrom:
+            - configMapRef:
+                name: cch-mla-config
+          volumeMounts:
+            - name: ppa-mtls
+              mountPath: /secrets/ppa-mtls
+              readOnly: true
+            - name: jws-keys
+              mountPath: /secrets/jws-keys
+              readOnly: true
+            - name: pii-secret
+              mountPath: /secrets/pii-secret
+              readOnly: true
+          env:
+            - name: PPA_CLIENT_CERT_PATH
+              value: /secrets/ppa-mtls/client.crt
+            - name: PPA_CLIENT_KEY_PATH
+              value: /secrets/ppa-mtls/client.key
+            - name: PPA_CA_CERT_PATH
+              value: /secrets/ppa-mtls/ca.crt
+            - name: JWS_PUBLIC_KEY_DIR
+              value: /secrets/jws-keys
+            - name: PII_SECRET_PATH
+              value: /secrets/pii-secret/secret
+          livenessProbe:
+            httpGet: { path: /health/live, port: 3001 }
+            initialDelaySeconds: 5
+            periodSeconds: 15
+          readinessProbe:
+            httpGet: { path: /health/ready, port: 3001 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests: { cpu: "250m", memory: "256Mi" }
+            limits: { cpu: "1", memory: "512Mi" }
+      volumes:
+        - name: ppa-mtls
+          secret: { secretName: cch-mla-ppa-mtls }
+        - name: jws-keys
+          secret: { secretName: cch-mla-jws-keys }
+        - name: pii-secret
+          secret: { secretName: cch-mla-pii-secret }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cch-mla
+  namespace: mla
+spec:
+  type: ClusterIP
+  selector:
+    app: cch-mla
+  ports:
+    - port: 3001
+      targetPort: 3001

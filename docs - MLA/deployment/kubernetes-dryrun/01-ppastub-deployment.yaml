@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ppa-stub
+  namespace: mla
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ppa-stub
+  template:
+    metadata:
+      labels:
+        app: ppa-stub
+    spec:
+      containers:
+        - name: ppa-stub
+          image: "ppa-stub:dryrun"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 4001
+              name: control
+            - containerPort: 4443
+              name: mtls
+          env:
+            - name: PPA_STUB_CERT_DIR
+              value: /secrets/server-tls
+            - name: PPA_STUB_CONTROL_PORT
+              value: "4001"
+            - name: PPA_STUB_MTLS_PORT
+              value: "4443"
+          volumeMounts:
+            - name: server-tls
+              mountPath: /secrets/server-tls
+              readOnly: true
+          livenessProbe:
+            httpGet: { path: /health/live, port: control }
+            initialDelaySeconds: 5
+            periodSeconds: 15
+          readinessProbe:
+            httpGet: { path: /health/ready, port: control }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            # ts-node compiles TypeScript on the fly and pulls in the full
+            # node:22-bullseye toolchain - meaningfully heavier at runtime
+            # than cch-mla's own compiled, distroless image. 256Mi OOM-killed
+            # it in practice; found running this, not guessed upfront.
+            requests: { cpu: "100m", memory: "256Mi" }
+            limits: { cpu: "500m", memory: "512Mi" }
+      volumes:
+        - name: server-tls
+          secret: { secretName: cch-ppastub-server-tls }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ppa-stub
+  namespace: mla
+spec:
+  type: ClusterIP
+  selector:
+    app: ppa-stub
+  ports:
+    - name: control
+      port: 4001
+      targetPort: 4001
+    - name: mtls
+      port: 4443
+      targetPort: 4443
