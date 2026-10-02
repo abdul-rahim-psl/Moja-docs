@@ -10,7 +10,10 @@ not at the ingress gateway, and the ingress gateway passes TLS through untouched
 
 **Status.** The container `ppa-mtls-nginx` runs on the host with the stock config and no published ports,
 from `/opt/ppa-mtls-nginx/docker-compose.yml`, and the default config is backed up per §4.2 (2026-10-01,
-`plan.md` §16). Nothing from §4.4 onward is on the host yet. §4.4's Nginx config was checked offline on 2026-10-01: it ran in `nginx:1.30.5-alpine` against a stand-in PPA that echoes the request it receives, using throwaway certificates, and passed every row of §5's table. Nothing else in this plan is verified. Steps that need a decision from someone other
+`plan.md` §16). Nothing from §4.4 onward is on the host yet. §4.4's Nginx config was checked offline on 2026-10-01: it ran in `nginx:1.30.5-alpine` against a stand-in PPA that echoes the request it receives, using throwaway certificates, and passed every row of §5's table. The upstream's `resolver`/`resolve` lines were added afterwards and tested on
+their own offline on 2026-10-01: with them, Nginx followed a recreated upstream container to its new IP within
+8 s and started while the upstream was absent; without them, it returned 502 until reloaded and refused to start.
+The full §5 table has not been re-run against the revised config. Nothing else in this plan is verified. Steps that need a decision from someone other
 than engineering are marked **[decision]** and listed in §8.
 
 ---
@@ -168,8 +171,13 @@ map $ssl_client_s_dn $mla_client_allowed {
     "~(?:^|,)CN=<AGREED_MLA_CN>(?:,|$)"  1;   # non-capturing: a capturing regex here overwrites $1
 }
 
+# Re-resolve PPA through Docker's DNS: a recreated PPA container gets a new IP, and a name resolved
+# only at startup keeps proxying to the old one (502 until reload), or stops Nginx starting at all.
+resolver 127.0.0.11 valid=5s ipv6=off;
+
 upstream ppa {
-    server ppa:3000;
+    zone ppa_upstream 64k;               # required by `resolve`
+    server ppa:3000 resolve;
     keepalive 16;                        # MLA reuses connections; so does this hop
 }
 
@@ -256,7 +264,14 @@ generated in a separate directory on the host and deleted afterwards. Generate: 
 certificate for `mla-interconnect.paysyslabs.com` signed by it; a client certificate with the agreed CN; a
 client certificate with a wrong CN; and a client certificate from a second, unrelated CA. Run
 `ppa-mtls-nginx` against them. With `proxy_protocol` off for these local tests, exercise it from the host
-itself:
+itself.
+
+**Point the upstream at a stand-in, never the real PPA, for every row that POSTs.** PPA writes even a
+schema-rejected body to its dead-letter queue (`cch-ppa` `clients/fastify.ts`, `setErrorHandler`), so a test
+POST pollutes the real store. A second `nginx:1.30.5-alpine` container on `cch-ppa_default` that echoes the
+method and path it receives serves as the stand-in, and needs no new image on the host. Only `GET` health
+requests go to the real PPA. Publish the port on `127.0.0.1` only for this phase, so nothing off the host can
+reach the test CA's trust.
 
 ```bash
 curl --resolve mla-interconnect.paysyslabs.com:8443:127.0.0.1 --cacert test-ca.crt \
@@ -267,15 +282,16 @@ curl --resolve mla-interconnect.paysyslabs.com:8443:127.0.0.1 --cacert test-ca.c
 | # | Case | Expect |
 | --- | --- | --- |
 | 1 | Good client cert, `GET /others/health/ready` | 200 `{"ready":true,...}`, with the request in the access log, `verify=SUCCESS` and the DN |
-| 1b | Good client cert, `POST` to each of `/others/QUOTES`, `FXQUOTES`, `TRANSFERS`, `FXTRANSFERS` | PPA receives the same route **without** `/others` (check PPA's write-ahead store or the access log's `upstream=` status). A route arriving as `/` means the path capture was lost; MLA would treat PPA's 404 as permanent and skip the event. |
+| 1b | Good client cert, `POST` to each of `/others/QUOTES`, `FXQUOTES`, `TRANSFERS`, `FXTRANSFERS` | The stand-in receives the same route **without** `/others` (its echoed path, and the access log's `upstream=` status). A route arriving as `/` means the path capture was lost; MLA would treat PPA's 404 as permanent and skip the event. |
 | 2 | No client cert, `POST /others/QUOTES` | 403 |
 | 3 | Cert from the other CA | 400 (certificate error) |
 | 4 | Right CA, wrong CN, `POST /others/QUOTES` | 403 |
 | 5 | Good cert, `GET /others/QUOTES` | 403 (method) |
 | 6 | Good cert, `GET /others/documentation` and `GET /health/ready` | 404 |
-| 7 | Good cert, PPA stopped, `POST /others/QUOTES` | 502 or 504 (504 in the offline run, at the 1 s connect timeout). **Never 2xx.** |
+| 7 | Good cert, stand-in stopped, `POST /others/QUOTES` | 502 or 504 (504 in the offline run, at the 1 s connect timeout). **Never 2xx.** |
 | 8 | No client cert, `GET /others/health/ready` | 200 (interim exemption) |
 | 9 | `docker restart` of the host's Docker daemon or a host reboot | `ppa-mtls-nginx` comes back on its own |
+| 10 | Stand-in container removed and recreated at a new IP | Requests reach the new container within seconds, with no Nginx reload |
 
 **End-to-end through the rig (optional, strongest).** Point the rig MLA on `10.0.150.69` at
 `https://mla-interconnect.paysyslabs.com:8443/others` through a hosts entry to `10.0.115.186`, with
