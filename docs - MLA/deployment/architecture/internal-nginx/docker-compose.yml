@@ -1,0 +1,20 @@
+# Internal Nginx in front of PPA: terminates cch-mla's TLS (the ingress gateway passes raw TCP through)
+# and proxies plain HTTP to PPA on PPA's own Docker network.
+services:
+  nginx:
+    image: nginx:1.30.5-alpine
+    container_name: ppa-mtls-nginx
+    restart: always
+    ports:
+      - "8443:8443"
+    volumes:
+      - ./conf.d:/etc/nginx/conf.d:ro,Z     # :Z - SELinux is Enforcing; without it Nginx can't read the files
+      - ./certs:/etc/nginx/certs:ro,Z
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+    networks: [ppa]
+networks:
+  ppa:
+    name: cch-ppa_default                   # PPA's network, so `ppa:3000` resolves by service name
+    external: true

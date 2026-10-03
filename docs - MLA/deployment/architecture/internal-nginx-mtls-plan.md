@@ -1,20 +1,56 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 
-# Internal Nginx with mTLS termination — implementation plan
+# Internal Nginx in front of PPA — TLS termination now, mTLS once the COMESA/DRPP CA arrives
 
-**What this is.** The plan for deploying the second Nginx in the UAT path: an internal reverse proxy on the
-PPA host `10.0.115.186` that terminates mutual TLS from `cch-mla` and forwards plain HTTP to PPA. The
+## Contents
+
+- [1. Topology](#1-topology)
+  - [Request flow](#request-flow)
+- [2. Facts this plan is built on](#2-facts-this-plan-is-built-on)
+- [3. Phase A — discovery](#3-phase-a--discovery)
+- [4. Phase B — build (done)](#4-phase-b--build-done)
+  - [4.1 Image (done 2026-10-01)](#41-image-done-2026-10-01)
+  - [4.2 Back up the default configuration (required; done 2026-10-01)](#42-back-up-the-default-configuration-required-done-2026-10-01)
+  - [4.3 Layout and compose](#43-layout-and-compose)
+  - [4.4 The config](#44-the-config)
+  - [4.5 The interim server certificate \[decision D9\]](#45-the-interim-server-certificate-decision-d9)
+  - [4.6 The mTLS stage (target, not deployed)](#46-the-mtls-stage-target-not-deployed)
+  - [4.7 Restrict who can reach port 8443](#47-restrict-who-can-reach-port-8443)
+- [5. Verification](#5-verification)
+  - [5.1 Proving routing against the real PPA without writing to it](#51-proving-routing-against-the-real-ppa-without-writing-to-it)
+  - [5.2 `verify-internal-nginx.sh` — result 2026-10-02](#52-verify-internal-nginxsh--result-2026-10-02)
+  - [5.3 Offline suite (2026-10-02)](#53-offline-suite-2026-10-02)
+  - [5.4 End to end through the rig (optional, strongest)](#54-end-to-end-through-the-rig-optional-strongest)
+- [6. Phase D — the real certificates (with Oscar)](#6-phase-d--the-real-certificates-with-oscar)
+- [7. Phase E — cut-over (no downtime, coordinated with CCH and the infra team)](#7-phase-e--cut-over-no-downtime-coordinated-with-cch-and-the-infra-team)
+- [8. Decisions not engineering's alone](#8-decisions-not-engineerings-alone)
+- [9. Documents to update as each phase lands](#9-documents-to-update-as-each-phase-lands)
+
+**What this is.** The plan and record for the second Nginx in the UAT path: an internal reverse proxy on
+the PPA host `10.0.115.186` that terminates `cch-mla`'s TLS session and forwards plain HTTP to PPA. The
 topology is the user-confirmed sketch [`CCh-->PSL architecture.jpeg`](<CCh-->PSL architecture.jpeg>). The
-design decision recorded here was made by the user on 2026-10-01: **mTLS terminates at the internal Nginx,
-not at the ingress gateway, and the ingress gateway passes TLS through untouched.**
+design decision was made by the user on 2026-10-01 and restated on 2026-10-02: **TLS (and later mTLS)
+terminates at the internal Nginx, and the ingress gateway is plain TCP forwarding, with no decryption.**
 
-**Status.** The container `ppa-mtls-nginx` runs on the host with the stock config and no published ports,
-from `/opt/ppa-mtls-nginx/docker-compose.yml`, and the default config is backed up per §4.2 (2026-10-01,
-`plan.md` §16). Nothing from §4.4 onward is on the host yet. §4.4's Nginx config was checked offline on 2026-10-01: it ran in `nginx:1.30.5-alpine` against a stand-in PPA that echoes the request it receives, using throwaway certificates, and passed every row of §5's table. The upstream's `resolver`/`resolve` lines were added afterwards and tested on
-their own offline on 2026-10-01: with them, Nginx followed a recreated upstream container to its new IP within
-8 s and started while the upstream was absent; without them, it returned 502 until reloaded and refused to start.
-The full §5 table has not been re-run against the revised config. Nothing else in this plan is verified. Steps that need a decision from someone other
-than engineering are marked **[decision]** and listed in §8.
+**Status (2026-10-02).**
+- **Built and verified against the real PPA.** `ppa-mtls-nginx` serves TLS on port 8443 with an interim
+  self-signed server certificate and proxies to PPA. The verification ran from the host and from another
+  subnet, and passed 11 of 11 both times (§5.2):
+  - Health returns PPA's own `{"ready":true,...}`.
+  - Each business route reaches PPA's route of the same name.
+  - Wrong paths get 503.
+  - PPA recorded no dead-letter writes.
+- **Not live.** The ingress gateway still terminates TLS itself and forwards to PPA's port 3000. Going live
+  needs two things (§7):
+  - The Paysys infra team switches the gateway to TCP forwarding to `10.0.115.186:8443`.
+  - CCH's MLA trusts the certificate this Nginx presents (D9).
+- **The deployed files are in [`internal-nginx/`](internal-nginx/)**, byte-identical (SHA-256) to the
+  copies on the host:
+  - `ppa-mtls.conf`
+  - `docker-compose.yml`
+  - `verify-internal-nginx.sh`
+
+Steps that need a decision from someone other than engineering are marked **[decision]** and listed in §8.
 
 ---
 
@@ -22,359 +58,525 @@ than engineering are marked **[decision]** and listed in §8.
 
 ```
 CCH cluster                      Paysys edge                         PPA host 10.0.115.186
-┌──────────────────┐   TLS (mTLS)  ┌──────────────────────────┐ TLS   ┌────────────────────────────────────┐
-│ topic-event-audit│   end to end  │ Ingress gateway (Nginx)  │ still │ Internal Nginx  :8443               │
-│        │         │ ────────────▶ │ mla-interconnect         │ ────▶ │  • terminates mTLS                  │
-│        ▼         │               │   .paysyslabs.com        │ intact│  • verifies MLA's client cert       │
-│     cch-mla      │               │  • DRPP IP allow-list    │       │  • strips /others, allows 6 routes  │
-└──────────────────┘               │  • L4 passthrough, no    │       │        │ plain HTTP (Docker network)│
-                                   │    decryption            │       │        ▼                            │
-                                   └──────────────────────────┘       │  PPA :3000 ──▶ Tazama TMS :5000     │
-                                                                      └────────────────────────────────────┘
+┌──────────────────┐     TLS      ┌──────────────────────────┐  TLS  ┌────────────────────────────────────┐
+│ topic-event-audit│  end to end  │ Ingress gateway (Nginx)  │ still │ Internal Nginx  :8443               │
+│        │         │ ───────────▶ │ mla-interconnect         │ ────▶ │  • terminates TLS (mTLS later)      │
+│        ▼         │              │   .paysyslabs.com        │ intact│  • strips /others, allows 6 routes  │
+│     cch-mla      │              │  • DRPP IP allow-list    │       │  • any other path: 503              │
+└──────────────────┘              │  • TCP forwarding, no    │       │        │ plain HTTP (Docker network)│
+                                  │    decryption            │       │        ▼                            │
+                                  └──────────────────────────┘       │  PPA :3000 ──▶ Tazama TMS :5000     │
+                                                                     └────────────────────────────────────┘
 ```
 
 | Component | Job | Holds |
 | --- | --- | --- |
-| `cch-mla` (CCH) | TLS client. Verifies the server certificate, presents its client certificate. | Client key and certificate (COMESA/DRPP CA), the CA bundle |
+| `cch-mla` (CCH) | TLS client. Verifies the server certificate against its CA file, and checks the hostname. | Its CA file; a client key and certificate, which are not requested until the mTLS stage |
 | Ingress gateway | Public entry point. Admits only DRPP's source IP and forwards the raw TCP stream. **Does not decrypt.** | No certificates for this hostname |
-| Internal Nginx | Terminates mTLS, verifies and pins the client, filters routes, proxies to PPA | Server key and certificate for `mla-interconnect.paysyslabs.com`, the CA bundle for client verification |
-| PPA | Plain HTTP since `cch-ppa` `9c5709e`. Must be reachable only from the internal Nginx. | Nothing TLS-related on ingress |
+| Internal Nginx | Terminates TLS, filters routes, proxies to PPA. In the mTLS stage it also verifies and pins MLA's client certificate (§4.6). | Server key and certificate for `mla-interconnect.paysyslabs.com`; later, the CA bundle for client verification |
+| PPA | Plain HTTP since `cch-ppa` `9c5709e`. Must be reachable only from the internal Nginx (§7 step 6). | Nothing TLS-related on ingress |
 
-**Why the two instances can differ.** DNS is resolved by the client: MLA looks up
-`mla-interconnect.paysyslabs.com` and connects to the ingress gateway's public IP. TLS checks only that the
-certificate presented in the handshake carries that hostname in its SAN, not which machine presents it.
-With the ingress in passthrough, the handshake runs directly between MLA and the internal Nginx. If the
-ingress decrypted the traffic instead, MLA's client certificate would stop there and the internal Nginx
-could never verify it.
+**Why the two instances can differ.**
+- DNS is resolved by the client: MLA looks up `mla-interconnect.paysyslabs.com` and connects to the ingress
+  gateway's public IP.
+- TLS checks only that the certificate presented in the handshake carries that hostname in its SAN, not
+  which machine presents it.
+- With TCP forwarding at the gateway, the handshake runs directly between MLA and the internal Nginx.
+- If the gateway decrypted the traffic instead, MLA's client certificate would stop there, and the internal
+  Nginx could never verify it.
+
+### Request flow
+
+The rig test path (2026-10-02) and CCH's path after the gateway switch share every hop from the internal Nginx on.
+The rig reaches the internal Nginx directly through a hosts entry, so it does not exercise the gateway.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant F as Feeder (rig tests only)
+    participant K as Kafka topic-event-audit
+    participant M as cch-mla
+    participant G as Ingress gateway (443)
+    participant N as Internal Nginx (8443)
+    participant P as PPA (3000)
+    participant T as Tazama TMS
+
+    F->>K: audit records for one corridor
+    K->>M: consume
+    Note over M: skip egress and party-lookup records,<br/>tokenize PII, build the envelopes
+    alt Rig MLA on 10.0.150.69
+        M->>N: TLS handshake, hosts entry to 10.0.115.186
+    else CCH's MLA, after the gateway switch
+        M->>G: TLS to mla-interconnect.paysyslabs.com
+        G->>N: raw TCP forward, no decryption
+    end
+    Note over M,N: MLA verifies the server certificate against its CA file,<br/>no client certificate is requested yet
+    M->>N: POST /others/QUOTES, FXQUOTES, TRANSFERS or FXTRANSFERS
+    N->>P: POST /QUOTES etc. over plain HTTP on cch-ppa_default
+    opt PPA refuses, for example while its TMS breaker is open
+        P-->>N: 503
+        N-->>M: 503, passed through unchanged
+        Note over M: park the partition and retry every 10 s,<br/>the event is never skipped
+    end
+    P-->>N: 200 once the envelope is stored
+    N-->>M: 200
+    Note over M: commit the Kafka offset
+    Note over P: validate, cache the FX legs,<br/>translate to ISO 20022
+    P->>T: pain.001, pain.013, pacs.008, pacs.002
+    T-->>P: accepted, or the auth-service 401 seen since 2026-10-01
+```
 
 ---
 
 ## 2. Facts this plan is built on
 
-- **PPA host:** RHEL 8.10, x86_64, SELinux `Enforcing`, firewalld active. **No internet egress at all.** Docker
-  requires root (password-gated `sudo` for `abdul.rahim`). The clock is unsynchronized and about 51 s fast
-  (`timedatectl`, 2026-10-01).
-- **PPA:** compose project `/opt/cch-ppa`, service `ppa`, container `cch-ppa-ppa-1`, port 3000, Docker
-  network `cch-ppa_default`, `restart: always` via `docker-compose.override.yml`. It publishes 3000, 3010,
-  9464, 5432 and 6379 on `0.0.0.0` today.
+**The PPA host**
+- **System:** RHEL 8.10, x86_64, SELinux `Enforcing`, firewalld 0.9.11, Docker CE 26.1.3, OpenSSL 1.1.1k
+  (FIPS).
+- **No internet egress at all.**
+- **Docker requires root.** `abdul.rahim` has password-gated `sudo`. Anything not touching Docker or root
+  paths, including every check in §5.2, runs as `abdul.rahim`.
+- **The clock is unsynchronized and about 51 s fast** (`timedatectl`, 2026-10-01; matched on 2026-10-02).
+
+**PPA**
+- **Compose project:** `/opt/cch-ppa`, service `ppa`, container `cch-ppa-ppa-1`, port 3000, Docker network
+  `cch-ppa_default`.
+- **Restart policy:** `restart: always`, set through `docker-compose.override.yml`.
+- **Exposure:** it publishes 3000, 3010, 9464, 5432 and 6379 on `0.0.0.0`.
+- **Body limit:** Fastify's default, 1 MiB.
+- **Keep-alive:** idle connections stay open for 72 s.
+
+**Docker and the firewall**
 - **Docker-published ports bypass firewalld.** Docker inserts its own iptables rules, so a firewalld rule
   does not restrict a published port. Restrictions go in the `DOCKER-USER` chain or in Nginx itself.
-- **Free host ports** include 443 and 8443. **8443** is proposed for the internal Nginx.
-- **Nginx image:** `nginx:stable-alpine` is **1.30.5**. It has `http_ssl`, `http_realip`, `stream`,
-  `stream_ssl_preread` and `stream_realip`, and ships `/etc/nginx/nginx.conf` plus `conf.d/default.conf`.
-- **Certificates:** server cert `CN=mla-interconnect.paysyslabs.com`, `SAN=DNS:mla-interconnect.paysyslabs.com`,
-  `O=DRPP`, `C=ZM`. Server and client certificates are both signed by the COMESA/DRPP CA, which Oscar Cobar
-  hosts. As of 2026-09-28 neither CSR had been generated and the CA bundle had not arrived
-  (`meetings and emails/sept-28.md - Conversation with Oscar.md`).
-- **CCH's MLA today:** delivers over HTTPS through the ingress, trusting a self-signed certificate bundled into
-  its CA file. Its manifest pins image `1e7610e`, whose health probe sends **no** client certificate.
-  `PPA_HEALTH_BASE_URL` is unset, so the probe goes to `/others/health/ready` (F-23,
-  `bugs/qa-sweep-2-findings.md`).
-- **MLA's delivery contract:** MLA commits its Kafka offset on any HTTP 200. **No hop may ever answer 2xx on
-  PPA's behalf**, or events are lost silently.
+
+**The ingress gateway today**
+- **It terminates TLS itself.** The evidence:
+  - CCH's MLA speaks HTTPS to it.
+  - PPA serves only plain HTTP.
+  - Nothing on the PPA host listened on 443 or 8443 before this Nginx.
+- **It presents a self-signed certificate**, which Oscar Cobar bundled into MLA's CA file.
+- **It strips `/others` and forwards to PPA's port 3000.**
+
+**What CCH's MLA sends** (`cch-mla` `src/clients/ppa.client.ts`)
+- **The request path is `PPA_BASE_URL`'s path plus the route.** The base URL is settled as
+  `https://mla-interconnect.paysyslabs.com/others` (`deployment/MLA-deployment-kubernetes.md` §11 Q4), so:
+  - Deliveries are `POST /others/QUOTES`, `/others/FXQUOTES`, `/others/TRANSFERS` and `/others/FXTRANSFERS`.
+  - The health probe is `GET /others/health/ready`, sent **without** a client certificate (F-23,
+    `bugs/qa-sweep-2-findings.md`).
+- **TLS settings:**
+  - Minimum version TLS 1.2.
+  - `rejectUnauthorized: true`.
+  - The hostname is checked against the server certificate's SAN.
+
+**How MLA treats each response.** This is the contract every setting below protects.
+- **HTTP 200** counts as delivered, and the Kafka offset is committed.
+- **Any 4xx** is permanent: the event is logged and **skipped for good**.
+- **Everything else** is retried, and the event is held behind the circuit breaker: 5xx, any other 1xx, 2xx
+  or 3xx, timeouts, TLS failures and network errors.
+- So no hop may ever answer 200 on PPA's behalf, and no hop may answer 4xx for a fault of its own.
 
 ---
 
-## 3. Phase A — discovery (read-only)
+## 3. Phase A — discovery
 
-1. **Ingress gateway:** which host it runs on, its internal IP, who administers it, and its current config
-   for `mla-interconnect.paysyslabs.com`, captured with `nginx -T`. Today it presents a self-signed
-   certificate and forwards to PPA somewhere, almost certainly `10.0.115.186:3000` over plain HTTP. Confirm
-   both.
-2. **Does the ingress serve other hostnames on 443?** If so, passthrough must route by SNI
-   (`ssl_preread`), and the other hostnames' TLS moves behind it (§5.1).
-3. **How CCH resolves `mla-interconnect.paysyslabs.com`.** It does not resolve from Paysys's own machines,
-   so it is either a public DNS record not visible internally, or a hosts entry on CCH's side.
-4. **Route from the ingress host to `10.0.115.186:8443`.** These sit on different subnets, and a
+**Known**
+- The gateway terminates TLS today (§2).
+- The gateway's owner: the Paysys infra team.
+- Port 8443 on the PPA host is reachable from this machine's VPN subnet (2026-10-02).
+
+**Still open, for the infra team**
+1. **The gateway host's internal IP**, and its current config for `mla-interconnect.paysyslabs.com`
+   (`nginx -T`).
+2. **Whether the gateway serves other hostnames on 443.** If it does, TCP forwarding must route by SNI
+   (`ssl_preread`), and the other hostnames' TLS moves behind it (§7 step 3).
+3. **How CCH resolves `mla-interconnect.paysyslabs.com`.** It does not resolve from Paysys's own machines, so
+   it is either a public DNS record not visible internally, or a hosts entry on CCH's side.
+4. **Whether the gateway host can reach `10.0.115.186:8443`.** They sit on different subnets, and a
    cross-subnet routing gap has blocked this network before (2026-09-21).
 
 ---
 
-## 4. Phase B — build and stage the internal Nginx (no live traffic)
+## 4. Phase B — build (done)
 
-### 4.1 Image
+### 4.1 Image (done 2026-10-01)
 
 The host has no egress, so the image is pulled here and streamed over, exactly as PPA's image was on
-2026-10-01 (`plan.md` §16; `learning/MLA/FAQ.md` Q4):
+2026-10-01 (`plan.md` §16; `learning/MLA/FAQ.md` Q4). The archive's SHA-256 matched on both ends, and the
+loaded image is `sha256:43d9d8c1…`, Nginx 1.30.5.
 
 ```bash
 # this machine
 docker pull nginx:1.30.5-alpine
-docker save nginx:1.30.5-alpine | gzip | tee >(sha256sum) \
+docker save --platform linux/amd64 nginx:1.30.5-alpine | gzip \
   | ssh -i ~/.ssh/ppa_10_0_115_186 abdul.rahim@10.0.115.186 'cat > /tmp/nginx-1.30.5-alpine.tar.gz'
 # host, as root: compare sha256sum, then
 docker load -i /tmp/nginx-1.30.5-alpine.tar.gz
 ```
 
-### 4.2 Back up the default configuration (required)
+### 4.2 Back up the default configuration (required; done 2026-10-01)
 
-The defaults are baked into the image. Copy the whole `/etc/nginx` tree out before anything replaces it.
-`docker create` plus `docker cp` avoids the image's entrypoint script, which would otherwise write its own
-messages into a redirected file:
+The backup copies the image's `/etc/nginx` from a container that is created but never started, because the
+image's entrypoint rewrites `conf.d/default.conf` on first start. It is at
+`/opt/ppa-mtls-nginx/default-config-backup/nginx/`, write-protected, with `SHA256SUMS` for all 7 files.
+
+- **Verified on 2026-10-01:** the hashes matched the untouched image byte for byte.
+- **Checked again on 2026-10-02:** `sha256sum -c` passed.
 
 ```bash
 mkdir -p /opt/ppa-mtls-nginx/default-config-backup && cd /opt/ppa-mtls-nginx
 id=$(docker create nginx:1.30.5-alpine)
 docker cp "$id":/etc/nginx ./default-config-backup/ && docker rm "$id"
-sha256sum default-config-backup/nginx/nginx.conf default-config-backup/nginx/conf.d/default.conf \
-  > default-config-backup/SHA256SUMS
+(cd default-config-backup && find nginx -type f -exec sha256sum {} + > SHA256SUMS)
+chmod -R a-w default-config-backup
 ```
 
-Only `conf.d/` is replaced (§4.4). The stock `nginx.conf` stays in place and keeps including `conf.d/*.conf`
-inside its `http` block.
+Only `conf.d/` is replaced. The stock `nginx.conf` stays in place and keeps including `conf.d/*.conf` inside
+its `http` block.
 
 ### 4.3 Layout and compose
 
 ```
 /opt/ppa-mtls-nginx/
-├── docker-compose.yml
-├── conf.d/ppa-mtls.conf          # §4.4
-├── certs/                        # mode 0600 for keys; never committed anywhere
-│   ├── mla-interconnect.key      # generated here (§6), never leaves this host
-│   ├── mla-interconnect.crt      # server cert + intermediates, from COMESA/DRPP
-│   └── comesa-drpp-ca-bundle.crt # root + intermediates, for verifying MLA's client cert
-└── default-config-backup/        # §4.2
+├── docker-compose.yml                       # internal-nginx/docker-compose.yml
+├── docker-compose.yml.bak-stock-20261002    # the stock-config compose, for rollback
+├── conf.d/ppa-mtls.conf                     # internal-nginx/ppa-mtls.conf
+├── certs/                                   # mode 0700; the key is 0600 and never leaves this host
+│   ├── mla-interconnect.key
+│   └── mla-interconnect.crt                 # interim self-signed (§4.5)
+└── default-config-backup/                   # §4.2
 ```
 
-```yaml
-# /opt/ppa-mtls-nginx/docker-compose.yml
-services:
-  nginx:
-    image: nginx:1.30.5-alpine
-    container_name: ppa-mtls-nginx
-    restart: always
-    ports:
-      - "8443:8443"
-    volumes:
-      - ./conf.d:/etc/nginx/conf.d:ro,Z     # :Z — SELinux is Enforcing; without it Nginx can't read the files
-      - ./certs:/etc/nginx/certs:ro,Z
-    networks: [ppa]
-networks:
-  ppa:
-    name: cch-ppa_default                   # PPA's network, so `ppa:3000` resolves by service name
-    external: true
+**The compose file** ([`internal-nginx/docker-compose.yml`](internal-nginx/docker-compose.yml)):
+- Publishes 8443 on all interfaces.
+- Mounts `conf.d/` and `certs/` read-only, with `:Z`, because SELinux is Enforcing.
+- Caps the container's logs at 5 × 10 MB.
+- Joins PPA's network `cch-ppa_default`, so Nginx reaches PPA as `ppa:3000`. That is what later lets PPA
+  stop publishing port 3000 at all (§7 step 6).
+
+**Rollback:** restore `docker-compose.yml.bak-stock-20261002` and run `docker compose up -d`.
+
+**SELinux and `:Z`.** Docker relabels a `:Z` mount for the one container that mounts it. Two rules follow:
+- **Use `cp` or `install` to put new files in place, never `mv` from `/tmp`.** A moved file keeps `/tmp`'s
+  label, and Nginx cannot read it.
+- **While `ppa-mtls-nginx` runs, never mount `conf.d/` or `certs/` into another container with `:Z`.** That
+  relabels the directories for the new container, and the running Nginx loses access. Test the config with
+  `docker exec ppa-mtls-nginx nginx -t` instead.
+
+### 4.4 The config
+
+The config is [`internal-nginx/ppa-mtls.conf`](internal-nginx/ppa-mtls.conf). What it does, and why:
+
+**TLS and routing**
+- **TLS only, for now.** Client certificates are not requested until the COMESA/DRPP CA bundle exists
+  (§4.6). CCH's current client certificate is unknown, and a rejected one would answer 400, which MLA skips.
+- **Routes:**
+  - `POST /others/{QUOTES,FXQUOTES,TRANSFERS,FXTRANSFERS}` go to PPA's route of the same name, with
+    `/others` stripped.
+  - `GET /others/health/{live,ready}` go to PPA's health routes.
+  - The bare forms (`/QUOTES`, `/health/ready`) are accepted too, so a base URL without `/others` still
+    routes.
+  - Named captures carry the route into `proxy_pass`. A path that arrived as `/` would get PPA's 404, and
+    MLA would skip the event.
+- **Any other path gets 503, not 404.** A misrouted event is then held and retried rather than skipped.
+- **The wrong method on a business route gets 403.** MLA never sends one.
+- **No PROXY protocol.** The gateway forwards plain TCP (D2), so the access log shows the gateway's IP as
+  the client.
+
+**Never answering for PPA**
+- **`proxy_next_upstream off`:** this hop never re-sends a POST to PPA on its own initiative.
+- **`proxy_intercept_errors off`:** PPA's own status reaches MLA unchanged.
+- **`proxy_connect_timeout 1s`:** a dead PPA gets a 5xx before MLA's own 2 s timeout fires.
+
+**Reaching PPA**
+- **`resolver 127.0.0.11 valid=5s` and `server ppa:3000 resolve`:** PPA's name is re-resolved through
+  Docker's DNS.
+- **`resolver_timeout 2s`.** Measured offline on 2026-10-02:
+
+| Setup | PPA recreated at a new IP | PPA absent when Nginx starts |
+| --- | --- | --- |
+| No re-resolution | 502 until Nginx is reloaded | Nginx refuses to start |
+| Re-resolution, default 30 s `resolver_timeout` | 20 s of 502s after PPA is back | Starts; recovers about 30 s after PPA appears |
+| Re-resolution with `resolver_timeout 2s` (deployed) | Served within 0–4 s, whatever the absence (0–30 s tried); 1 s on a same-IP restart | Starts; recovers within seconds |
+
+**Limits and logging**
+- **`client_max_body_size 2m`:** above PPA's own 1 MiB limit, so PPA alone decides on size.
+- **Access log:** method, path, status, upstream status, timings and TLS version. Never bodies, because they
+  carry PII.
+
+### 4.5 The interim server certificate [decision D9]
+
+**This certificate**
+- **Self-signed.** Generated on the host by root on 2026-10-02. The key has never left the host.
+- **Subject:** `C=ZM, O=DRPP, CN=mla-interconnect.paysyslabs.com`, with
+  `SAN=DNS:mla-interconnect.paysyslabs.com`.
+- **Valid until 2027-10-02 12:16:30 GMT,** a host-clock time, which runs about 51 s fast.
+- **SHA-256 fingerprint:**
+  `F3:87:F3:9B:06:70:68:7A:41:29:88:7C:1E:1B:EF:94:90:B5:A9:E6:0A:90:5A:D0:E5:77:22:3D:3D:CE:4E:8F`.
+
+```bash
+openssl req -x509 -newkey rsa:2048 -nodes -days 365 \
+  -keyout certs/mla-interconnect.key -out certs/mla-interconnect.crt \
+  -subj "/C=ZM/O=DRPP/CN=mla-interconnect.paysyslabs.com" \
+  -addext "subjectAltName=DNS:mla-interconnect.paysyslabs.com"
+chmod 600 certs/mla-interconnect.key
 ```
 
-The internal Nginx joins PPA's own Docker network and reaches it as `ppa:3000`. That is what later lets
-PPA stop publishing port 3000 at all (§7, step 7).
+**CCH's MLA must trust whatever this Nginx presents before the gateway switches (§7 step 1).** Otherwise
+every delivery fails its TLS handshake. MLA retries those failures and holds the events, so nothing is
+lost, but nothing is delivered either. A local run with MLA's own client showed exactly that outcome
+(§5.3).
 
-### 4.4 `conf.d/ppa-mtls.conf`
+**Options (D9):**
+- **Recommended:** CCH adds this certificate to MLA's CA file and restarts the pod, as Oscar already did
+  for the gateway's certificate. No private key moves.
+- **The infra team hands over the gateway's current certificate and key.** CCH does nothing, but a private
+  key moves between machines.
+- **Sign a server certificate with the interim Paysys CA** (`O=Paysys, CN=cch-mla-ppa-interconnect-ca`):
+  - **What's known:** its certificate went to George on 2026-09-21.
+  - **Unconfirmed:** whether CCH's CA file still holds it.
+  - **What it needs:** the interim CA's private key.
+
+**Swapping a certificate later is a file swap plus a reload, with no restart.** Tested locally on
+2026-10-02, it went as follows:
+1. Overwrite the files in `certs/`.
+2. Run `docker exec ppa-mtls-nginx nginx -t`.
+3. Run `docker exec ppa-mtls-nginx nginx -s reload`.
+
+What the test showed:
+- The new certificate was served immediately.
+- A CA file holding two CAs accepted clients from both, which allows an overlap.
+- A mismatched certificate and key failed `nginx -t`, and a forced reload kept serving the old certificate.
+- **Keep the previous files until the new ones pass.** Bad files left in place stop the container from
+  starting on its next restart.
+
+### 4.6 The mTLS stage (target, not deployed)
+
+When the COMESA/DRPP CA bundle and certificates exist (Phase D), the server block gains these lines:
 
 ```nginx
-log_format ppa_mtls '$remote_addr [$time_iso8601] "$request_method $uri" $status '
-                    'upstream=$upstream_status rt=$request_time urt=$upstream_response_time '
-                    'verify=$ssl_client_verify dn="$ssl_client_s_dn"';
+ssl_client_certificate /etc/nginx/certs/comesa-drpp-ca-bundle.crt;
+ssl_verify_client      optional;     # the health probe sends no client certificate (F-23); see below
+ssl_verify_depth       3;
 
 # Pin the one client identity allowed in: the CN agreed with CCH [decision D4].
-map $ssl_client_s_dn $mla_client_allowed {
+map $ssl_client_s_dn $mla_client_allowed {          # http level, next to the upstream
     default                              0;
-    "~(?:^|,)CN=<AGREED_MLA_CN>(?:,|$)"  1;   # non-capturing: a capturing regex here overwrites $1
+    "~(?:^|,)CN=<AGREED_MLA_CN>(?:,|$)"  1;         # non-capturing: a capturing regex here overwrites $1
 }
-
-# Re-resolve PPA through Docker's DNS: a recreated PPA container gets a new IP, and a name resolved
-# only at startup keeps proxying to the old one (502 until reload), or stops Nginx starting at all.
-resolver 127.0.0.11 valid=5s ipv6=off;
-
-upstream ppa {
-    zone ppa_upstream 64k;               # required by `resolve`
-    server ppa:3000 resolve;
-    keepalive 16;                        # MLA reuses connections; so does this hop
-}
-
-server {
-    listen 8443 ssl proxy_protocol;      # drop `proxy_protocol` unless the ingress sends it [decision D2]
-    server_name mla-interconnect.paysyslabs.com;
-
-    set_real_ip_from <INGRESS_INTERNAL_IP>;   # [decision D3]
-    real_ip_header   proxy_protocol;          # logs show DRPP's IP, not the ingress's
-
-    ssl_certificate         /etc/nginx/certs/mla-interconnect.crt;
-    ssl_certificate_key     /etc/nginx/certs/mla-interconnect.key;
-    ssl_client_certificate  /etc/nginx/certs/comesa-drpp-ca-bundle.crt;
-    ssl_verify_client       optional;    # interim, see §4.5; becomes `on` once F-23 ships to CCH
-    ssl_verify_depth        3;
-    ssl_protocols           TLSv1.2 TLSv1.3;
-    ssl_session_cache       shared:ppa_mtls:10m;
-
-    access_log /dev/stdout ppa_mtls;     # method, path, status, client DN and IP; never bodies (they carry PII)
-    client_max_body_size 1m;
-
-    proxy_http_version    1.1;
-    proxy_set_header      Connection "";
-    proxy_set_header      Host $host;
-    proxy_set_header      X-Forwarded-For $remote_addr;
-    proxy_set_header      X-Forwarded-Proto https;
-    proxy_connect_timeout 1s;            # a dead PPA answers 504 before MLA's own 2 s timeout fires
-    proxy_read_timeout    10s;           # MLA gives up after PPA_TIMEOUT_MS (2 s); this only needs to be longer
-    proxy_next_upstream   off;           # never re-send a POST to PPA on this hop's initiative
-    proxy_intercept_errors off;          # PPA's own status reaches MLA unchanged; failures stay 5xx, never 2xx
-
-    # Business routes: mTLS client cert required and pinned. `/others` is stripped.
-    # Named captures: the client-pinning map runs a regex later in the request, which resets numbered ones.
-    location ~ ^/others/(?<ppa_route>QUOTES|FXQUOTES|TRANSFERS|FXTRANSFERS)$ {
-        if ($ssl_client_verify != SUCCESS) { return 403; }
-        if ($mla_client_allowed = 0)        { return 403; }
-        limit_except POST { deny all; }
-        proxy_pass http://ppa/$ppa_route;
-    }
-
-    # Health: interim exemption from the client-cert check (§4.5).
-    location ~ ^/others/health/(?<ppa_health>live|ready)$ {
-        limit_except GET { deny all; }
-        proxy_pass http://ppa/health/$ppa_health;
-    }
-
-    # Everything else, including PPA's Swagger UI at /documentation, is not exposed.
-    location / { return 404; }
-}
+# ...and in the business-route location:
+#   if ($ssl_client_verify != SUCCESS) { return 503; }
+#   if ($mla_client_allowed = 0)        { return 503; }
 ```
 
-### 4.5 The health-check conflict (F-23) [decision D6]
+**Two rules for that stage:**
+- **A rejected client certificate must answer 5xx, never 4xx.** MLA skips a 4xx for good, so a client
+  certificate that expired or was misconfigured would silently drop every event. Nginx's own certificate
+  errors (495, 496) answer 400 by default. Map them to 503, and test that, before enabling `on` or
+  `optional`.
+- **The health probe.** CCH's MLA probes health **without** a client certificate (F-23):
+  - Under `ssl_verify_client on`, that probe fails, and a tripped partition never resumes.
+  - Until F-23's fix ships in CCH's image, use `optional`: the business routes require `SUCCESS`, and the
+    two health routes don't. Health returns only `{"ready":true,...}` and sits behind the gateway's IP
+    allow-list.
+  - After the fix ships, switch to `on`.
 
-CCH's MLA (`1e7610e`) probes `/others/health/ready` **without** a client certificate. Under
-`ssl_verify_client on`, that probe fails the handshake. Once a partition's PPA breaker trips, it then never
-recovers, even after PPA is healthy again: F-23, the only Critical in `bugs/qa-sweep-2-findings.md`.
+### 4.7 Restrict who can reach port 8443
 
-- **Interim (above):** `ssl_verify_client optional`. The business routes demand a verified, pinned
-  certificate, and the two health routes don't. Health returns only `{"ready":true,...}` and sits behind the
-  ingress's IP allow-list.
-- **Target:** fix F-23 in `cch-mla` so the probe presents the same client certificate as delivery. Ship it
-  in CCH's next image, then switch to `ssl_verify_client on` and drop the health exemption.
+8443 is published on all interfaces and bypasses firewalld (§2). It adds no exposure beyond what PPA's own
+port 3000 already has: that port is plain HTTP and open to the same network. The two are therefore closed
+together, after cut-over (§7 step 6).
 
-### 4.6 Restrict who can reach port 8443
-
-The published port bypasses firewalld (§2). Allow only the ingress gateway, in the chain Docker leaves for
-operators. It must persist across reboots, for example as a firewalld direct rule:
+The rule allows only the gateway, in the chain Docker leaves for operators:
 
 ```bash
 firewall-cmd --permanent --direct --add-rule ipv4 filter DOCKER-USER 0 \
-  -p tcp --dport 8443 ! -s <INGRESS_INTERNAL_IP> -j DROP
+  -p tcp --dport 8443 ! -s <GATEWAY_INTERNAL_IP> -j DROP
 firewall-cmd --reload
 ```
 
-`DOCKER-USER` sees the container-side port after Docker's DNAT, which is also 8443 here. The same mechanism
-later locks PPA's own ports (§7, step 7).
+**To check on this host before relying on it:**
+- Whether the rule applies at boot, since firewalld starts before Docker creates `DOCKER-USER`.
+- Whether it survives a `firewall-cmd --reload`.
+- That it doesn't match a container's own outbound connections to some other port 8443. A conntrack
+  match, `-m conntrack --ctorigdstport 8443`, is tighter.
 
 ---
 
-## 5. Phase C — prove it with throwaway certificates, before the real ones exist
+## 5. Verification
 
-Oscar's CA bundle is not yet available, so the mechanics are proven first with a disposable test CA,
-generated in a separate directory on the host and deleted afterwards. Generate: a test CA; a server
-certificate for `mla-interconnect.paysyslabs.com` signed by it; a client certificate with the agreed CN; a
-client certificate with a wrong CN; and a client certificate from a second, unrelated CA. Run
-`ppa-mtls-nginx` against them. With `proxy_protocol` off for these local tests, exercise it from the host
-itself.
+### 5.1 Proving routing against the real PPA without writing to it
 
-**Point the upstream at a stand-in, never the real PPA, for every row that POSTs.** PPA writes even a
-schema-rejected body to its dead-letter queue (`cch-ppa` `clients/fastify.ts`, `setErrorHandler`), so a test
-POST pollutes the real store. A second `nginx:1.30.5-alpine` container on `cch-ppa_default` that echoes the
-method and path it receives serves as the stand-in, and needs no new image on the host. Only `GET` health
-requests go to the real PPA. Publish the port on `127.0.0.1` only for this phase, so nothing off the host can
-reach the test CA's trust.
+**A test POST to the real PPA is never side-effect free:**
+- PPA writes even a schema-rejected body to its dead-letter queue (`cch-ppa` `clients/fastify.ts`,
+  `setErrorHandler`).
+- A re-sent duplicate rewrites the stored envelope and runs it through processing again (`writeAhead`'s
+  `ON CONFLICT … DO UPDATE`).
+
+**The business routes are therefore probed with an unsupported `Content-Type` instead.**
+- Fastify matches the route, then rejects the request with **415 `FST_ERR_CTP_INVALID_MEDIA_TYPE`** before
+  validation, so before any write.
+- A path mangled on the way gets PPA's **404**, or Nginx's own 503.
+- This was proven against PPA's real app code at `7d92941`, compiled locally and driven with Fastify's
+  `inject`:
+  - The four routes gave 415.
+  - `/`, `/others/QUOTES` and `/quotes` gave 404.
+  - There were zero database calls.
+
+### 5.2 `verify-internal-nginx.sh` — result 2026-10-02
+
+[`internal-nginx/verify-internal-nginx.sh`](internal-nginx/verify-internal-nginx.sh) needs no root:
+- It fetches the served certificate and uses it as the trust anchor, so `curl` also checks the hostname
+  against the SAN.
+- It runs 11 checks.
+- It compares PPA's `ppa_dlq_write_total{code="VALIDATION_FAILED"}`, the only dead-letter write a probe
+  could cause, before and after the checks.
 
 ```bash
-curl --resolve mla-interconnect.paysyslabs.com:8443:127.0.0.1 --cacert test-ca.crt \
-     --cert client-good.crt --key client-good.key \
-     https://mla-interconnect.paysyslabs.com:8443/others/health/ready
+/tmp/ppa-mtls-nginx-stage/verify-internal-nginx.sh            # on the host, against 127.0.0.1
+METRICS=http://10.0.115.186:9464/metrics \
+  ./verify-internal-nginx.sh 10.0.115.186                     # from another machine with a route to the host
 ```
 
-| # | Case | Expect |
+**Result on 2026-10-02:** 11 of 11 passed, from the host and from this machine over the VPN, a different
+subnet.
+
+| Check | Expected | Got |
 | --- | --- | --- |
-| 1 | Good client cert, `GET /others/health/ready` | 200 `{"ready":true,...}`, with the request in the access log, `verify=SUCCESS` and the DN |
-| 1b | Good client cert, `POST` to each of `/others/QUOTES`, `FXQUOTES`, `TRANSFERS`, `FXTRANSFERS` | The stand-in receives the same route **without** `/others` (its echoed path, and the access log's `upstream=` status). A route arriving as `/` means the path capture was lost; MLA would treat PPA's 404 as permanent and skip the event. |
-| 2 | No client cert, `POST /others/QUOTES` | 403 |
-| 3 | Cert from the other CA | 400 (certificate error) |
-| 4 | Right CA, wrong CN, `POST /others/QUOTES` | 403 |
-| 5 | Good cert, `GET /others/QUOTES` | 403 (method) |
-| 6 | Good cert, `GET /others/documentation` and `GET /health/ready` | 404 |
-| 7 | Good cert, stand-in stopped, `POST /others/QUOTES` | 502 or 504 (504 in the offline run, at the 1 s connect timeout). **Never 2xx.** |
-| 8 | No client cert, `GET /others/health/ready` | 200 (interim exemption) |
-| 9 | `docker restart` of the host's Docker daemon or a host reboot | `ppa-mtls-nginx` comes back on its own |
-| 10 | Stand-in container removed and recreated at a new IP | Requests reach the new container within seconds, with no Nginx reload |
+| `GET /others/health/ready`, `/others/health/live` | 200 from PPA (`{"ready":true,"checks":{"writeAheadStore":true}}`) | 200 |
+| `POST /others/QUOTES`, `FXQUOTES`, `TRANSFERS`, `FXTRANSFERS` (probe) | PPA's 415 `FST_ERR_CTP_INVALID_MEDIA_TYPE` | 415 |
+| `POST /QUOTES` (bare form, probe) | 415 | 415 |
+| `POST /others/quotes`, `GET /others/documentation` | Nginx's 503 | 503 |
+| `GET /others/QUOTES` | 403 | 403 |
+| PPA validation dead-letter writes during the run | 0 | 0 |
 
-**End-to-end through the rig (optional, strongest).** Point the rig MLA on `10.0.150.69` at
-`https://mla-interconnect.paysyslabs.com:8443/others` through a hosts entry to `10.0.115.186`, with
-`PPA_MTLS_DISABLED=false` and the test client certificate. Feed one corridor (the 2026-10-01 procedure in
-`plan.md` §16). Expect 8 forwarded and 4 `processed_pairs` rows.
+### 5.3 Offline suite (2026-10-02)
 
-When done, delete the test CA and certificates, and restore the real `certs/` contents.
+**The setup**
+- Real `nginx:1.30.5-alpine` with the deployed config.
+- A stand-in PPA that echoes the method and path it receives.
+- **MLA's own `HttpsPpaClient`, compiled from `cch-mla` `f2fb624`, as the TLS client.** So TLS, the
+  hostname check, URL building and status classification are exactly what a deployed MLA does.
+
+| Case | Result |
+| --- | --- |
+| Base URL `…/others` (CCH's), trusting the served certificate | All four `deliver` calls `success`, and `probeReady` true. The stand-in received `/QUOTES`, `/FXQUOTES`, `/TRANSFERS`, `/FXTRANSFERS` and `/health/ready`. |
+| Bare base URL | All `success` |
+| Unexpected base URL (`…/ppa`) | `server-error` 503, which is retried. Never `client-error`. |
+| MLA not trusting the served certificate | `tls-handshake-failure`, which is retried. Never `client-error`. |
+| Stand-in PPA stopped | 504 within 1.0 s; `server-error` |
+| Stand-in PPA recreated at a new IP | Served again within 6 s, with no reload |
+| Doubled slashes, a query string, a 1.5 MB body | Routed to the right PPA path |
+| TLS 1.1 client | No handshake |
+| TLS 1.2 and 1.3 | Both negotiated |
+| Client certificate requested | No |
+| `nginx -s stop` inside the container | Restarted by the restart policy |
+
+### 5.4 End to end through the rig (optional, strongest)
+
+Run on 2026-10-02 with corridor `03_ZMW_to_MWK_alt`.
+- **MLA:** all 8 deliverable envelopes reached PPA through the internal Nginx over TLS 1.3.
+- **PPA's 503s:** PPA answered 503 twelve times, while its TMS breaker was open. MLA parked and retried each time; nothing was skipped.
+- **TMS:** the quote and transfer legs then failed at TMS, with the open auth-service 401.
+
+The steps:
+1. Point the rig MLA on `10.0.150.69` at `https://mla-interconnect.paysyslabs.com:8443/others`, through a
+   hosts entry to `10.0.115.186`.
+2. Set `PPA_MTLS_DISABLED=false`, with the served certificate in its CA file.
+3. Feed one corridor never sent to this PPA before (the 2026-10-01 procedure in `plan.md` §16).
+
+Expect 8 forwarded envelopes. Real envelopes go into PPA's store, as in every corridor test.
 
 ---
 
 ## 6. Phase D — the real certificates (with Oscar)
 
-1. **Server key and CSR on the PPA host.** The key never leaves `10.0.115.186`. Confirm key type and size with
-   Oscar first [decision D5]. His command, unchanged, is run here rather than on the ingress:
+1. **Server key and CSR on the PPA host.** The key never leaves `10.0.115.186`. Confirm key type and size
+   with Oscar first [decision D5]. His command, unchanged, runs here rather than on the gateway:
    ```bash
    cd /opt/ppa-mtls-nginx/certs
    openssl req -new -newkey rsa:2048 -nodes \
-     -keyout mla-interconnect.key -out mla-interconnect.csr \
+     -keyout mla-interconnect-comesa.key -out mla-interconnect.csr \
      -subj "/C=ZM/O=DRPP/CN=mla-interconnect.paysyslabs.com" \
      -addext "subjectAltName=DNS:mla-interconnect.paysyslabs.com"
-   chmod 600 mla-interconnect.key
+   chmod 600 mla-interconnect-comesa.key
    ```
-   Send only `mla-interconnect.csr`.
-2. **Receive** `mla-interconnect.crt` (with intermediates) and the COMESA/DRPP CA bundle.
+   Send only `mla-interconnect.csr`. The interim key and certificate stay in service until the swap.
+2. **Receive** `mla-interconnect.crt`, with its intermediates after it, and the COMESA/DRPP CA bundle.
 3. **Client side (CCH).** CCH generates `cch-mla`'s key and CSR where MLA runs, with the agreed CN
    [decision D4], and gets it signed by the same CA (`deployment/PR-by-oscar/mtls-provisioning-steps.md`).
-4. **Install and repeat §5's table** with the real certificates. Fix the host clock first (NTP), so
+4. **Swap the server certificate and key (§4.5).**
+   - Install the new files under the deployed names.
+   - Run `nginx -t`, then reload.
+   - Check with `curl` that the full chain verifies. A missing intermediate is the one mistake `nginx -t`
+     does not catch.
+   - CCH's MLA must trust the COMESA/DRPP CA before the swap.
+5. **Enable the mTLS stage (§4.6),** after its 5xx mapping is tested. Fix the host clock first (NTP), so
    certificate validity checks don't trip over drift.
 
 ---
 
-## 7. Phase E — cut-over (no downtime, coordinated with CCH)
+## 7. Phase E — cut-over (no downtime, coordinated with CCH and the infra team)
 
-Today CCH's MLA trusts the ingress's self-signed certificate. After cut-over it sees the internal Nginx's
-COMESA-signed one. The overlap step keeps traffic flowing throughout:
-
-1. **CCH widens trust.** MLA's CA file holds **both** the current self-signed certificate and the COMESA/DRPP
-   CA bundle, and MLA is given its new client certificate and key. Nothing changes on the wire yet: today's
-   ingress doesn't request a client certificate, so presenting one is harmless.
-2. **Back up the ingress config.** Keep the `nginx -T` output and the config files.
-3. **Switch the ingress to passthrough** and reload. Sketch only: the real file depends on Phase A.
+1. **CCH trusts the internal Nginx's certificate (D9).**
+   - MLA's CA file holds both the gateway's current self-signed certificate and the one the internal Nginx
+     presents.
+   - MLA reads its CA file at start-up, so the pod is restarted.
+   - Nothing changes on the wire yet.
+2. **The infra team backs up the gateway config** (`nginx -T` output and the files) and checks the path
+   from the gateway host. This should show `CN=mla-interconnect.paysyslabs.com`:
+   ```bash
+   openssl s_client -connect 10.0.115.186:8443 -servername mla-interconnect.paysyslabs.com </dev/null
+   ```
+3. **The infra team switches `mla-interconnect.paysyslabs.com` to TCP forwarding and reloads.** This is a
+   sketch only: the real file depends on Phase A.
    ```nginx
    stream {
-     map $ssl_preread_server_name $mla_backend {          # only needed if 443 serves other hostnames
+     map $ssl_preread_server_name $mla_backend {   # only needed if 443 serves other hostnames
        mla-interconnect.paysyslabs.com  10.0.115.186:8443;
-       default                          127.0.0.1:8444;     # existing TLS sites, moved behind the stream block
+       default                          127.0.0.1:8444;  # existing TLS sites, moved behind the stream block
      }
      server {
        listen 443;
        ssl_preread on;
        allow <DRPP_SOURCE_IP>;  deny all;
-       proxy_pass $mla_backend;
-       proxy_protocol on;                                   # only if the internal Nginx expects it [D2]
+       proxy_pass $mla_backend;                    # no proxy_protocol: the internal Nginx does not expect it
      }
    }
    ```
-4. **Verify live:**
+   CCH's batches arrive about every 90 minutes. Switching right after one leaves a full cycle before the
+   next.
+4. **Verify live on CCH's next batch:**
+   - `docker logs ppa-mtls-nginx` shows CCH's `POST /others/...` with `200 upstream=200`, from the
+     gateway's IP.
+   - PPA's `write_ahead` gains CCH rows (ULID prefix `01M3`) created after the switch.
    - CCH's MLA logs `Forwarded`.
-   - The internal Nginx's access log shows DRPP's IP, `verify=SUCCESS` and MLA's DN.
-   - PPA's `processed_pairs` gains all four ISO types on CCH's next 90-minute batch.
-5. **Rollback** (any failure in step 4): restore the ingress backup and reload. CCH's MLA still trusts the
-   old certificate, so traffic resumes as before.
-6. **CCH narrows trust** to the COMESA/DRPP CA only.
-7. **Close PPA's bypass.** PPA stops publishing 3000; nothing but the internal Nginx reaches it. Postgres
-   5432 and ValKey 6379 stop publishing entirely. 3010 (unauthenticated DLQ replay) and 9464 (metrics) are
-   restricted to localhost or the `DOCKER-USER` chain. The rig's direct path to `:3000` ends here
-   [decision D8].
-8. **Later:** ship F-23's fix to CCH, then switch to `ssl_verify_client on` and drop the health exemption.
+5. **Rollback** (any failure in step 4): the infra team restores the gateway backup and reloads. Nothing on
+   the PPA host needs undoing. MLA holds every event it could not deliver, then delivers it once the path
+   works again.
+6. **Close PPA's bypass:**
+   - Restrict 8443 to the gateway's internal IP (§4.7).
+   - PPA stops publishing 3000. Postgres 5432 and ValKey 6379 stop publishing entirely.
+   - 3010 (unauthenticated DLQ replay) and 9464 (metrics) are restricted to localhost, or in the
+     `DOCKER-USER` chain.
+   - The rig's direct path to `:3000` ends here [decision D8].
+7. **Later:** the COMESA/DRPP certificates (Phase D), then the mTLS stage (§4.6).
 
 ---
 
 ## 8. Decisions not engineering's alone
 
-| # | Decision | Owner | Blocks |
-| --- | --- | --- | --- |
-| D1 | The ingress does L4 passthrough (no decryption) for this hostname | Paysys infra team, which runs the ingress Nginx. Not yet requested; their approval goes through several levels. | Phase E |
-| D2 | PROXY protocol between ingress and internal Nginx (real client IP in logs and allow rules) | Same | Phase E config |
-| D3 | The ingress's internal IP and the internal Nginx's port (8443 proposed) | Same | §4.4, §4.6 |
-| D4 | `cch-mla`'s client CN, pinned by the internal Nginx | CCH (Oscar) with Paysys | Phase D, §4.4 |
-| D5 | Key type and size for both certificates | Oscar | Phase D |
-| D6 | Health-probe handling: interim exemption now; F-23 fix shipped in CCH's image later | Paysys engineering, then CCH to deploy | `ssl_verify_client on` |
-| D7 | Tell Oscar mTLS now terminates on the internal Nginx, not the ingress his notes name. The certificate contents are unchanged; where the server key lives changes. | Paysys → Oscar | Phase D |
-| D8 | Whether the rig at `10.0.150.69` keeps any path to PPA after step 7 (it could go through the internal Nginx with a test client certificate) | User | Phase E step 7 |
+| # | Decision | Owner | State | Blocks |
+| --- | --- | --- | --- | --- |
+| D1 | The gateway does plain TCP forwarding (no decryption) for this hostname, to `10.0.115.186:8443` | Paysys infra team, which runs the gateway Nginx | Design decided by the user (2026-10-01, restated 2026-10-02). Not yet applied; their approval goes through several levels. | Go-live |
+| D2 | PROXY protocol between the gateway and the internal Nginx | User | **Decided: none.** The gateway forwards plain TCP, so the internal Nginx sees the gateway's IP. | — |
+| D3 | The internal Nginx's port, and the gateway's internal IP | Infra team | **Port decided: 8443.** The IP is still unknown. | §4.7 |
+| D4 | `cch-mla`'s client CN, pinned by the internal Nginx | CCH (Oscar) with Paysys | Open | mTLS stage |
+| D5 | Key type and size for both COMESA/DRPP certificates | Oscar | Open (his command uses RSA 2048) | Phase D |
+| D6 | Health-probe handling once client certificates are verified: `optional` with a health exemption, until F-23's fix ships in CCH's image | Paysys engineering, then CCH to deploy | Not needed until the mTLS stage | `ssl_verify_client on` |
+| D7 | Tell Oscar that TLS now terminates on the internal Nginx, not on the gateway his notes name. The certificate contents are unchanged; where the server key lives changes. | Paysys → Oscar | Open | Phase D |
+| D8 | Whether the rig at `10.0.150.69` keeps any path to PPA after §7 step 6 (it could go through the internal Nginx) | User | Open | §7 step 6 |
+| D9 | Which certificate the internal Nginx presents until the COMESA/DRPP one exists, and how CCH's MLA comes to trust it (§4.5) | User, with Oscar or the infra team | Open. The interim self-signed certificate is in place. | Go-live |
 
 ---
 
@@ -384,5 +586,7 @@ COMESA-signed one. The overlap step keeps traffic flowing throughout:
 - **`deployment/MLA-deployment-kubernetes.md`:** §2's diagram, §7, §8 item 1 and §11 Q5, for where TLS
   terminates and the certificate inventory.
 - **`strategy.md` §1:** the UAT path line.
-- **`e2e-testing/next-steps.md`:** item 22 (deploy the internal Nginx) closes or splits into the remaining phases.
+- **`e2e-testing/next-steps.md`:** item 22 (the internal Nginx) closes or splits into the remaining phases.
 - **`bugs/qa-sweep-2-findings.md`:** F-23's status, once D6's target is shipped.
+- **`internal-nginx/`:** any change to the host's files is made here too, in the same commit, so the two
+  stay byte-identical.
