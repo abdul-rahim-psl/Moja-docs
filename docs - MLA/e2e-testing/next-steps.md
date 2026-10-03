@@ -31,29 +31,21 @@ trusting a stale local copy.
     four message types and zero `LOCAL_VALIDATION_FAILED`. Also open from that entry: whether TMS's restart
     shortly before the check is related; rule-level evaluation of the corridor; and whether to replay about
     1,130 of CCH's envelopes the old image dead-lettered (operator replay, US-PPA-15).
+22. **Put the internal Nginx on `10.0.115.186` into the live path.** It is configured and verified against
+    the real PPA [2026-10-02]: TLS terminates on 8443, each `/others/...` route reaches PPA intact, and
+    unmatched paths answer 503 (`deployment/architecture/internal-nginx-mtls-plan.md`, `plan.md` §16).
+    What remains, in order:
+    - CCH's MLA must trust the certificate the internal Nginx presents (D9). The recommended way is for CCH
+      to add the interim self-signed certificate to MLA's CA file.
+    - The Paysys infra team switches the gateway from terminating TLS to plain TCP forwarding to
+      `10.0.115.186:8443` (D1).
+    - The infra team supplies the gateway's internal IP (D3), so 8443 can be restricted to it. That happens
+      together with closing PPA's own published ports.
+    - Later: the COMESA/DRPP certificates, then the mTLS stage.
 23. **Give PPA its own Keycloak user.** PPA uses `tazama-user@tazama.org` with the publicly documented
     default password. A dedicated user in `/tazama-tms` only, with a real password, is the identity for
     anything beyond UAT. Also: sync the PPA host's clock (`timedatectl` reports it unsynchronized; it has
     drifted about 51 s), and stop publishing Postgres and ValKey on `0.0.0.0` in PPA's compose file.
-22. **Deploy the internal Nginx on `10.0.115.186`, terminating mTLS.** The plan is
-    `deployment/architecture/internal-nginx-mtls-plan.md`: discovery, build, a dry run with throwaway
-    certificates, the real certificate exchange with Oscar, and a zero-downtime cut-over. Its Nginx config
-    passed an offline check on 2026-10-01. The container `ppa-mtls-nginx` runs on the host with the stock
-    config, no published ports and the default config backed up (`plan.md` §16, 2026-10-01); configuring it
-    is next. It depends on decisions D1–D8 in that plan, chiefly that the ingress gateway does TLS
-    passthrough, which the Paysys infra team owns and has not yet been asked about.
-23. **Give PPA its own Keycloak user.** PPA uses `tazama-user@tazama.org` with the publicly documented
-    default password. A dedicated user in `/tazama-tms` only, with a real password, is the identity for
-    anything beyond UAT. Also: sync the PPA host's clock (`timedatectl` reports it unsynchronized; it has
-    drifted about 51 s), and stop publishing Postgres and ValKey on `0.0.0.0` in PPA's compose file.
-22. **Deploy the internal Nginx reverse proxy on `10.0.115.186`.** It sits between the ingress gateway and
-    PPA, runs in Docker with `restart: always`, and the Nginx image's default config is backed up before it
-    is replaced (`plan.md` §16's [2026-10-01] entries). Design questions are open with the user: where TLS
-    ends and what the gateway forwards; the gateway's internal IP and the Nginx listen port; which hop
-    strips `/others`; the health-probe path (F-23); the image source (the `10.0.70.92:5000` registry or
-    `docker save | load`, since the host has no Docker Hub access); and whether the `10.0.150.69` test rig
-    keeps a direct path to PPA. Host constraints: SELinux `Enforcing` (bind mounts need `:Z`), and
-    Docker-published ports bypass firewalld.
 
 1. **Remaining QA findings.** Fixed and live-verified on `main`: F-01–F-16, F-25, F-26, F-28a. F-17 is
    deliberately deferred and F-33 is closed by decision (`plan.md` §16). Open and self-contained: F-18–F-22
