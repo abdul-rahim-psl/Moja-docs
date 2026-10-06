@@ -8,11 +8,11 @@ Each headline is labelled against the five source documents in [`user stories/`]
 
 ---
 
-### F-23 — Critical — Health probe can't pass real PPA's mTLS, so a tripped partition never resumes — US-MLA-07, US-PPA-01
+### F-23 — Critical — Health probe can't pass an mTLS endpoint that checks client certs on health, so a tripped partition never resumes — US-MLA-07, US-PPA-01
 
 - **Problem:** Once a PPA breaker trips, the health probe used to decide when to retry always fails against the real PPA, so the partition never resumes delivery — even after PPA is healthy again.
-- **Context:** MLA's probe sends no client cert; real `cch-ppa` serves health routes on the same mTLS listener as business routes. Masked in every environment tested so far because they all run with mTLS disabled.
-- **Solution:** **Parked.** PPA engineer is removing mTLS from PPA's health endpoint — do not build until the real `cch-ppa` commit is seen and read directly.
+- **Context:** MLA's probe sends no client cert. `cch-ppa` `9c5709e` [2026-09-28] removed mTLS from PPA itself; it now terminates at the internal Nginx on the PPA host, which exempts the health routes (`ssl_verify_client optional`) only until this fix ships, then switches to `on`.
+- **Solution:** Present the delivery client cert on `https:` health probes. Open, and needed before the internal Nginx enforces client certificates (`deployment/architecture/internal-nginx-mtls-plan.md` §4.6).
 
 ### F-24 — High — Kafka startup failure is never retried; liveness stays UP forever — NOT IN USER STORIES
 
@@ -24,7 +24,7 @@ Each headline is labelled against the five source documents in [`user stories/`]
 
 - **Problem:** If the PII secret is unavailable at boot, no amount of retrying in-process can ever fix it, since the secret is loaded exactly once. Meanwhile a not-Ready pod still joins the consumer group and freezes partitions.
 - **Context:** The retry/park/reprobe machinery for this was built assuming secret rotation would eventually need a reload; rotation was later ruled out entirely, so the reprobe loop is now structurally dead weight.
-- **Solution:** Treat an unavailable/invalid PII secret as fatal at boot — refuse to start. Needs a quick check with the user that this satisfies COMESA's "fail the transaction and retry" gate answer before building.
+- **Solution:** Built [2026-09-24]: an unavailable or invalid PII secret is fatal at boot, and MLA refuses to start.
 
 ### F-26 — High — Secret content is never validated: empty file becomes an unkeyed hash; trailing newline changes every token — US-PII-02 — **DONE [2026-09-24]**
 
@@ -42,7 +42,7 @@ Each headline is labelled against the five source documents in [`user stories/`]
 
 - **Problem:** Several real fields — `payer.name`, `payee.name`, `dateOfBirth`, `complexName`, and the quote callback's `ilpPacket` — aren't in the spec's tokenize table, so they reach PPA in cleartext even though the design intent is "PPA never sees raw PII".
 - **Context:** The code correctly implements the spec table as written; the table itself just doesn't cover everything the real messages carry. Verified live against captured records.
-- **Solution:** **Spec gap, CCH/story-author's call**, not a code defect. Take the field list to them as one question; each row they add becomes one line of config in the tokenize table.
+- **Solution:** A spec gap, not a code defect. The story author added `payer.name`, `payee.name` and payee `complexName` to the tokenize table, and MLA tokenizes them [2026-09-24]. The quote callback's `ilpPacket` is F-28b, still open.
 
 ### F-29 — Medium — No rebalance handling: stale reprobe loops keep running after a partition is reassigned — NOT IN USER STORIES
 
@@ -74,11 +74,11 @@ Each headline is labelled against the five source documents in [`user stories/`]
 - **Context:** Canonicalization is just `JSON.stringify`, which preserves incoming key order rather than normalizing it. Verified live: two key orders, two different tokens for the same name.
 - **Solution:** Sort object keys recursively before hashing. **Deliberate output change** — must land before go-live, while no production token history exists to break.
 
-### F-34 — Medium — `plan.md` §16's F-17 entry misdescribes the commit-retry recovery path — NOT IN USER STORIES
+### F-34 — Medium — `plan.md` §16's F-17 entry misdescribes the commit-retry recovery path — NOT IN USER STORIES — **DONE [2026-10-05]**
 
 - **Problem:** The permanent progress-log record says one recovery path already retries only the commit (not a full re-delivery); in fact both recovery paths re-deliver to PPA on a commit failure.
 - **Context:** Harmless in practice today because PPA's own idempotency key absorbs the duplicate, but whoever picks up F-17 later would be scoping against a wrong description.
-- **Solution:** Documentation fix — correct the `plan.md` §16 F-17 entry. When F-17 is eventually built, fix both paths through one shared commit-only-retry helper (natural fit with Q-02).
+- **Solution:** Documentation only, done [2026-10-05]: `plan.md` §16's F-34 entry corrects the F-17 entry, and `qa-review-findings.md`'s F-17 row matches the code. When F-17 is eventually built, fix both paths through one shared commit-only-retry helper (natural fit with Q-02).
 
 ### F-35 — Medium — URL scheme is never cross-checked against `PPA_MTLS_DISABLED` — NOT IN USER STORIES
 
@@ -145,7 +145,7 @@ Each headline is labelled against the five source documents in [`user stories/`]
 ### Q-03 — A domain abstraction now generalizes over exactly one domain — NOT IN USER STORIES
 
 - **Problem:** `TransientDependencyDomain` was built for two outage types (JWS + PII); JWS is gone, so it's now a generic abstraction wrapping a single case.
-- **Solution:** If F-25 fails fast at boot, most of this (~200 lines) can simply be deleted; otherwise collapse it back to direct PII-specific code.
+- **Solution:** F-25 fails fast at boot [2026-09-24], so most of this (~200 lines) can simply be deleted.
 
 ### Q-04 — A circular (type-only) import between the consumer and its logging module — NOT IN USER STORIES
 

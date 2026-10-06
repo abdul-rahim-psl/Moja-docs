@@ -227,7 +227,7 @@ reflects it:
 │        ▼                      │  listed    │        │                                                 │
 │  cch-mla ── Event Envelope ───┼───────────▶│        ▼   private network                               │
 │                               │            │  ┌─ PPA host 10.0.115.186 ────────────────────────────┐  │
-└───────────────────────────────┘            │  │ internal Nginx (Docker, not yet configured)        │  │
+└───────────────────────────────┘            │  │ internal Nginx (Docker, terminates TLS on 8443)    │  │
                                              │  │      │ plain HTTP                                  │  │
                                              │  │      ▼                                             │  │
                                              │  │ PPA ── ISO 20022 ──▶ Tazama TMS (core stack, same  │  │
@@ -408,7 +408,7 @@ blocker for this handoff.
   confirmed [2026-09-28]. CN/O/C values for the server certificate have been sent to Oscar; the CSR has
   not yet been generated. Full detail: §8 item 1, §11 Q4/Q5.
   **Behind the gateway [2026-10-01]**: the gateway forwards over Paysys's private network to an internal
-  Nginx on `10.0.115.186` (running since 2026-10-01, not yet configured), which forwards plain HTTP to PPA. PPA's own published ports
+  Nginx on `10.0.115.186`, which terminates TLS on 8443 and was verified routing to the real PPA on 2026-10-02 (`architecture/internal-nginx-mtls-plan.md`). It is not yet in the live path: the gateway still terminates TLS itself until the infra team switches it to TCP forwarding. The internal Nginx forwards plain HTTP to PPA. PPA's own published ports
   must be closed to everything except that Nginx. Docker-published ports bypass the host's firewalld, so
   this is done in the compose file, not with a firewall rule.
 - **TLS version and cipher suites — resolved 2026-09-20.** George confirmed TLS 1.2/1.3 is acceptable on
@@ -694,10 +694,13 @@ items already being tracked, not new asks created by this deployment work.
    ([`certificate-setup-proposal.md`](certificate-setup-proposal.md)) and reissue MLA's client certificate
    under the gateway's own Interconnect CA, retiring the interim CA once that's live.~~ **Superseded
    [2026-09-25/28]** — no Paysys-operated Interconnect CA or dedicated gateway; mTLS terminates at the internal Nginx on the PPA host,
-   behind a passthrough ingress gateway, under a COMESA/DRPP-hosted CA (§8 item 1, §11 Q5). Current next steps: receive Oscar's
-   CA bundle; generate and send the server CSR; agree `cch-mla`'s own client CN and get it signed; wire
-   `cch-mla`'s config (PR #1); configure the ingress listener; deploy the internal Nginx on `10.0.115.186`
-   in front of PPA. Full detail in §8 item 1 and the 1 October update.
+   behind a passthrough ingress gateway, under a COMESA/DRPP-hosted CA (§8 item 1, §11 Q5). The internal Nginx on
+   `10.0.115.186` is deployed and verified against the real PPA [2026-10-02]
+   (`architecture/internal-nginx-mtls-plan.md`). Current next steps: CCH trusts its interim certificate
+   (D9; the package for CCH techops is ready, `plan.md` §16's [2026-10-03] entry); the infra team switches
+   the gateway to TCP forwarding (D1); receive Oscar's CA bundle; generate and send the server CSR; agree
+   `cch-mla`'s own client CN and get it signed; wire `cch-mla`'s config (PR #1). Full detail in §8 item 1
+   and the 1 October update.
 5. Reply to George confirming the four decisions recorded in the 15 September update above, and send the
    registry URL + deploy token, `KAFKA_BROKERS`'s variable name, and the digest-pinning acknowledgement.
    **Partially superseded 2026-09-17** — access is being granted directly on GHCR per-username instead
@@ -706,5 +709,10 @@ items already being tracked, not new asks created by this deployment work.
 6. Live-verify against CCH's actual cluster before calling any of this done, per `engineering-rules.md`
    §11. Done for delivery [2026-10-01]: CCH applied it, and PPA's write-ahead store holds CCH's
    envelopes. PPA was rebuilt to current `main` and reaches Tazama: a real corridor produced all four
-   messages, each accepted by TMS [2026-10-01]. Still open: CCH's own traffic on the new image, and
-   real mTLS with the COMESA/DRPP CA.
+   messages, each accepted by TMS [2026-10-01]. CCH's own traffic followed that evening: seven
+   transactions completed every step, 29 messages accepted by TMS. Since 2026-10-01 22:32:50 UTC every
+   PPA → TMS dispatch has failed with a 401 (`plan.md` §16's [2026-10-02] entry). Still open: that 401,
+   and real mTLS with the COMESA/DRPP CA.
+7. Push the F-11–F-28 bugfix image to GHCR and pin it in `03-mla-deployment.yaml`, which still pins
+   `sha256:0907…` (tag `1e7610e`, the JWS-removal build), then email George about it
+   (`e2e-testing/next-steps.md` items 1 and 8).

@@ -107,13 +107,13 @@ This sweep uses the same scale as [`qa-review-findings.md`](qa-review-findings.m
 
 | Severity | Count | Headline |
 | --- | --- | --- |
-| Critical | 1 | Once a PPA breaker trips against the real (mTLS) PPA, that partition never resumes (F-23) |
+| Critical | 1 | Once a PPA breaker trips behind an endpoint that checks client certificates on health, that partition never resumes (F-23) |
 | High | 5 | Kafka startup failure is never retried (F-24); PII secret failure at boot is unrecoverable and still takes partitions (F-25); secret content never validated, so an empty key is accepted (F-26); Kafka connection has no TLS/SASL (F-27); PII outside the tokenize table reaches PPA in cleartext (F-28) |
 | Medium | 8 | No rebalance handling (F-29); unmetered drop path in the handler (F-30); typo'd topic auto-created and reported healthy (F-31); watchdog can spawn duplicate reprobe loops (F-32); `complexName` tokens depend on key order (F-33); the F-17 record misdescribes the code (F-34); URL scheme not cross-checked against `PPA_MTLS_DISABLED` (F-35); every post-connect error labelled a TLS handshake failure (F-36) |
 | Low | 6 | PII fragments in JSON parse errors (F-37); shutdown cancels timers before draining handlers (F-38); internal finding IDs in `src/` (F-39); party lookups counted as `egress` (F-40); stale type/comment claims (F-41); pod security context absent (F-42) |
 | Code quality | 7 | Q-01 … Q-07 — dependency threading, duplicated reprobe loops, a one-domain abstraction, a circular import, non-exhaustive dispatch, an 1,800-line test file, operator-facing text |
 
-**Where to start.** F-23, F-24 and F-25 share one theme: each is a way for MLA to stop consuming for good while its liveness probe keeps reporting it healthy. No self-healing path covers any of them. F-23's fix is a few lines, and it must land before mTLS is switched on anywhere. Whatever is picked first, it is built and verified under [Correctness first](#correctness-first--the-rule-every-fix-is-held-to): the core flow is proven intact before the fix is called done.
+**Where to start.** F-23, F-24 and F-25 share one theme: each is a way for MLA to stop consuming for good while its liveness probe keeps reporting it healthy. No self-healing path covers any of them. F-25 is fixed [2026-09-24], and F-24 is proposed next. F-23's fix is a few lines, and it must land before the internal Nginx enforces client certificates (`ssl_verify_client on`). Whatever is picked first, it is built and verified under [Correctness first](#correctness-first--the-rule-every-fix-is-held-to): the core flow is proven intact before the fix is called done.
 
 ---
 
@@ -126,10 +126,13 @@ cadence, and before go-ahead was given, the PPA-side engineer said he was removi
 health endpoint. **That change has landed, and goes further: `cch-ppa` `9c5709e` [2026-09-28]
 removed mTLS from PPA entirely.** PPA now serves plain HTTP on every route, health included, and its
 own code comment places mTLS termination at an Nginx in front of PPA. The premise below (PPA itself
-requiring a client cert on its health routes) no longer holds for PPA's own listener. Whether F-23
-still applies now depends on whether the mTLS-terminating ingress (`mla-interconnect.paysyslabs.com`)
-requires a client certificate on the health path. That has not been checked, and F-23 stays open
-until it is. `plan.md` §16's F-23 entry lists what to check, including F-35.
+requiring a client cert on its health routes) no longer holds for PPA's own listener. **mTLS now
+terminates at the internal Nginx on the PPA host**, behind a passthrough ingress gateway
+([`internal-nginx-mtls-plan.md`](../deployment/architecture/internal-nginx-mtls-plan.md)). That Nginx
+requests no client certificate today. At the mTLS stage (its §4.6, decision D6) it runs
+`ssl_verify_client optional`, exempting the two health routes, until this fix ships in CCH's image, and
+only then `on`. **F-23 therefore still applies: its fix is what allows `on`.** `plan.md` §16's F-23 entry
+lists what else to check, including F-35.
 
 **Where.** [`ppa.client.ts:76-79, 145-173`](../../../cch-mla/src/clients/ppa.client.ts) (the `healthAgent`, built with `ca` only and no client cert, and `probeReady`), gated at [`ingestion-consumer.service.ts:610`](../../../cch-mla/src/services/ingestion-consumer.service.ts) (`const canAttemptDelivery = !tripped || (await probeReady())`). The default comes from [`config.service.ts:173`](../../../cch-mla/src/services/config.service.ts): `PPA_HEALTH_BASE_URL` falls back to `PPA_BASE_URL`. The CCH manifests ([`deploy/kubernetes/01-configmap.yaml`](../../../cch-mla/deploy/kubernetes/01-configmap.yaml), `02-env-configmap.yaml`) do not set `PPA_HEALTH_BASE_URL`.
 
@@ -148,7 +151,7 @@ probeReady() attempt 2 against the same, healthy PPA -> false
 probeReady() attempt 3 against the same, healthy PPA -> false
 ```
 
-**Fix direction.** When the health URL is `https:`, have the health agent present the same client key and cert as delivery. An mTLS-terminating ingress gateway (George's proposed architecture, `deployment/certificate-setup-proposal.md`) is equally likely to require a client cert on every path, so presenting the cert is the robust choice whatever sits in front of PPA. Add a test that the probe succeeds against a listener with `requestCert: true`. Correct `core-knowledge.md` §6.2 to match what PPA actually implements. Keep `PPA_HEALTH_BASE_URL` for deployments that do expose a plain health port.
+**Fix direction.** When the health URL is `https:`, have the health agent present the same client key and cert as delivery. The internal Nginx that terminates mTLS in front of PPA requires a client cert on every path once it runs `ssl_verify_client on` (`deployment/architecture/internal-nginx-mtls-plan.md` §4.6), so presenting the cert is the robust choice whatever sits in front of PPA. Add a test that the probe succeeds against a listener with `requestCert: true`. Correct `core-knowledge.md` §6.2 to match what PPA actually implements. Keep `PPA_HEALTH_BASE_URL` for deployments that do expose a plain health port.
 
 ---
 
@@ -296,7 +299,9 @@ The result: two independent chains on one partition, each re-arming forever. The
 
 ### F-34 — The F-17 progress-log entry describes the recovery path's commit retry incorrectly
 
-**Where.** `plan.md` §16, "F-17 — investigated, deliberately deferred (not built)" [2026-09-24], against [`ingestion-consumer.service.ts:561-573`](../../../cch-mla/src/services/ingestion-consumer.service.ts).
+**Status [2026-10-05]: fixed, documentation only.** `plan.md` §16's F-34 entry records the correction, and the F-17 row of `qa-review-findings.md`'s index describes every path as re-delivering. F-17 itself stays deferred.
+
+**Where.** `plan.md` §16, "F-17 — investigated, deliberately deferred (not built)" [2026-09-24], and the F-17 row of [`qa-review-findings.md`](qa-review-findings.md)'s index, against [`ingestion-consumer.service.ts:561-573`](../../../cch-mla/src/services/ingestion-consumer.service.ts).
 
 **What happens.** The entry says the parked/reprobe recovery path "already wraps `advance()` in its own try/catch and, on failure, schedules a commit-only retry timer directly - it does not call `deliver()` again". It does not. `resolvePartition`'s `catch` arms `setTimeout(() => { reprobe(); })`, and `reprobe()` (lines 605-627) calls `probeReady()` and `deliver(envelope)` again. That re-delivery is what the original F-17 text in `qa-review-findings.md` described. The PII recovery path re-delivers too: an `advance` throw inside `resolveTransient` → `resolveOutcome` escapes to that reprobe's `catch`, the `finally` re-arms, and the next tick calls `deliver`. `logResolvedOutcome` has already incremented `mla_forwarded_total` by then, so the recovered record is counted twice.
 
@@ -373,7 +378,7 @@ The file is 661 lines. It passes `max-lines` only because that rule skips commen
 
 ### Q-03 — `TransientDependencyDomain` generalizes over exactly one domain
 
-The domain abstraction was built for JWS key-store and PII-secret outages together. With JWS removed, `domains` is always a one-element array, `isDomainUnavailable` is generic over a single literal type, and `resolveTransient` loops over one entry. If F-25 is fixed by failing fast at boot, the whole PII park path can be deleted: `runTransientRetryBurst`, `parkAndReprobeTransient`, `resolveTransient`, the process-wide `CircuitBreaker` instance, `mla_pii_breaker_state`, the four `PII_*` retry settings, and the PII half of `assertRetryBurstsFitSessionTimeout`. That is about 200 lines. If F-25 is fixed some other way, at least collapse the abstraction back to direct PII code.
+The domain abstraction was built for JWS key-store and PII-secret outages together. With JWS removed, `domains` is always a one-element array, `isDomainUnavailable` is generic over a single literal type, and `resolveTransient` loops over one entry. F-25 was fixed by failing fast at boot [2026-09-24], so the whole PII park path can be deleted: `runTransientRetryBurst`, `parkAndReprobeTransient`, `resolveTransient`, the process-wide `CircuitBreaker` instance, `mla_pii_breaker_state`, the four `PII_*` retry settings, and the PII half of `assertRetryBurstsFitSessionTimeout`. That is about 200 lines.
 
 ### Q-04 — A circular import between the consumer and its logging module
 
@@ -399,11 +404,11 @@ Per `CLAUDE.md` ("External decisions — build anyway, but never bury them"). Ea
 
 | Finding | Decision | Belongs to | Blocks | Recommended default meanwhile |
 | --- | --- | --- | --- | --- |
-| F-27 | Does the DRPP Kafka cluster require TLS and/or SASL for MLA's consumer, and with what credentials? | CCH infrastructure / techops (via George) | **Go-live**, and possibly MLA's first connection in CCH's cluster | Build optional TLS/SASL config, off unless configured, validated at boot |
+| F-27 | Does the DRPP Kafka cluster require TLS and/or SASL for MLA's consumer, and with what credentials? | CCH infrastructure / techops (via George) | **Go-live.** Not MLA's first connection: CCH's MLA has consumed from DRPP staging since 2026-09-28 with no TLS/SASL support, so that broker accepts plaintext. Production is unconfirmed | Build optional TLS/SASL config, off unless configured, validated at boot |
 | ~~F-28~~ | ~~Tokenize `payer.name`, `payee.name`, `dateOfBirth`, `payee.personalInfo.complexName`?~~ **Resolved [2026-09-24]:** the user, as story author, decided yes to `payer.name`/`payee.name`/`payee.personalInfo.complexName`, no to `dateOfBirth` ("not independently identifying"). Built and live-verified; see `plan.md` §16. The quote-callback `ilpPacket` sub-question remains open, tracked as F-28b, not blocked on a decision — it's a build-effort question (decode/tokenize/re-encode), not a policy one. | — | — | — |
 | F-33 (second half) | Should MSISDNs be normalised before hashing? | CCH / story author | Token determinism across DFSPs | No normalisation (current behaviour) |
 | ~~F-25~~ | ~~Is "refuse to start without a valid secret" an acceptable realization of COMESA's gate item #1?~~ **Resolved [2026-09-24]:** yes, per the user. Built and live-verified; see `plan.md` §16. | — | — | — |
-| F-23 | Will the real PPA, or the ingress in front of it, ever expose an unauthenticated health endpoint? | The PPA engineer / CCH | Nothing. F-23's fix works either way | Present the client cert on the probe |
+| F-23 | Will the real PPA, or the ingress in front of it, ever expose an unauthenticated health endpoint? | Paysys engineering (internal Nginx decision D6) | Nothing. F-23's fix works either way | Present the client cert on the probe. Answered for the interim: PPA itself serves plain HTTP (`cch-ppa` `9c5709e`), and the internal Nginx exempts health under `optional` until this fix ships |
 
 ---
 
@@ -431,7 +436,7 @@ Per `CLAUDE.md` ("External decisions — build anyway, but never bury them"). Ea
 
 | # | Severity | One line | Status |
 | --- | --- | --- | --- |
-| F-23 | Critical | Health probe sends no client cert, and real PPA serves health behind mTLS, so a tripped partition never resumes | Parked [2026-09-24]; the upstream PPA change has landed (`cch-ppa` `9c5709e`, PPA mTLS removed), so the finding now depends on the ingress in front of PPA — re-evaluation pending; see `plan.md` §16 |
+| F-23 | Critical | Health probe sends no client cert, and real PPA serves health behind mTLS, so a tripped partition never resumes | Open, needed before the mTLS stage. Parked [2026-09-24] for an upstream PPA change that has landed (`cch-ppa` `9c5709e`, PPA mTLS removed); mTLS now terminates at the internal Nginx, which exempts health under `ssl_verify_client optional` only until this fix ships (`deployment/architecture/internal-nginx-mtls-plan.md` §4.6) |
 | F-24 | High | Kafka connect/subscribe/run failure at startup is never retried; liveness always UP | Open — verified-live |
 | F-25 | High | PII secret read once, so the PII reprobe can never heal, and a pod without its secret still takes partitions | **Fixed and live-verified** [2026-09-24] — see `plan.md` §16 |
 | F-26 | High | Empty secret accepted (unkeyed hash); trailing newline silently changes every token | **Fixed and live-verified** [2026-09-24] — see `plan.md` §16 |
@@ -442,7 +447,7 @@ Per `CLAUDE.md` ("External decisions — build anyway, but never bury them"). Ea
 | F-31 | Medium | Typo'd topic is auto-created and reported healthy (lag 0, ready UP) | Open — verified-live |
 | F-32 | Medium | Watchdog `retrigger` leaves the pending timer, which can create two concurrent reprobe loops | Open |
 | F-33 | Medium | `complexName` token depends on JSON key order | **Closed, not built** [2026-09-25] — user confirmed this deployment's DFSPs always emit a fixed field order, so the real-world trigger doesn't occur; see `plan.md` §16 |
-| F-34 | Medium | `plan.md` §16's F-17 entry says the recovery path retries only the commit; it re-delivers | Open — documentation |
+| F-34 | Medium | `plan.md` §16's F-17 entry says the recovery path retries only the commit; it re-delivers | Fixed [2026-10-05], documentation only (`plan.md` §16's F-34 entry) |
 | F-35 | Medium | URL scheme not cross-checked against `PPA_MTLS_DISABLED`; one mismatch reproduces F-23 | Open — verified-live |
 | F-36 | Medium | Every post-connect transport error labelled `tls-handshake-failure`, even on plain HTTP | Open |
 | F-37 | Low | V8 parse errors echo input, so partial MSISDNs reach the error log | Open — verified-live |

@@ -4,6 +4,8 @@
 
 **Companion to** [`qa-review-findings.md`](qa-review-findings.md). One section per finding, same numbering (F-01 … F-22). Each section states: the fix, why that fix and not the obvious alternative, the test that must fail before the fix and pass after it (`engineering-rules.md` §10.3, "write the failing test first"), what must be live-verified against the harness (§11), and any decision that is not engineering's to make (`CLAUDE.md`, "External decisions").
 
+**Status.** Each finding's status lives in [`qa-review-findings.md`](qa-review-findings.md)'s index, not here: F-01 … F-16 are fixed (F-14 in part), F-17 is deferred, F-18 … F-22 are open. The proposals for F-01, F-04 and F-06, and every JWS or key-store item in the tables below, concern code deleted when JWS validation was removed from MLA [2026-09-23].
+
 **What was checked before writing this.** Every library call proposed below was confirmed against the installed dependency, not recalled from memory: kafkajs 2.2.4's consumer event names (`consumer.events.CONNECT` / `DISCONNECT` / `CRASH` / `GROUP_JOIN`), its `partitionsConsumedConcurrently` run option, the `heartbeat` and `pause` callbacks it passes into `eachMessage`, and that its runner heartbeats only *between* messages ([`kafkajs/src/consumer/runner.js`](../../../cch-mla/node_modules/kafkajs/src/consumer/runner.js) lines 225-262); Node v22's `https.Agent` accepting TLS options; `crypto.createPublicKey` throwing on a malformed PEM. Capture evidence cited for F-02 and F-04 was produced by scanning the checked-in fixtures directly.
 
 **Suggested order.** F-03 and F-07 (config) first — they are small, independent, and several later fixes add config that should go through the same validation. Then F-01, F-02, F-04 (the Critical/High correctness items, each a contained change with a sharp test). Then F-05/F-08/F-10/F-11 together — they all touch `ingestion-consumer.service.ts`'s park/reprobe machinery and are easier to reason about as one refactor. The rest in any order.
@@ -580,7 +582,7 @@ Attempt 1 draws in [250, 1000] ms, attempt 2 in [500, 2000], attempt 3 in [1000,
 
 ### The fix
 
-Leave the per-attempt `raiseTokenizationFailureAlert` at `informational` (it is, correctly, a rate signal), but make the **park** that follows a tokenization retry-burst exhaustion raise at `failure`, not `informational` — today `raiseRetryExhaustionAlert` is `informational` for both the PII and the PPA park. Cleanest: `raiseRetryExhaustionAlert(message, context, severity)` with the PII/JWS callers passing `failure` (every QUOTE/FXQUOTE on this replica is now blocked — systemic) and the PPA caller passing `informational` (one partition's delivery is parked — live recovery). Update the `Alert` port comment and `alert.client.test.ts`'s severity assertions.
+Leave the per-attempt `raiseTokenizationFailureAlert` at `informational` (it is, correctly, a rate signal), but make the **park** that follows a tokenization retry-burst exhaustion raise at `failure`, not `informational` — today `raiseRetryExhaustionAlert` is `informational` for both the PII and the PPA park. Cleanest: `raiseRetryExhaustionAlert(message, context, severity)` with the PII caller passing `failure` (every QUOTE/FXQUOTE on this replica is now blocked — systemic) and the PPA caller passing `informational` (one partition's delivery is parked — live recovery). Update the `Alert` port comment and `alert.client.test.ts`'s severity assertions.
 
 ---
 
