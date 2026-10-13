@@ -710,9 +710,10 @@ items already being tracked, not new asks created by this deployment work.
    §11. Done for delivery [2026-10-01]: CCH applied it, and PPA's write-ahead store holds CCH's
    envelopes. PPA was rebuilt to current `main` and reaches Tazama: a real corridor produced all four
    messages, each accepted by TMS [2026-10-01]. CCH's own traffic followed that evening: seven
-   transactions completed every step, 29 messages accepted by TMS. Since 2026-10-01 22:32:50 UTC every
-   PPA → TMS dispatch has failed with a 401 (`plan.md` §16's [2026-10-02] entry). Still open: that 401,
-   and real mTLS with the COMESA/DRPP CA.
+   transactions completed every step, 29 messages accepted by TMS. A PPA → TMS 401 from 2026-10-01
+   22:32:50 UTC was fixed [2026-10-12], and the UAT phase completed [2026-10-13] with a payment verified
+   end to end through Tazama's rules to a written evaluation (`plan.md` §16's [2026-10-12] and
+   [2026-10-13] entries). Still open: real mTLS with the COMESA/DRPP CA.
 7. Push the F-11–F-28 bugfix image to GHCR and pin it in `03-mla-deployment.yaml`, which still pins
    `sha256:0907…` (tag `1e7610e`, the JWS-removal build), then email George about it
    (`e2e-testing/next-steps.md` items 1 and 8).
