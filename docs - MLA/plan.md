@@ -376,7 +376,7 @@ Four items were flagged before starting this phase's build. None are CCH/COMESA 
 - [ ] Verify a genuine DFSP signature with real keys. **Dissolved [2026-09-23]** — DFSP JWS signature validation was removed from MLA outright (item 2 of `deployment/MLA-deployment-kubernetes.md`'s 15 September update; `plan.md` §16's JWS-removal entries), so there is no signature check left to verify against real keys, and `JWS_VALIDATION_DISABLED`/`JWS_*` no longer exist as config surface to check on `10.0.150.69` or anywhere else — confirmed [2026-09-25] via `/health/ready` on the redeployed instance showing `kafka`/`piiSecret` only, no `jwsKeyStore` field.
 - [ ] Real mTLS against the real PPA; the deployment's certificate provisioning. **Regressed rather than advanced, and deliberately so.** The real PPA instance is plain HTTP on `:3000` with no mTLS port found on any of six checked candidates, so MLA gained a dev-only `PPA_MTLS_DISABLED` bypass by user decision [2026-09-17]. While that flag is on, MLA↔PPA traffic is unauthenticated and unencrypted — **a real, standing gap, not a mechanism that turns itself off.** This bullet now also covers turning it back off. **mTLS architecture reversed [2026-09-25 to 09-28]**, per Oscar Cobar (COMESA/DRPP), the Infotex contact (`meetings and emails/sept-28.md - Conversation with Oscar.md`): COMESA/DRPP now hosts the interconnect CA (not Paysys, as the 2026-09-15 proposal had it), and mTLS terminates on the Paysys side. The ingress gateway (`mla-interconnect.paysyslabs.com`) passes TLS through, and an internal Nginx on the PPA host terminates it (decided [2026-10-01]; plan in `deployment/architecture/internal-nginx-mtls-plan.md`). `cch-mla` handles the client-side mTLS connection itself, through configuration. CN/O/C values sent to Oscar; the CSR and Oscar's CA bundle are the next concrete steps. PPA itself no longer speaks TLS at all (`cch-ppa` `9c5709e` [2026-09-28]). Behind the ingress gateway sits an internal Nginx on `10.0.115.186`, which terminates TLS and forwards to PPA. It is configured and verified against the real PPA but not yet in the live path, because the gateway still terminates TLS itself (§16's [2026-10-02] entry). Going live needs CCH's MLA to trust its interim certificate first (D9); the package for CCH techops is ready (§16's [2026-10-03] entry). `deployment/MLA-deployment-kubernetes.md` §7/§8/§11 has the full detail.
 - [x] End-to-end against the real PPA, including the durable-ack semantics the stub cannot evidence. **Done [2026-10-01].** MLA's own side is proven: a full happy-path corridor fed through the real instance, all 8 canonical envelopes accepted with HTTP 200, every fed record accounted for (`e2e-testing/checklist.md` §§1–2, §16's own entry). **The durable-ack half is proven on the local stack and on the deployed instance.** `cch-ppa`'s own compose stack was stood up locally [2026-09-21]. After PPA's schema-completeness fix, all 5 real corridors ran through a real local MLA → PPA → TMS chain [2026-09-29]: 40/40 write-ahead rows `completed`, all 20 ISO messages accepted by TMS, zero DLQ writes (§16's [2026-09-29] entry). On the deployed instance at `10.0.115.186`, its own write-ahead store was inspected directly [2026-09-21], and after the rebuild to `cch-ppa` `7d92941` a rig corridor and then seven of CCH's own transactions reached TMS through the real `auth-service`/Keycloak token exchange [2026-10-01]. That login failed with a 401 from 2026-10-01 22:32:50 UTC until it was fixed [2026-10-12] (§16's [2026-10-12] entry). `e2e-testing/checklist.md` §3 tracks the per-item remainder.
-- [x] **End-to-end through Tazama's rules to a written evaluation — done; the UAT phase is complete [2026-10-13].** A payment fed through the rig produced all four ISO messages, all 30 Izyane CCH rules and the typology reported, and the adjudicator wrote the evaluation: 27 of 30 rules with an outcome, typology score 500, the exact sum of its weights (§16's [2026-10-12] and [2026-10-13] entries; the report sent to CCH is `send-to-behjet/Rules-fixed-ALRT-status-now.md`). The typology is still Tazama's stock one, and two structural gaps (no corridor key in the DataCache; 13 rules counting only `ACCC` history) keep the result from being a CCH verdict; `e2e-testing/next-steps.md` items 28–36 carry that work.
+- [x] **End-to-end through Tazama's rules to a written evaluation — done; the UAT phase is complete [2026-10-13].** A payment fed through the rig produced all four ISO messages, all 30 Izyane CCH rules and the typology reported, and the adjudicator wrote the evaluation: 27 of 30 rules with an outcome, typology score 500, the exact sum of its weights (§16's [2026-10-12] and [2026-10-13] entries; the report sent to CCH is `send-to-behjet -UAT-completion/Rules-fixed-ALRT-status-now.md`). The typology is still Tazama's stock one, and two structural gaps (no corridor key in the DataCache; 13 rules counting only `ACCC` history) keep the result from being a CCH verdict; `e2e-testing/next-steps.md` items 28–36 carry that work.
 - [ ] Load test on production-representative infrastructure. **Still blocked on the environment** — Phase 7's figures are local, on one laptop, and R-10 means the 25/125 TPS baseline is itself unconfirmed.
 - [x] **Kubernetes manifests.** Done [2026-09-15] — real manifests built for CCH techops and shipped, with the registry pivoted to **GHCR** (`psl-izyane-cch-frms/cch-mla`, digest-pinned), and MLA deployed and running at `10.0.150.69` (namespace `mla`).
 - [ ] **APM.** Not done. No APM tooling wired against the deployed instance.
@@ -4221,7 +4221,7 @@ processors → typology processor → event adjudicator. Every PPA → TMS dispa
                    `/home/abdul-rahim/mojaloop/cch-rules-pacs002/` (README, one patch per rule, patched
                    clones). Each rule's guard and history SQL move to `pacs.002.001.12`; rule 010 moves from
                    pacs.008 to pacs.002. Nothing pushed to Izyane's branches.
-                4. **A report for Behjet**, `send-to-behjet/uat-end-to-end-test-2026-10-12.md`.
+                4. **A report for Behjet**, `send-to-behjet -UAT-completion/uat-end-to-end-test-2026-10-12.md`.
 **Tests**       The 30 patched rules: `npm run build` passes, 1,026 tests pass at 100% coverage in each, and
                 lint shows no new errors.
 **Verified**    `live`. Rig corridor 03 produced an evaluation (pacs.002 `01M4RABQ3RZCSRD5FR6KJ7SKP1`, NALT),
@@ -4266,7 +4266,7 @@ each with its own rollback, and each was checked live before the next started.
                 Also `tools/reid-capture.py`: copies a capture with every ULID replaced, including inside
                 base64 `dataUri` bodies and ILP packets, keeping lengths so OER prefixes stay valid. It
                 makes a used corridor feedable again.
-                **Report**: `send-to-behjet/Rules-fixed-ALRT-status-now.md`, **sent to CCH on 2026-10-13**.
+                **Report**: `send-to-behjet -UAT-completion/Rules-fixed-ALRT-status-now.md`, **sent to CCH on 2026-10-13**.
 **Tests**       No new unit tests. The re-ID tool was checked on its output: no old ID in any layer, all 14
                 new IDs present, and every decoded layer identical once the IDs are mapped back.
 **Verified**    `live`, after each step. Step 1: corridor 01 (pacs.002 `01M4T2RRQC53JHVET2NQMTFRHW`), zero
@@ -4296,3 +4296,29 @@ each with its own rollback, and each was checked live before the next started.
                 (threshold basis; typology 137's fail-loud `.err` while 091 is unconfigured), rule 076's
                 `PrcgDt`, moving the fixes into Izyane's repositories, the three business values, the
                 clear-text MSISDN trace, and the 401-era replay decision.
+
+### Phase 8 (partial) — E2E rails: the full UAT path verified through to the CMS; runbook written   [2026-10-13]
+
+**Context.** The UAT test so far stopped at the `evaluation` row. The last hop, the adjudicator's alert reaching
+a Case Management System, had never been checked, nor had whether UAT has a CMS at all.
+
+**Built**       `for-samit/E2E rails.md`: Phase 1, seven steps for Samit; Phase 2, the full runbook for Claude
+                (hops, rules of engagement, Steps 0–8 with commands and completion criteria, failure table,
+                gotchas, reference run). `cch-rules-pacs002/tools/watch_alerts.js`: a read-only NATS subscriber
+                that decodes the adjudicator's alerts and stops on one transferId.
+**Tests**       None. Every command in the runbook was run live as written.
+**Verified**    `live`, one run, corridor 01 re-IDed (transfer `01M4TH7ASBPFRH3Y7Q03Y28BGZ`): feeder 20 records;
+                MLA 8 `Forwarded`; TMS `pain.001`, `pain.013`, `pacs.008` and `pacs.002`
+                (`01M4THAM86JFQ75WXD6PNDHHQF`); evaluation `01a13515-51e5-72a8-b8b1-258d11d52a6e` ALRT, score
+                500; the alert on `investigation-service` (`MATCH`); the CMS backend's log shows it received the
+                alert, created case 8 with its workflow process, created alert 44 and a task, and logged
+                `Alert ingested from NATS for tenant: DEFAULT`, about 20 ms after the evaluation was written.
+                **The CMS runs on the PPA host**: `case-management-system-backend` (`:3090`), `-frontend`
+                (`:5175`), `-voila` and `extensions-postgres` (`:15433`). The backend subscribes to
+                `investigation-service` on `nats://10.0.115.186:14222`. The adjudicator runs
+                `SUPPRESS_ALERTS=false`, `ALERTS_ONLY=false`, `ALERT_DESTINATION=global`. Read with sudo,
+                read-only (`docker ps`, `docker inspect`, `docker logs`), with the user's go-ahead.
+**Diverged**    None.
+**Left open**   The case and alert were seen in the CMS's log, not in its UI or API: the API needs a CMS bearer
+                token and its Postgres a password, neither of which was used. Each run leaves a real case,
+                alert and task in the UAT CMS, where its users can see them.

@@ -8,7 +8,7 @@ way: CCH's own `cch-mla` is deployed and delivering to PPA through the ingress g
 [2026-10-01]), and seven of CCH's transactions reached Tazama on the rebuilt PPA that evening. The PPA →
 TMS 401 that followed was fixed [2026-10-12]. **The UAT phase is complete [2026-10-13]**: the Izyane CCH
 rules were fixed on UAT, a fresh payment was verified end to end through to a Tazama evaluation, and the
-report went to CCH (`send-to-behjet/Rules-fixed-ALRT-status-now.md`). Items 28–36 carry forward what that
+report went to CCH (`send-to-behjet -UAT-completion/Rules-fixed-ALRT-status-now.md`). Items 28–36 carry forward what that
 work left open. Our own test rig at
 `10.0.150.69` runs `main`. The QA bugfix workstream has its fixes on `cch-mla` `main` (`f2fb624`), with the remaining findings open. Any item
 here stops being covered by this menu once it is picked up and logged in `plan.md` §16, which this document
@@ -169,4 +169,4 @@ required primary research beyond what those documents state, except item 15, whi
 `cch-ppa`'s own git history; item 26, which comes from `CCH_UAT_Packet_2026-10-01/README.md`
 (outside this repository, because it holds clear-text payee names); and items 28–36, which come from the
 UAT end-to-end test (`plan.md` §16's [2026-10-12] and [2026-10-13] entries, the two reports in
-`send-to-behjet/`, and `/home/abdul-rahim/mojaloop/cch-rules-pacs002/`).
+`send-to-behjet -UAT-completion/`, and `/home/abdul-rahim/mojaloop/cch-rules-pacs002/`).
